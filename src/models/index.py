@@ -13,6 +13,8 @@ class IndexBase(BaseModel):
     topic_count: int = 0
     commitment_count: int = 0
     last_updated: datetime.datetime
+    google_access_token: str | None = None
+    google_refresh_token: str | None = None
 
 
 class IndexCreate(IndexBase):

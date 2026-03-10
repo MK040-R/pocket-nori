@@ -13,6 +13,7 @@ Usage:
 import logging
 
 from supabase import Client, create_client
+from supabase.lib.client_options import SyncClientOptions
 
 from src.config import settings
 
@@ -22,8 +23,10 @@ logger = logging.getLogger(__name__)
 def get_client(user_jwt: str) -> Client:
     """Return a Supabase client scoped to the authenticated user.
 
-    The client uses the user's JWT so all queries are subject to RLS policies.
-    Each call creates a new client instance to avoid session bleed between requests.
+    The client uses the user's access token for Authorization so all queries are
+    subject to RLS policies. We intentionally avoid ``auth.set_session()`` here:
+    Supabase-py requires both access+refresh tokens for that flow, while API and
+    worker code usually receives only the bearer access token.
 
     Args:
         user_jwt: The bearer token issued to the user by Supabase Auth.
@@ -31,8 +34,15 @@ def get_client(user_jwt: str) -> Client:
     Returns:
         An authenticated Supabase Client.
     """
-    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
-    client.auth.set_session(user_jwt, "")
+    if not user_jwt.strip():
+        raise ValueError("user_jwt must be non-empty")
+
+    options = SyncClientOptions(
+        headers={"Authorization": f"Bearer {user_jwt}"},
+        auto_refresh_token=False,
+        persist_session=False,
+    )
+    client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY, options=options)
     return client
 
 

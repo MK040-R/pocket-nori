@@ -18,9 +18,14 @@ without real credentials during offline unit-test runs.
 
 import json
 import os
+import socket
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any, TypedDict, cast
+from urllib.parse import urlparse
 
 import pytest
+from celery import Celery
 from dotenv import load_dotenv
 
 # Load .env first so real values take precedence over stubs.
@@ -73,6 +78,17 @@ _CREDENTIALS_PATH = (
 )
 
 
+class UserCredentials(TypedDict):
+    user_id: str
+    access_token: str
+    refresh_token: str
+
+
+class TestCredentials(TypedDict):
+    user_a: UserCredentials
+    user_b: UserCredentials
+
+
 @pytest.fixture(scope="session")
 def supabase_url() -> str:
     """Read SUPABASE_URL from the environment; skip if not configured."""
@@ -91,18 +107,19 @@ def supabase_service_key() -> str:
     return key
 
 
-def _load_test_credentials() -> dict:
+def _load_test_credentials() -> TestCredentials:
     if not _CREDENTIALS_PATH.exists():
         pytest.skip(
             f"test_credentials.json not found at {_CREDENTIALS_PATH}. "
             "Run spikes/spike4_supabase_rls/setup_test_users.py first."
         )
     with _CREDENTIALS_PATH.open() as fh:
-        return json.load(fh)
+        payload = json.load(fh)
+    return cast(TestCredentials, payload)
 
 
 @pytest.fixture(scope="session")
-def _supabase_credentials(supabase_url: str) -> dict:
+def _supabase_credentials(supabase_url: str) -> TestCredentials:
     """Load test_credentials.json produced by setup_test_users.py."""
     return _load_test_credentials()
 
@@ -112,7 +129,7 @@ def _build_user_client(
     anon_key: str,
     access_token: str,
     refresh_token: str,
-):
+) -> Any:
     """Return a Supabase client authenticated as a specific user via JWT."""
     from supabase import create_client
 
@@ -122,7 +139,7 @@ def _build_user_client(
 
 
 @pytest.fixture(scope="session")
-def service_client(supabase_url: str, supabase_service_key: str):
+def service_client(supabase_url: str, supabase_service_key: str) -> Any:
     """Supabase client authenticated with the service role key.
 
     Bypasses RLS — represents server-side admin access.
@@ -133,7 +150,7 @@ def service_client(supabase_url: str, supabase_service_key: str):
 
 
 @pytest.fixture(scope="session")
-def user_a_client(supabase_url: str, _supabase_credentials: dict):
+def user_a_client(supabase_url: str, _supabase_credentials: TestCredentials) -> Any:
     """Supabase client authenticated as test User A."""
     anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
     creds = _supabase_credentials["user_a"]
@@ -141,7 +158,7 @@ def user_a_client(supabase_url: str, _supabase_credentials: dict):
 
 
 @pytest.fixture(scope="session")
-def user_b_client(supabase_url: str, _supabase_credentials: dict):
+def user_b_client(supabase_url: str, _supabase_credentials: TestCredentials) -> Any:
     """Supabase client authenticated as test User B."""
     anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
     creds = _supabase_credentials["user_b"]
@@ -154,7 +171,33 @@ def user_b_client(supabase_url: str, _supabase_credentials: dict):
 
 
 @pytest.fixture
-def eager_app():
+def eager_ingest() -> Generator[Celery]:
+    """Eager-mode fixture scoped to the ingest_recording Celery app."""
+    from src.workers.ingest import celery_app as ingest_celery_app
+
+    original_eager = bool(ingest_celery_app.conf.task_always_eager)
+    original_propagates = bool(ingest_celery_app.conf.task_eager_propagates)
+    original_backend = ingest_celery_app.conf.result_backend
+    original_cache = getattr(ingest_celery_app.conf, "cache_backend", None)
+
+    ingest_celery_app.conf.update(
+        task_always_eager=True,
+        task_eager_propagates=True,
+        result_backend="cache",
+        cache_backend="memory",
+    )
+    yield ingest_celery_app
+    ingest_celery_app.conf.update(
+        task_always_eager=original_eager,
+        task_eager_propagates=original_propagates,
+        result_backend=original_backend,
+    )
+    if original_cache is not None:
+        ingest_celery_app.conf.update(cache_backend=original_cache)
+
+
+@pytest.fixture
+def eager_app() -> Generator[Celery]:
     """Return the production Celery app configured for synchronous (eager)
     execution.
 
@@ -162,6 +205,11 @@ def eager_app():
     network.  Results are returned directly from .delay()/.apply_async().
     """
     from src.workers.tasks import celery_app
+
+    original_task_always_eager = bool(celery_app.conf.task_always_eager)
+    original_task_eager_propagates = bool(celery_app.conf.task_eager_propagates)
+    original_result_backend = celery_app.conf.result_backend
+    original_cache_backend = getattr(celery_app.conf, "cache_backend", None)
 
     celery_app.conf.update(
         task_always_eager=True,
@@ -172,10 +220,12 @@ def eager_app():
     yield celery_app
     # Restore to normal async mode after each test.
     celery_app.conf.update(
-        task_always_eager=False,
-        task_eager_propagates=False,
-        result_backend=celery_app.conf.result_backend,
+        task_always_eager=original_task_always_eager,
+        task_eager_propagates=original_task_eager_propagates,
+        result_backend=original_result_backend,
     )
+    if original_cache_backend is not None:
+        celery_app.conf.update(cache_backend=original_cache_backend)
 
 
 @pytest.fixture(scope="session")
@@ -191,4 +241,22 @@ def require_redis() -> str:
             "UPSTASH_REDIS_URL not set — skipping Celery integration tests. "
             "See FAR-67 to provision Upstash credentials."
         )
+
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or 6379
+    if not host:
+        pytest.skip("UPSTASH_REDIS_URL is invalid — skipping Celery integration tests.")
+
+    # Integration tests should not fail on machines/environments that cannot
+    # reach external Redis endpoints (for example, network-restricted sandboxes).
+    try:
+        with socket.create_connection((host, port), timeout=2.0):
+            pass
+    except OSError:
+        pytest.skip(
+            "UPSTASH_REDIS_URL is set but unreachable from this environment — "
+            "skipping Celery integration tests."
+        )
+
     return url

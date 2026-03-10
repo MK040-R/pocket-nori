@@ -1,13 +1,8 @@
 # ---------------------------------------------------------------------------
-# Farz — pinned production dependencies
+# Farz — pinned dependencies
 #
-# Generated from pyproject.toml.
-# To regenerate after changing pyproject.toml:
-#   pip install pip-tools
-#   pip-compile pyproject.toml --output-file requirements.txt
-#
-# To install:
-#   pip install -r requirements.txt
+# Install: pip install -r requirements.txt
+# Python 3.13 required
 # ---------------------------------------------------------------------------
 
 # API framework
@@ -17,11 +12,13 @@ pydantic==2.12.5
 pydantic-settings==2.8.0
 
 # LLM
-anthropic==0.49.0
+# Note: anthropic must be >=0.84.0 to be compatible with instructor 1.7.x
+anthropic==0.84.0
 instructor==1.7.2
 
 # Database
 supabase==2.15.1
+psycopg2-binary==2.9.11
 
 # Auth / JWT
 python-jose[cryptography]==3.3.0
@@ -36,21 +33,17 @@ deepgram-sdk==3.9.0
 # HTTP client
 httpx==0.28.1
 
-# Config
+# Config / environment
 python-dotenv==1.0.1
 
 # ---------------------------------------------------------------------------
-# Transitive deps already in .venv — listed for completeness
+# Testing & QA
 # ---------------------------------------------------------------------------
-anyio==4.12.1
-annotated-types==0.7.0
-certifi==2026.2.25
-charset-normalizer==3.4.5
-click==8.3.1
-h11==0.16.0
-idna==3.11
-pydantic-core==2.41.5
-requests==2.32.5
-starlette==0.52.1
-typing-extensions==4.15.0
-urllib3==2.6.3
+pytest==9.0.2
+pytest-anyio==0.0.0
+
+# ---------------------------------------------------------------------------
+# Linting & type-checking
+# ---------------------------------------------------------------------------
+ruff==0.15.5
+mypy==1.19.1

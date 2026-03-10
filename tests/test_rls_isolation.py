@@ -17,6 +17,7 @@ Run with:
 import json
 import os
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 import pytest
 from dotenv import load_dotenv
@@ -36,6 +37,17 @@ _SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 _SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
 
+class UserCredentials(TypedDict):
+    user_id: str
+    access_token: str
+    refresh_token: str
+
+
+class RlsCredentials(TypedDict):
+    user_a: UserCredentials
+    user_b: UserCredentials
+
+
 def _require_env() -> None:
     missing = [
         name
@@ -53,14 +65,15 @@ def _require_env() -> None:
         )
 
 
-def _load_credentials() -> dict:
+def _load_credentials() -> RlsCredentials:
     if not _CREDENTIALS_PATH.exists():
         pytest.skip(
             "test_credentials.json not found. "
             "Run spikes/spike4_supabase_rls/setup_test_users.py first."
         )
     with _CREDENTIALS_PATH.open() as fh:
-        return json.load(fh)
+        payload = json.load(fh)
+    return cast(RlsCredentials, payload)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +82,7 @@ def _load_credentials() -> dict:
 
 
 @pytest.fixture(scope="session")
-def credentials() -> dict:
+def credentials() -> RlsCredentials:
     _require_env()
     return _load_credentials()
 
@@ -84,7 +97,11 @@ class TestRLSIsolation:
     """Validates that Supabase RLS enforces strict per-user data isolation for
     the ``conversations`` table."""
 
-    def test_user_a_sees_only_own_rows(self, user_a_client, credentials: dict) -> None:
+    def test_user_a_sees_only_own_rows(
+        self,
+        user_a_client: Any,
+        credentials: RlsCredentials,
+    ) -> None:
         """user_a JWT → query conversations → only user_a rows are returned."""
         user_a_id = credentials["user_a"]["user_id"]
 
@@ -97,7 +114,11 @@ class TestRLSIsolation:
                 f"user_a received a row belonging to a different user: {row['user_id']}"
             )
 
-    def test_user_b_sees_only_own_rows(self, user_b_client, credentials: dict) -> None:
+    def test_user_b_sees_only_own_rows(
+        self,
+        user_b_client: Any,
+        credentials: RlsCredentials,
+    ) -> None:
         """user_b JWT → query conversations → only user_b rows are returned."""
         user_b_id = credentials["user_b"]["user_id"]
 
@@ -112,9 +133,9 @@ class TestRLSIsolation:
 
     def test_cross_user_isolation(
         self,
-        user_a_client,
-        service_client,
-        credentials: dict,
+        user_a_client: Any,
+        service_client: Any,
+        credentials: RlsCredentials,
     ) -> None:
         """user_a JWT → attempt to fetch a row owned by user_b by ID → empty result.
 
@@ -143,7 +164,11 @@ class TestRLSIsolation:
             f"user_a was able to read user_b's row (id={user_b_row_id}). RLS isolation has FAILED."
         )
 
-    def test_service_key_sees_all(self, service_client, credentials: dict) -> None:
+    def test_service_key_sees_all(
+        self,
+        service_client: Any,
+        credentials: RlsCredentials,
+    ) -> None:
         """Service key → query conversations → sees rows for all users (admin access)."""
         user_a_id = credentials["user_a"]["user_id"]
         user_b_id = credentials["user_b"]["user_id"]
@@ -155,7 +180,11 @@ class TestRLSIsolation:
         assert user_a_id in owner_ids, "Service key should see user_a rows but did not"
         assert user_b_id in owner_ids, "Service key should see user_b rows but did not"
 
-    def test_insert_enforces_user_id(self, user_a_client, credentials: dict) -> None:
+    def test_insert_enforces_user_id(
+        self,
+        user_a_client: Any,
+        credentials: RlsCredentials,
+    ) -> None:
         """user_a JWT → INSERT a row with user_b's user_id → should fail (RLS WITH CHECK).
 
         The WITH CHECK clause on the policy ensures that even on INSERT/UPDATE,

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
     LOG_LEVEL: str = "INFO"
+    SUPABASE_JWT_AUDIENCE: str = "authenticated"
+    SUPABASE_JWT_ISSUER: str | None = None
+    SUPABASE_JWT_SECRET: str | None = None
+    SUPABASE_JWKS_TTL_SECONDS: int = 3600
 
 
 # Module-level singleton — import this directly from other modules.

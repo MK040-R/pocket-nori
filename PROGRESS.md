@@ -1,7 +1,7 @@
 # Farz — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-10
+> Last updated: 2026-03-10 (Phase 1 Wave 1 complete — Google Drive ingest pipeline built and tested)
 
 ---
 
@@ -22,7 +22,7 @@ Building a software product from scratch happens in stages, like constructing a 
 | **Phase 1 — First Working Product** | Putting up walls and a roof | The first version users can actually interact with — import past meetings, get AI summaries, search across meetings |
 | **Phase 2 — Full Product** | Interior design, finishing, furniture | The complete dashboard — topic timelines, pre-meeting briefs, commitment tracker, cross-meeting connections |
 
-We are currently finishing **Phase 0 — Foundation**.
+**Phase 0 is complete.** We are now starting **Phase 1 — First Working Product**.
 
 ---
 
@@ -40,14 +40,18 @@ We are currently finishing **Phase 0 — Foundation**.
 | Background job system | ✅ Complete | Async processing ready |
 | Google Sign-In | ✅ Complete | Login/callback endpoints built |
 | Automated test suite | ✅ Complete | 10 tests passing |
-| AI module (single controlled gateway) | 🔄 Up next | `src/llm_client.py` |
-| Database connector | 🔄 Up next | `src/database.py` |
-| Apply database schema to Supabase | 🔄 Up next | Run migration script |
-| Phase 0 complete | ⏳ Soon | |
-| Phase 1 — Google Drive import | ⏳ Weeks 5–12 | |
-| Phase 1 — Transcription pipeline | ⏳ Weeks 5–12 | |
-| Phase 1 — AI extraction of topics/commitments | ⏳ Weeks 5–12 | |
-| Phase 1 — Search interface (web UI) | ⏳ Weeks 5–12 | |
+| AI module (single controlled gateway) | ✅ Complete | `src/llm_client.py` |
+| Database connector | ✅ Complete | `src/database.py` |
+| Apply database schema to Supabase | ✅ Complete | Migration applied — all 9 tables live |
+| Junction table privacy enforcement | ✅ Complete | Migration 002 — all 8 link tables have FORCE RLS |
+| Engineer QA review | ✅ Complete | 8 bugs found and fixed, 75/75 QA checks passing |
+| Phase 0 complete | ✅ Complete | Foundation fully built and independently verified |
+| Phase 1 Wave 1 — Google Drive import + transcription pipeline | ✅ Complete | Drive listing, ingest task, 22 tests passing |
+| Phase 1 Wave 2 — AI extraction pipeline + pgvector | ⏳ Next | Topics, commitments, entities, embeddings |
+| Phase 1 Wave 3 — Semantic search endpoint | ⏳ After Wave 2 | GET /search?q=... |
+| Phase 1 Wave 4 — Web UI | ⏳ After Wave 3 | Next.js frontend |
+| Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
+| Phase 2 — Full dashboard | ⏳ Weeks 13–20 | |
 | Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
 | Phase 2 — Full dashboard | ⏳ Weeks 13–20 | |
 
@@ -186,30 +190,68 @@ Current test coverage:
 
 ---
 
-## What's Being Built Right Now (Wave 3)
+## ✅ Wave 3 — Completed
 
-### 🔄 AI Gateway Module (`src/llm_client.py`)
-**What it is:** A single, controlled entry point for all AI calls. Every time Farz needs to talk to Claude (for extracting topics, writing briefs, etc.), it goes through this one module.
+### ✅ AI Gateway Module (`src/llm_client.py`)
+**What it is:** A single, controlled entry point for all AI calls. Every time Farz needs to talk to Claude (for extracting topics, writing briefs, etc.), it goes through this one module — nowhere else.
 
-**Why it matters:** Centralising AI calls means we can control costs, add logging (without logging private content), enforce rate limits, and swap AI providers in one place if needed.
+Four functions built:
+- `extract_topics` — reads a transcript and returns the main topics discussed
+- `extract_commitments` — reads a transcript and returns action items with owners and due dates
+- `extract_entities` — reads a transcript and returns people, projects, companies, and products mentioned
+- `generate_brief` — given context about past meetings, writes a pre-meeting briefing
 
-### 🔄 Database Connector (`src/database.py`)
-**What it is:** A reusable connection to the Supabase database. Rather than every part of the app setting up its own connection, they all share one managed connector.
+Uses the faster, cheaper Claude Sonnet model for the three extraction tasks, and the more powerful Claude Opus model for brief generation (briefs are used once per meeting and justify the higher quality).
 
-**Why it matters:** Consistent, safe database access across the entire codebase.
+**Why it matters:** Centralising AI calls means we can control costs, add safe logging (without ever logging private transcript content), and change models in one place if needed.
 
-### 🔄 Applying the Database Schema
-**What it is:** Running the SQL migration script against the live Supabase project to actually create all 9 tables.
+### ✅ Database Connector (`src/database.py`)
+**What it is:** A reusable connection to the Supabase database. Rather than every part of the app setting up its own connection, they all use one controlled module.
 
-**Why it matters:** Until this runs, the database exists but is empty — no tables, no data. After this runs, the data layer is live and ready.
+Two modes built:
+- `get_client(user_jwt)` — connects as the actual user, so all database privacy rules (RLS) are enforced. Used by all API routes and background workers.
+- `get_admin_client()` — connects as the database administrator, bypassing privacy rules. Used ONLY for running migrations. Logs a warning every time it's called as a safety guard.
+
+**Why it matters:** Consistent, safe database access across the entire codebase. The admin client's warning log makes it impossible to accidentally use it in the wrong place without a visible signal.
+
+### ✅ Database Schema Applied to Supabase
+**What happened:** Ran the migration script against the live Supabase project. All 9 tables now exist in the database with all privacy rules and performance indexes in place.
+
+**Why it matters:** The database is now live and ready to store real data. The data layer is complete.
+
+---
+
+## ✅ Engineer QA Review — Completed
+
+After the foundation was built, an independent senior engineer reviewed all the code and ran QA without seeing our results. The outcome: 8 real bugs were found and fixed, and 75 automated checks now pass.
+
+### What the engineer found and fixed
+
+| Issue | What it was | Why it mattered |
+|---|---|---|
+| **Login system (JWT validation)** | The original code only understood one type of login token (HS256). Supabase uses a more secure format in production (RS256). | Without this fix, users would be rejected when trying to log in on the live server. |
+| **Database connection auth** | The original way of passing a user's login credentials to the database was broken. | Queries would have failed silently when the app tried to read or write data on behalf of a user. |
+| **Redis/Celery TLS** | The background job system was missing required security settings for Upstash's encrypted connection. | Background jobs would have crashed immediately when deployed. |
+| **Google Drive access scope** | The Google login was not requesting permission to read Drive files. | Phase 1's meeting import would have been blocked — Google would refuse access to recordings. |
+| **Junction table privacy** | 8 "link" tables (which connect topics to meetings, commitments to transcript quotes, etc.) had no privacy rules. | Any user could theoretically see another user's links between data. |
+| **Commitment status mismatch** | The app model and database used slightly different words for commitment status. | Would have caused validation errors when saving commitments. |
+| **Test reliability** | Tests were failing in environments without access to external services. | CI pipeline would have been broken for any developer not connected to real credentials. |
+
+### What the engineer confirmed was correct
+Everything else — the server structure, the AI gateway, the data models, the per-user isolation architecture, the Celery task design — was confirmed solid.
+
+### The independent result
+Running the full QA script after fixes: **75 of 75 checks passing (100%)**.
 
 ---
 
 ## Full Roadmap
 
-### Phase 0 — Foundation (NOW — completing this week)
-What's being built: The invisible infrastructure. No user-facing features yet.
-Outcome: A secure, running backend that can accept requests, store data, process jobs, and authenticate users.
+### Phase 0 — Foundation (COMPLETE ✅)
+What was built: The invisible infrastructure. No user-facing features.
+Outcome: A secure, running backend that can accept requests, store data, process jobs, and authenticate users. Independently verified by a second engineer — 75/75 QA checks passing.
+
+### Phase 1 — First Working Product (IN PROGRESS ✅ Wave 1 complete)
 
 ### Phase 1 — First Working Product (Weeks 5–12)
 What becomes usable: You can connect your Google Drive, import past meeting recordings, and Farz will transcribe them, extract topics and commitments, and let you search across all your meetings.
@@ -236,6 +278,38 @@ Key deliverables:
 
 ### Phase 3 — Desktop App + Scale (Future)
 What becomes usable: A native macOS desktop app that listens to Google Meet in real-time (no upload needed), plus enterprise-grade compliance.
+
+---
+
+---
+
+## ✅ Phase 1 Wave 1 — Google Drive Ingest Pipeline
+
+### What was built
+
+This is the first piece of Phase 1 — the pipeline that connects Farz to your Google Drive and pulls in your past meeting recordings.
+
+**What it can now do:**
+- After you sign in with Google, Farz stores your Google credentials securely so it can access Drive on your behalf — even when you're not actively using the app
+- A new screen (when the UI is built) will show you your last 60 days of Drive video recordings and which ones are already imported
+- You select which recordings to import; Farz queues background jobs for each one
+- Each job: connects to Drive → downloads the audio/video to memory → sends it to Deepgram for transcription with speaker labels → stores the transcript in the database as a series of speaking segments → **immediately deletes the audio from memory** — Farz never stores audio
+- You can check the status of each import job at any time
+
+**Safety guardrails built in:**
+- If a recording has already been imported, the system detects this and skips it — so running an import twice has no effect
+- Audio bytes are deleted from memory inside a `try/finally` block — even if transcription fails, the audio is never retained
+- Each Celery job always refreshes the Google access token from the stored refresh token before downloading, so tokens expiring overnight don't break imports
+- The database write uses the user's own JWT (not the admin key) so all privacy rules are enforced
+
+**Test coverage:**
+- 12 new unit tests added (mocking Drive, Deepgram, and Supabase)
+- All 22 unit tests passing (10 original + 12 new)
+
+**New API endpoints (backend-only for now — UI comes in Wave 4):**
+- `GET /onboarding/available-recordings` — shows what's available to import
+- `POST /onboarding/import` — starts the import jobs
+- `GET /onboarding/import/status/{job_id}` — check progress
 
 ---
 

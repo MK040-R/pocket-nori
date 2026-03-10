@@ -14,6 +14,7 @@ class ConversationBase(BaseModel):
     meeting_date: datetime.datetime
     duration_seconds: int | None = None
     calendar_event_id: str | None = None
+    drive_file_id: str | None = None
 
 
 class ConversationCreate(ConversationBase):

@@ -5,6 +5,7 @@ Reads UPSTASH_REDIS_URL from the settings singleton (fail-fast if missing).
 All settings are tuned for reliability with a serverless Redis backend.
 """
 
+import ssl
 import sys
 from typing import Any
 
@@ -25,6 +26,11 @@ if not REDIS_URL and _running_as_worker:
 
 broker_url: str = REDIS_URL
 result_backend: str = REDIS_URL
+
+# Explicit TLS configuration is required when using rediss:// URLs.
+# Celery's Redis backend raises at runtime if ssl_cert_reqs is omitted.
+broker_use_ssl: dict[str, Any] = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+redis_backend_use_ssl: dict[str, Any] = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
 
 # Serialization — JSON only; never pickle (security + portability).
 task_serializer: str = "json"

@@ -7,6 +7,7 @@ GET /auth/callback — exchanges the authorization code for tokens and signs
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -16,6 +17,7 @@ from fastapi.responses import RedirectResponse
 from supabase import create_client
 
 from src.config import settings
+from src.database import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ _SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
 ]
 
 
@@ -120,6 +123,37 @@ async def callback(
         raise HTTPException(status_code=400, detail="Authentication failed")
 
     logger.info("User authenticated successfully (user_id=%s)", user.id)
+
+    # --- Persist Google tokens and upsert user_index ---
+    # The Google access_token and refresh_token are stored so the ingest
+    # pipeline can call Drive/Calendar APIs on behalf of the user.
+    # The refresh_token is only issued on the first consent — only update
+    # it if Google included one in this response.
+    google_access_token: str | None = token_data.get("access_token")
+    google_refresh_token: str | None = token_data.get("refresh_token")
+
+    user_index_row: dict[str, Any] = {
+        "user_id": str(user.id),
+        "conversation_count": 0,
+        "topic_count": 0,
+        "commitment_count": 0,
+        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    if google_access_token:
+        user_index_row["google_access_token"] = google_access_token
+    if google_refresh_token:
+        user_index_row["google_refresh_token"] = google_refresh_token
+
+    try:
+        user_db = get_client(session.access_token)
+        user_db.table("user_index").upsert(
+            user_index_row, on_conflict="user_id"
+        ).execute()
+    except Exception as exc:
+        # Non-fatal: token storage failing should not block login.
+        # The user can still use the app; onboarding will prompt re-auth
+        # if the tokens are missing later.
+        logger.error("Failed to upsert user_index for user=%s: %s", user.id, type(exc).__name__)
 
     return {
         "access_token": session.access_token,
