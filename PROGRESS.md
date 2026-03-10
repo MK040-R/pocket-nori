@@ -1,7 +1,7 @@
 # Farz — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-10 (Phase 1 Wave 3 complete — semantic search, topics, commitments, index stats, calendar stub)
+> Last updated: 2026-03-10 (Backend hardening complete — 60 tests passing, Render deployment config ready, frontend integration in progress)
 
 ---
 
@@ -49,7 +49,9 @@ Building a software product from scratch happens in stages, like constructing a 
 | Phase 1 Wave 1 — Google Drive import + transcription pipeline | ✅ Complete | Drive listing, ingest task, 22 tests passing |
 | Phase 1 Wave 2 — AI extraction pipeline + pgvector | ✅ Complete | Topics, commitments, entities, embeddings, conversations API |
 | Phase 1 Wave 3 — Semantic search + supporting endpoints | ✅ Complete | POST /search, topics, commitments, index stats, calendar |
-| Phase 1 Wave 4 — Web UI | ⏳ Next | Next.js frontend |
+| Backend security hardening | ✅ Complete | Job ownership checks, API contract fixes, 60 tests |
+| Render deployment config | ✅ Complete | render.yaml — 1 API + 3 workers, ready to connect |
+| Phase 1 Wave 4 — Web UI | ⏳ In progress | Next.js frontend (Codex building) |
 | Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
 | Phase 2 — Full dashboard | ⏳ Weeks 13–20 | |
 | Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
@@ -251,7 +253,7 @@ Running the full QA script after fixes: **75 of 75 checks passing (100%)**.
 What was built: The invisible infrastructure. No user-facing features.
 Outcome: A secure, running backend that can accept requests, store data, process jobs, and authenticate users. Independently verified by a second engineer — 75/75 QA checks passing.
 
-### Phase 1 — First Working Product (IN PROGRESS ✅ Wave 1 complete)
+### Phase 1 — First Working Product (IN PROGRESS ✅ Waves 1–3 complete, Wave 4 in progress)
 
 ### Phase 1 — First Working Product (Weeks 5–12)
 What becomes usable: You can connect your Google Drive, import past meeting recordings, and Farz will transcribe them, extract topics and commitments, and let you search across all your meetings.
@@ -380,6 +382,29 @@ This is the search layer — the part that lets you find anything said in any me
 **Test coverage:**
 - 9 new unit tests for search (input validation, happy path, error handling, user isolation)
 - All **38 unit tests passing**
+
+---
+
+---
+
+## ✅ Backend Security Hardening + Frontend Integration Prep
+
+### What was done
+
+After the frontend engineer (Codex) reviewed the backend, four issues were found and fixed:
+
+| Issue | What it was | Why it mattered |
+|---|---|---|
+| **Job ownership gap** | When you checked the status of an import job, the backend didn't verify the job actually belonged to you | Someone who guessed a job ID could see another user's import progress |
+| **Topics API shape mismatch** | The topics endpoint returned the wrong data shape — the frontend expected a simplified summary list, and the detail view expected a `conversations` array | Frontend would have crashed trying to display the topics screen |
+| **Commitments filter param** | The frontend sends `?status=open` but the backend only accepted `?filter_status=open` | Filtering commitments by status would have silently failed |
+| **Import status missing file ID** | The job status response didn't include which Drive file each job was processing | Frontend couldn't show which recording was being imported |
+
+### What else was done
+
+- **22 new unit tests** added for commitments and topics endpoints — total now 60 tests passing
+- **Render deployment config created** (`render.yaml`) — the file that tells Render.com how to run the backend. Four services defined: one web API and three background workers.
+- **Database migration applied** — the `status` column on conversations (processing → indexed) is now live in Supabase
 
 ---
 
