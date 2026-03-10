@@ -97,7 +97,7 @@ def _parse_google_transcript(text: str) -> list[dict[str, Any]]:
         ts_ms: int | None = None
         text_lines: list[str] = []
         for ln in lines[1:]:
-            if ts_ms is None and _TS_RE.match(ln):
+            if ts_ms is None and ts_re.match(ln):
                 ts_ms = _timestamp_to_ms(ln)
             else:
                 text_lines.append(ln)
