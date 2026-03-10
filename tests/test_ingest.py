@@ -16,7 +16,6 @@ import pytest
 
 from src.workers.ingest import _transcribe_bytes, ingest_recording
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -210,7 +209,6 @@ class TestIngestRecordingUnit:
 
     def test_audio_bytes_deleted_even_on_transcription_error(self, eager_ingest: Any) -> None:
         """gc.collect() is called even if transcription raises — audio is never retained."""
-        import gc
 
         with (
             patch("src.workers.ingest.get_client") as mock_get_client,

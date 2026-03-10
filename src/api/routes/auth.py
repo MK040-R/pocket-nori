@@ -9,7 +9,7 @@ POST /auth/logout    — clears the session cookie.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -140,7 +140,7 @@ async def callback(
         "conversation_count": 0,
         "topic_count": 0,
         "commitment_count": 0,
-        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
+        "last_updated": datetime.now(tz=UTC).isoformat(),
     }
     if google_access_token:
         user_index_row["google_access_token"] = google_access_token

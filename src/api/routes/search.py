@@ -20,9 +20,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from src import llm_client
 from src.api.deps import get_current_user
 from src.database import get_direct_connection
-from src import llm_client
 
 logger = logging.getLogger(__name__)
 

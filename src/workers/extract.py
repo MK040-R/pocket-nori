@@ -17,14 +17,13 @@ Rules:
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from celery import Celery
 
-from src import celeryconfig
+from src import celeryconfig, llm_client
 from src.database import get_client
-from src import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +226,7 @@ def extract_from_conversation(
         db.table("user_index").update({
             "topic_count": current["topic_count"] + len(topic_list.topics),
             "commitment_count": current["commitment_count"] + len(commitment_list.commitments),
-            "last_updated": datetime.now(tz=timezone.utc).isoformat(),
+            "last_updated": datetime.now(tz=UTC).isoformat(),
         }).eq("user_id", user_id).execute()
 
     logger.info(

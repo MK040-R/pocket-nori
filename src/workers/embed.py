@@ -17,9 +17,8 @@ from typing import Any
 
 from celery import Celery
 
-from src import celeryconfig
+from src import celeryconfig, llm_client
 from src.database import get_client
-from src import llm_client
 
 logger = logging.getLogger(__name__)
 

@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.main import app
 from src.api.deps import get_current_user
+from src.main import app
 
 client = TestClient(app)
 
