@@ -18,7 +18,7 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 **Audience:** Engineers building Phases 0a through 2
 **Purpose:** Records every major engineering decision with its rationale. Stack choices, database strategy, authentication, ingestion pipeline, async job design, infrastructure, per-user isolation enforcement. Explicitly overrides the PRD on implementation choices where the two conflict.
 **When to read:** Before any architecture or infrastructure work. The definitive source for "why did we choose X?"
-**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `Later stages/farz-tech-requirements-full.md`.
+**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `docs/later-stages/farz-tech-requirements-full.md`.
 
 ---
 
@@ -45,10 +45,24 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 
 ---
 
-### `Later stages/farz-tech-requirements-full.md` — Full Architecture (Phase 3+)
+### `docs/later-stages/farz-tech-requirements-full.md` — Full Architecture (Phase 3+)
 **Audience:** Engineers planning Phase 3 and beyond
 **Purpose:** Covers the full architectural vision: AWS ECS/RDS migration, Electron desktop app, formal compliance (SOC 2, GDPR, ADGM), enterprise multi-tenancy.
 **When to read:** Phase 3+ planning only. Do not apply Phase 3+ decisions to MVP work.
+
+---
+
+### `agent_docs/CODEX_BRIEF.md` — Cross-Agent Integration Brief
+**Audience:** Claude Code + Codex
+**Purpose:** Temporary live contract for frontend/backend wave coordination, API shape expectations, and integration boundaries.
+**When to read:** Before changing frontend-facing API contracts during active wave work.
+
+---
+
+### `docs/working-notes/PROGRESS.md` — Shared Progress Log
+**Audience:** Claude Code + Codex + humans tracking execution
+**Purpose:** Append-only log of completed tasks and wave milestones.
+**When to read:** Before starting work to avoid duplicate effort; update after each completed task.
 
 ---
 
