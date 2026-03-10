@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farz — Pre-Meeting Brief</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.brief-hero {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 24px 26px;
+  margin-bottom: 40px;
+}
+.brief-hero-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brief-hero-meeting {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ink-primary);
+  margin-bottom: 5px;
+}
+.brief-hero-time {
+  font-size: 13px;
+  color: var(--ink-tertiary);
+}
+.brief-section {
+  margin-bottom: 40px;
+}
+.brief-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.brief-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.brief-section-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-standard);
+}
+.brief-summary-card {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+}
+.brief-summary-text {
+  font-size: 14.5px;
+  color: var(--ink-secondary);
+  line-height: 1.75;
+}
+.brief-summary-text strong { color: var(--ink-primary); font-weight: 600; }
+.agenda-list {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.agenda-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 17px 22px;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 0.12s;
+}
+.agenda-item:last-child { border-bottom: none; }
+.agenda-item:hover { background: var(--bg-base); }
+.agenda-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  width: 22px;
+  flex-shrink: 0;
+  padding-top: 2px;
+  font-family: ui-monospace, monospace;
+}
+.agenda-body { flex: 1; }
+.agenda-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.agenda-note {
+  font-size: 12.5px;
+  color: var(--ink-tertiary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.share-panel {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+}
+.share-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.share-panel-desc {
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+.share-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.privacy-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 14px;
+  line-height: 1.55;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.meeting-header-meta {
+  font-size: 13px;
+  color: var(--ink-tertiary);
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-text">farz<span class="sidebar-logo-dot">.</span></div>
+    </div>
+    <div class="sidebar-nav">
+      <a href="dashboard.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a href="search-arc.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14.5" y2="14.5"/></svg>
+        Search
+      </a>
+      <a href="meeting-detail.html" class="nav-item active">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="3" width="13" height="10.5" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>
+        Meetings
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,8 6.5,11.5 13,4"/></svg>
+        Commitments
+        <span class="nav-badge">7</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="1.5,12 5,6.5 8.5,9 12.5,3.5 14.5,5.5"/></svg>
+        Insights
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-avatar">MK</div>
+        <div class="user-name">Murali K.</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page-header">
+      <a href="meeting-detail.html" class="back-link">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="9,2 4,7 9,12"/></svg>
+        Product Sync — Core Team
+      </a>
+      <div class="page-title">Pre-Meeting Brief</div>
+      <div class="meeting-header-meta">Generated Mon, 9 Mar 2026 at 9:17 AM · 13 min before your meeting</div>
+    </div>
+
+    <div class="page-content" style="max-width:740px;">
+
+      <!-- Hero card -->
+      <div class="brief-hero">
+        <div class="brief-hero-label">
+          <svg width="11" height="11" viewBox="0 0 10 10" fill="currentColor"><path d="M5 0l1.12 3.45H9.76L6.82 5.58l1.12 3.45L5 7l-2.94 2.03 1.12-3.45L.24 3.45H3.88z"/></svg>
+          Brief for your 9:30 AM
+        </div>
+        <div class="brief-hero-meeting">Product Sync — Core Team</div>
+        <div class="brief-hero-time">Monday, 9 March 2026 · 9:30 AM · 45 min · Murali, Sarah, Dev, Priya</div>
+      </div>
+
+      <!-- Last Session Summary -->
+      <div class="brief-section">
+        <div class="brief-section-header">
+          <div class="brief-section-label">Last session summary</div>
+          <div class="brief-section-line"></div>
+        </div>
+        <div class="brief-summary-card">
+          <p class="brief-summary-text">
+            In the <strong>Mar 7 sync</strong>, the team confirmed the <strong>reporting feature deadline of March 14</strong>. Sarah committed to sharing wireframes. Dev raised a performance concern — chart component degrades significantly past 10,000 rows; streaming vs. pagination was unresolved. Separately, <strong>a retention metric definition mismatch was flagged</strong>: product tracks D30, investor narrative uses 90-day cohort. Both issues remain open.
+          </p>
+        </div>
+      </div>
+
+      <!-- Commitments -->
+      <div class="brief-section">
+        <div class="brief-section-header">
+          <div class="brief-section-label">Your open commitments</div>
+          <div class="brief-section-line"></div>
+        </div>
+
+        <div class="commitment-item">
+          <div class="commitment-bar"></div>
+          <div class="commitment-content">
+            <div class="commitment-text">Follow up with Dev on chart performance with large datasets</div>
+            <div class="commitment-footer">
+              <span class="badge badge-open" style="font-size:11px; padding:2px 9px;">open</span>
+              <span class="commitment-source">No due date · from Mar 07</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="commitment-item">
+          <div class="commitment-bar"></div>
+          <div class="commitment-content">
+            <div class="commitment-text">Clarify retention metric definition before investor call — D30 vs 90-day cohort</div>
+            <div class="commitment-footer">
+              <span class="badge badge-open" style="font-size:11px; padding:2px 9px;">open</span>
+              <span class="commitment-source" style="color:#E5484D; font-weight:500;">Due today</span>
+              <span class="commitment-source">from Mar 07</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; font-size:13px; color:var(--ink-tertiary);">
+          Sarah has 1 open commitment: <em>share wireframes for reporting feature</em>
+        </div>
+      </div>
+
+      <!-- Relevant Connections -->
+      <div class="brief-section">
+        <div class="brief-section-header">
+          <div class="brief-section-label">Relevant connections</div>
+          <div class="brief-section-line"></div>
+        </div>
+
+        <div class="connection-card">
+          <div class="connection-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#4A6CF7" stroke-width="1.6" style="flex-shrink:0;"><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="8" r="2"/><path d="M5.5 8h5"/></svg>
+            Data export timeline — expectation gap
+          </div>
+          <div class="connection-rationale">
+            Alex Chen expects data export by Q1 close (Mar 31). Engineering's current estimate is Q2. Neither group has reconciled this — it has not come up in the same room yet.
+          </div>
+          <div class="connection-meetings">
+            <span class="connection-meeting-pill">Investor Update · Feb 28</span>
+            <span class="connection-meeting-pill">Eng Standup · Mar 06</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggested Agenda -->
+      <div class="brief-section">
+        <div class="brief-section-header">
+          <div class="brief-section-label">Suggested agenda</div>
+          <div class="brief-section-line"></div>
+        </div>
+        <div class="agenda-list">
+          <div class="agenda-item">
+            <div class="agenda-num">01</div>
+            <div class="agenda-body">
+              <div class="agenda-text">Reporting feature — resolve chart performance</div>
+              <div class="agenda-note">Dev to present options; decide stream vs. paginate before standup</div>
+            </div>
+          </div>
+          <div class="agenda-item">
+            <div class="agenda-num">02</div>
+            <div class="agenda-body">
+              <div class="agenda-text">Sarah's wireframes — walk through and lock design</div>
+              <div class="agenda-note">Committed last session; expected today</div>
+            </div>
+          </div>
+          <div class="agenda-item">
+            <div class="agenda-num">03</div>
+            <div class="agenda-body">
+              <div class="agenda-text">Retention metric alignment — D30 vs 90-day</div>
+              <div class="agenda-note">Investor call at 2pm today; resolve definition mismatch now</div>
+            </div>
+          </div>
+          <div class="agenda-item">
+            <div class="agenda-num">04</div>
+            <div class="agenda-body">
+              <div class="agenda-text">Data export — surface Q1 vs Q2 timeline gap</div>
+              <div class="agenda-note">Alex expects Q1 close; engineering thinks Q2. Needs reconciling before this afternoon</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Share Panel -->
+      <div class="brief-section">
+        <div class="brief-section-header">
+          <div class="brief-section-label">Share this brief</div>
+          <div class="brief-section-line"></div>
+        </div>
+        <div class="share-panel">
+          <div class="share-panel-title">Send to attendees</div>
+          <div class="share-panel-desc">
+            Generate a read-only link for the other attendees. They'll see the summary and open threads — not your full meeting history or other meetings.
+          </div>
+          <div class="share-actions">
+            <button class="btn btn-accent">Generate share link</button>
+            <button class="btn btn-ghost">Preview shared view</button>
+          </div>
+          <div class="privacy-note">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0; margin-top:1px; color:var(--ink-muted);"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>
+            Sharing only exposes this brief. Your full index, other meetings, and all commitments remain private. You can revoke access at any time.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Screen nav -->
+<div style="position:fixed; bottom:20px; right:20px; display:flex; gap:8px; z-index:100;">
+  <a href="dashboard.html" class="btn btn-ghost" style="font-size:12px;">← Dashboard</a>
+  <a href="search-arc.html" class="btn btn-ghost" style="font-size:12px;">Search →</a>
+  <a href="meeting-detail.html" class="btn btn-ghost" style="font-size:12px;">Meeting →</a>
+</div>
+</body>
+</html>

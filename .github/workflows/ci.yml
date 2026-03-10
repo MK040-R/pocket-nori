@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-typecheck-test:
+    name: Lint + Type-check + Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ".[dev]" 2>/dev/null || pip install \
+            pytest>=8.3.5 \
+            anyio>=4.12.1 \
+            mypy>=1.14.0 \
+            types-redis>=4.6.0 \
+            types-python-jose>=3.3.4 \
+            ruff>=0.9.10
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Mypy type-check
+        run: mypy src/ --ignore-missing-imports
+
+      - name: Pytest (unit tests — no external services)
+        run: pytest tests/ -v --tb=short -m "not integration"
+        env:
+          # Unit tests must run without any live credentials.
+          # Integration tests are gated behind the `integration` mark
+          # and run separately in the rls-test workflow or manually.
+          ENVIRONMENT: test
+
+  rls-isolation:
+    name: RLS Isolation Tests
+    runs-on: ubuntu-latest
+    # Only run when Supabase credentials are available (set as repo secrets)
+    if: ${{ vars.SUPABASE_URL != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install spike4 dependencies
+        run: |
+          pip install -r spikes/spike4_supabase_rls/requirements.txt
+
+      - name: Run RLS isolation tests
+        run: pytest spikes/spike4_supabase_rls/test_rls_isolation.py -v
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

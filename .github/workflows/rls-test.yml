@@ -1,0 +1,28 @@
+name: RLS Isolation Test
+
+on: [push, pull_request]
+
+jobs:
+  rls-test:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install -r spikes/spike4_supabase_rls/requirements.txt
+
+      - name: Set up test users and seed data
+        run: python spikes/spike4_supabase_rls/setup_test_users.py
+
+      - name: Run RLS isolation tests
+        run: pytest spikes/spike4_supabase_rls/test_rls_isolation.py -v

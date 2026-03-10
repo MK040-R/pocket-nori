@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farz — Search · Reporting Feature Arc</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.search-bar-wrap {
+  position: relative;
+  max-width: 540px;
+}
+.search-bar-wrap .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 16px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+.search-input {
+  padding-left: 42px;
+  padding-right: 40px;
+  font-size: 15px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-color: var(--border-standard);
+}
+.search-clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.search-clear:hover { color: var(--ink-secondary); background: var(--bg-base); }
+.breadcrumb {
+  font-size: 13px;
+  color: var(--ink-tertiary);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.breadcrumb a { color: var(--ink-secondary); text-decoration: none; font-weight: 500; }
+.breadcrumb a:hover { color: var(--accent); }
+.arc-header { margin-bottom: 32px; }
+.arc-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink-primary);
+  margin-bottom: 10px;
+}
+.arc-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.arc-meta-item {
+  font-size: 13px;
+  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Arc Thread Layout */
+.arc-layout {
+  display: flex;
+  gap: 0;
+}
+.arc-spine {
+  width: 40px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 22px;
+}
+.arc-cards { flex: 1; }
+.arc-point-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.arc-spine-segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.arc-node {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin-top: 22px;
+}
+.arc-node::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+}
+.arc-node.active {
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 4px rgba(74,108,247,0.15);
+}
+.arc-node.active::after { width: 5px; height: 5px; }
+.arc-line-seg {
+  width: 1.5px;
+  background: linear-gradient(to bottom, rgba(74,108,247,0.55), rgba(74,108,247,0.3));
+  flex: 1;
+  min-height: 24px;
+}
+
+/* ArcPoint card */
+.arc-point-card {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-left: 16px;
+  flex: 1;
+  transition: box-shadow 0.15s;
+}
+.arc-point-card:hover { box-shadow: var(--shadow-raised); }
+.arc-point-card.active {
+  border: 1.5px solid rgba(74,108,247,0.2);
+  box-shadow: 0 2px 12px rgba(74,108,247,0.08);
+}
+.arc-point-date {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 3px;
+  letter-spacing: 0.01em;
+}
+.arc-point-meeting {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin-bottom: 9px;
+  letter-spacing: -0.01em;
+}
+.arc-point-summary {
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  line-height: 1.65;
+  margin-bottom: 12px;
+}
+.arc-point-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  text-decoration: none;
+  padding: 4px 10px;
+  background: var(--bg-base);
+  border-radius: 999px;
+  border: 1px solid var(--border-standard);
+  transition: color 0.12s, border-color 0.12s;
+}
+.arc-point-jump:hover {
+  color: var(--accent);
+  border-color: rgba(74,108,247,0.3);
+  background: var(--accent-subtle);
+}
+
+/* Status note */
+.arc-status-note {
+  margin-top: 12px;
+  padding: 14px 18px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--accent);
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+.arc-status-note-text {
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-text">farz<span class="sidebar-logo-dot">.</span></div>
+    </div>
+    <div class="sidebar-nav">
+      <a href="dashboard.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a href="search-arc.html" class="nav-item active">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14.5" y2="14.5"/></svg>
+        Search
+      </a>
+      <a href="meeting-detail.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="3" width="13" height="10.5" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>
+        Meetings
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,8 6.5,11.5 13,4"/></svg>
+        Commitments
+        <span class="nav-badge">7</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="1.5,12 5,6.5 8.5,9 12.5,3.5 14.5,5.5"/></svg>
+        Insights
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-avatar">MK</div>
+        <div class="user-name">Murali K.</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page-header">
+      <div class="search-bar-wrap">
+        <svg class="search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14.5" y2="14.5"/></svg>
+        <input class="input search-input" type="text" value="reporting feature" placeholder="Search topics, meetings, people…">
+        <button class="search-clear">×</button>
+      </div>
+    </div>
+
+    <div class="page-content" style="max-width:800px;">
+
+      <div class="breadcrumb">
+        <a href="#">← All topics</a>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg>
+        <span>reporting feature</span>
+      </div>
+
+      <!-- Arc Header -->
+      <div class="arc-header">
+        <div class="arc-title">Reporting Feature</div>
+        <div class="arc-meta-row">
+          <span class="arc-meta-item">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="3" width="13" height="10.5" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/></svg>
+            5 conversations
+          </span>
+          <span class="arc-meta-item">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg>
+            Jan 12 – Mar 07
+          </span>
+          <span class="badge badge-open" style="font-size:11.5px; padding:3px 12px;">open</span>
+        </div>
+      </div>
+
+      <!-- Arc -->
+      <div class="arc-layout">
+
+        <!-- Spine thread (visual) -->
+        <div class="arc-spine">
+          <div class="arc-node"></div>
+          <div class="arc-line-seg" style="height:72px;"></div>
+          <div class="arc-node"></div>
+          <div class="arc-line-seg" style="height:72px;"></div>
+          <div class="arc-node"></div>
+          <div class="arc-line-seg" style="height:72px;"></div>
+          <div class="arc-node"></div>
+          <div class="arc-line-seg" style="height:72px;"></div>
+          <div class="arc-node active"></div>
+        </div>
+
+        <!-- ArcPoint cards -->
+        <div class="arc-cards">
+
+          <div class="arc-point-card" style="margin-bottom:14px;">
+            <div class="arc-point-date">Jan 12, 2026</div>
+            <div class="arc-point-meeting">Product Sync — Q1 Kickoff</div>
+            <div class="arc-point-summary">
+              First mention of a reporting feature request from enterprise customers. Team agreed it was a Q1 priority but no scope was defined. Murali volunteered to draft an initial spec.
+            </div>
+            <a href="meeting-detail.html" class="arc-point-jump">→ 00:08:14 &nbsp;Jump to clip</a>
+          </div>
+
+          <div class="arc-point-card" style="margin-bottom:14px;">
+            <div class="arc-point-date">Jan 28, 2026</div>
+            <div class="arc-point-meeting">Product Sync — Sprint Review</div>
+            <div class="arc-point-summary">
+              Spec reviewed and approved. Frontend build assigned to Dev team. Initial deadline set for end of February. Sarah flagged dependency on the data export module being finalized first.
+            </div>
+            <a href="#" class="arc-point-jump">→ 00:22:37 &nbsp;Jump to clip</a>
+          </div>
+
+          <div class="arc-point-card" style="margin-bottom:14px;">
+            <div class="arc-point-date">Feb 14, 2026</div>
+            <div class="arc-point-meeting">Product Sync — Mid-Sprint Check-in</div>
+            <div class="arc-point-summary">
+              Data export dependency resolved. Frontend work started. Deadline slipped to Mar 7 due to design iteration on the chart component. No new blocker raised.
+            </div>
+            <a href="#" class="arc-point-jump">→ 00:14:22 &nbsp;Jump to clip</a>
+          </div>
+
+          <div class="arc-point-card" style="margin-bottom:14px;">
+            <div class="arc-point-date">Feb 28, 2026</div>
+            <div class="arc-point-meeting">Investor Update — Series A</div>
+            <div class="arc-point-summary">
+              Alex Chen raised the reporting feature unprompted — three enterprise prospects cited it as a blocker. Murali committed to a Mar 14 delivery. The internal team was not in the room for this commitment.
+            </div>
+            <a href="#" class="arc-point-jump">→ 00:31:05 &nbsp;Jump to clip</a>
+          </div>
+
+          <div class="arc-point-card active" style="margin-bottom:0;">
+            <div class="arc-point-date" style="display:flex; align-items:center; gap:8px;">
+              Mar 07, 2026
+              <span style="font-size:10.5px; font-weight:600; color:var(--ink-muted); background:var(--bg-base); border:1px solid var(--border-standard); border-radius:999px; padding:1px 8px; letter-spacing:0.01em;">Most recent</span>
+            </div>
+            <div class="arc-point-meeting">Product Sync — Core Team</div>
+            <div class="arc-point-summary">
+              Deadline confirmed as Mar 14. Sarah to share wireframes today. Dev raised a performance concern on chart component with large datasets — unresolved. Murali to follow up async. Investor call urgency noted.
+            </div>
+            <a href="meeting-detail.html" class="arc-point-jump">→ 00:06:48 &nbsp;Jump to clip</a>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Status note -->
+      <div class="arc-status-note">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4A6CF7" stroke-width="1.6" style="flex-shrink:0; margin-top:1px;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5.5" x2="8" y2="8.5"/><circle cx="8" cy="11" r="0.7" fill="#4A6CF7"/></svg>
+        <div class="arc-status-note-text">
+          <strong style="color:var(--ink-primary);">Still open.</strong> Delivery committed to Mar 14. A chart performance concern raised Mar 7 is unresolved. Last discussed 2 days ago.
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Screen nav -->
+<div style="position:fixed; bottom:20px; right:20px; display:flex; gap:8px; z-index:100;">
+  <a href="dashboard.html" class="btn btn-ghost" style="font-size:12px;">← Dashboard</a>
+  <a href="meeting-detail.html" class="btn btn-ghost" style="font-size:12px;">Meeting →</a>
+  <a href="brief.html" class="btn btn-ghost" style="font-size:12px;">Brief →</a>
+</div>
+</body>
+</html>

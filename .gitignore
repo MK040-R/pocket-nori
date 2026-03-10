@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------------------
+# Secrets — NEVER commit
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# MCP server config (contains API keys)
+.mcp.json
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Type checking caches
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# Ruff cache
+.ruff_cache/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Node / TypeScript (Electron spike and future frontend)
+# ---------------------------------------------------------------------------
+node_modules/
+.npm
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# OS / IDE
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---------------------------------------------------------------------------
+# Compiled outputs
+# ---------------------------------------------------------------------------
+*.pyc
+*.pyo
+spikes/spike1_electron_audio/dist/
+spikes/spike1_electron_audio/out/
+
+# ---------------------------------------------------------------------------
+# Test artifacts
+# ---------------------------------------------------------------------------
+spikes/spike4_supabase_rls/test_credentials.json
+spikes/spike2_deepgram/recordings/
+spikes/spike3_llm_extraction/results/

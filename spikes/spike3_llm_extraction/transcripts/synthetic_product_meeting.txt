@@ -1,0 +1,52 @@
+Product Team Weekly Sync — March 5, 2026
+Attendees: Priya (PM), Dan (Engineering Lead), Sofia (Design), Marcus (Data)
+
+Priya: Alright, let's get started. First up — the Farz onboarding flow. Sofia, you had designs ready to review?
+
+Sofia: Yeah, I pushed the updated Figma frames yesterday. The main change is we've collapsed the three-step Google OAuth flow into a single consent screen. Users were dropping off on the second step — Marcus, you had the numbers on that?
+
+Marcus: Right, the funnel data from our beta showed 34% drop-off between step two and step three. The new single-screen approach should eliminate that entirely. I still need to run the updated numbers after we push the change though.
+
+Priya: Good. Dan, is the single-screen OAuth implementation feasible before the March 20th launch?
+
+Dan: It's feasible. I'd say two days of work on the backend — there's some token handling we need to adjust. But I'll need Sofia to export the final assets by end of day Thursday so we don't get blocked waiting on design.
+
+Sofia: I can do that. Thursday EOD, final Figma exports.
+
+Priya: Great. Let's also talk about the meeting transcript ingestion pipeline. Dan, where are we on the Google Meet integration?
+
+Dan: We've got the OAuth scopes working and can pull calendar events. The blocker right now is the transcript access — Google doesn't expose raw Meet transcripts through the Calendar API. We need to go through the Drive API since Meet saves transcripts there. I have a spike planned for next week to validate that approach.
+
+Priya: Does that put us at risk for the April 1st milestone?
+
+Dan: Potentially. If the Drive API approach doesn't work or has rate limits we can't handle, we may need to fall back to manual transcript upload for the beta. I'd say we know by March 12th.
+
+Priya: Okay. I want a go/no-go from you on the Drive API by March 12th. If it's a no-go, we pivot to manual upload and I'll update the milestone in Linear.
+
+Dan: Will do. I'll post the spike results in the FAR-7 issue.
+
+Marcus: While we're on the topic — I've been looking at the extraction quality. The commitment and entity extraction seems solid in my local tests, but topic clustering is still off. I'd like at least one more week of prompt iteration before we call it production-ready.
+
+Priya: That's fine. We don't need topic clustering for the April beta — it's a nice-to-have. Let's deprioritize it. What's blocking the entity extraction being shipped?
+
+Marcus: Nothing blocking, actually. I just need a code review from Dan on the Pydantic model changes.
+
+Dan: I'll review it today. Send me the PR link in Slack.
+
+Priya: Marcus, can you also put together a one-pager on the extraction accuracy metrics by the end of this sprint? We need something to show the investors.
+
+Marcus: Sure, I'll have that by March 14th.
+
+Priya: Last item — the Notion integration. That's still on the backlog, right?
+
+Sofia: Yes, it's in the Q2 roadmap. We agreed last quarter to hold off until the Google Workspace integrations are stable.
+
+Priya: Good. Let's not let that scope creep in. Okay — to summarize: Sofia gets final Figma exports to Dan by Thursday, Dan delivers the Drive API spike result by March 12th, Marcus sends the PR for review today, and Marcus delivers the investor one-pager by March 14th. Any questions?
+
+Dan: None from me.
+
+Sofia: All good.
+
+Marcus: Same.
+
+Priya: Great. See everyone next week.

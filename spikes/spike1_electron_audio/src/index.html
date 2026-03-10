@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Farz — Audio Capture Spike</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 16px;
+      padding: 24px;
+    }
+
+    h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+
+    #source-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    select {
+      flex: 1;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    button {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #e0e0e0;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: #2a2a2a; }
+    button:disabled { opacity: 0.4; cursor: default; }
+
+    #btn-start { border-color: #2d6a4f; color: #74c69d; }
+    #btn-start:hover:not(:disabled) { background: #1a3a2a; }
+    #btn-stop  { border-color: #6a2d2d; color: #e07070; }
+    #btn-stop:hover:not(:disabled)  { background: #3a1a1a; }
+
+    #controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    #status {
+      font-size: 12px;
+      color: #888;
+      min-height: 18px;
+      text-align: center;
+    }
+
+    #timer {
+      font-size: 28px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 1px;
+      color: #74c69d;
+      min-height: 36px;
+    }
+
+    #output-path {
+      font-size: 11px;
+      color: #555;
+      word-break: break-all;
+      text-align: center;
+      max-width: 380px;
+      cursor: pointer;
+    }
+    #output-path:hover { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Farz Audio Capture</h1>
+
+  <div id="source-row">
+    <select id="source-select"><option value="">Loading sources…</option></select>
+    <button id="btn-refresh">Refresh</button>
+  </div>
+
+  <div id="timer">00:00</div>
+
+  <div id="controls">
+    <button id="btn-start">Start Capture</button>
+    <button id="btn-stop" disabled>Stop &amp; Save</button>
+  </div>
+
+  <div id="status">Select a source, then click Start Capture.</div>
+  <div id="output-path" title="Click to open output folder"></div>
+
+  <script>
+    // -----------------------------------------------------------------
+    // DOM refs
+    // -----------------------------------------------------------------
+    const sourceSelect = document.getElementById("source-select");
+    const btnRefresh   = document.getElementById("btn-refresh");
+    const btnStart     = document.getElementById("btn-start");
+    const btnStop      = document.getElementById("btn-stop");
+    const statusEl     = document.getElementById("status");
+    const timerEl      = document.getElementById("timer");
+    const outputPathEl = document.getElementById("output-path");
+
+    // -----------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------
+    // audioCapture module is bundled inline below to avoid a bundler
+    // requirement for the spike. In production, use a proper bundler.
+
+    let audioCtx = null;
+    let sourceNode = null;
+    let processorNode = null;
+    let activeStream = null;
+    let pcmChunks = [];
+    let captureStartTime = 0;
+    let timerInterval = null;
+
+    const TARGET_SAMPLE_RATE = 16000;
+    const BUFFER_SIZE = 4096;
+
+    // -----------------------------------------------------------------
+    // Source enumeration
+    // -----------------------------------------------------------------
+    async function loadSources() {
+      statusEl.textContent = "Loading sources…";
+      try {
+        const sources = await window.captureAPI.getSources();
+        sourceSelect.innerHTML = "";
+        if (sources.length === 0) {
+          sourceSelect.innerHTML = '<option value="">No sources found</option>';
+          return;
+        }
+        for (const s of sources) {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name;
+          sourceSelect.appendChild(opt);
+        }
+        statusEl.textContent = `${sources.length} source(s) found. Select one and click Start.`;
+      } catch (err) {
+        statusEl.textContent = "Error loading sources: " + err.message;
+      }
+    }
+
+    btnRefresh.addEventListener("click", loadSources);
+
+    // -----------------------------------------------------------------
+    // Start capture
+    // -----------------------------------------------------------------
+    btnStart.addEventListener("click", async () => {
+      const sourceId = sourceSelect.value;
+      if (!sourceId) {
+        statusEl.textContent = "Please select a source first.";
+        return;
+      }
+
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      statusEl.textContent = "Requesting stream…";
+
+      try {
+        const constraints = {
+          audio: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: sourceId,
+            loopback: true,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            sampleRate: TARGET_SAMPLE_RATE,
+          },
+          video: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: sourceId,
+            width: { max: 1 },
+            height: { max: 1 },
+            frameRate: { max: 1 },
+          },
+        };
+
+        activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        audioCtx = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+        sourceNode = audioCtx.createMediaStreamSource(activeStream);
+        processorNode = audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
+
+        processorNode.onaudioprocess = (event) => {
+          const inputBuffer = event.inputBuffer;
+          const numCh = inputBuffer.numberOfChannels;
+          const frameCount = inputBuffer.length;
+          const mono = new Float32Array(frameCount);
+
+          for (let ch = 0; ch < numCh; ch++) {
+            const data = inputBuffer.getChannelData(ch);
+            for (let i = 0; i < frameCount; i++) {
+              mono[i] += data[i] / numCh;
+            }
+          }
+
+          // Float32 → Int16
+          const int16 = new Int16Array(frameCount);
+          for (let i = 0; i < frameCount; i++) {
+            const clamped = Math.max(-1, Math.min(1, mono[i]));
+            int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+          }
+          pcmChunks.push(int16);
+        };
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(audioCtx.destination);
+
+        pcmChunks = [];
+        captureStartTime = Date.now();
+
+        // Timer
+        timerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - captureStartTime) / 1000);
+          const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+          const ss = String(elapsed % 60).padStart(2, "0");
+          timerEl.textContent = `${mm}:${ss}`;
+        }, 500);
+
+        statusEl.textContent = "Capturing… click Stop & Save when done.";
+      } catch (err) {
+        statusEl.textContent = "Error starting capture: " + err.message;
+        console.error(err);
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+      }
+    });
+
+    // -----------------------------------------------------------------
+    // Stop capture & save
+    // -----------------------------------------------------------------
+    btnStop.addEventListener("click", async () => {
+      btnStop.disabled = true;
+      statusEl.textContent = "Stopping capture…";
+
+      clearInterval(timerInterval);
+      timerInterval = null;
+
+      // Tear down graph
+      if (sourceNode) sourceNode.disconnect();
+      if (processorNode) {
+        processorNode.disconnect();
+        processorNode.onaudioprocess = null;
+      }
+      if (activeStream) activeStream.getTracks().forEach(t => t.stop());
+      if (audioCtx) await audioCtx.close();
+
+      sourceNode = null;
+      processorNode = null;
+      activeStream = null;
+      audioCtx = null;
+
+      // Concatenate PCM chunks
+      const totalLen = pcmChunks.reduce((s, c) => s + c.length, 0);
+      const pcm = new Int16Array(totalLen);
+      let off = 0;
+      for (const chunk of pcmChunks) {
+        pcm.set(chunk, off);
+        off += chunk.length;
+      }
+      pcmChunks = [];
+
+      statusEl.textContent = "Saving WAV…";
+
+      try {
+        const result = await window.captureAPI.saveWav(
+          Array.from(pcm),
+          TARGET_SAMPLE_RATE,
+          1
+        );
+        if (result.ok) {
+          statusEl.textContent = "Saved!";
+          outputPathEl.textContent = result.path;
+        } else {
+          statusEl.textContent = "Save error: " + result.error;
+        }
+      } catch (err) {
+        statusEl.textContent = "IPC error: " + err.message;
+      }
+
+      btnStart.disabled = false;
+      timerEl.textContent = "00:00";
+    });
+
+    // Open output dir on click
+    outputPathEl.addEventListener("click", () => {
+      window.captureAPI.openOutputDir();
+    });
+
+    // -----------------------------------------------------------------
+    // Init
+    // -----------------------------------------------------------------
+    loadSources();
+  </script>
+</body>
+</html>

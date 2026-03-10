@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farz — Dashboard</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.greeting {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink-primary);
+}
+.greeting-sub {
+  font-size: 14px;
+  color: var(--ink-tertiary);
+  margin-top: 4px;
+}
+.meeting-card {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
+  transition: box-shadow 0.15s;
+}
+.meeting-card:hover { box-shadow: var(--shadow-raised); }
+.meeting-card + .meeting-card { margin-top: 10px; }
+.meeting-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.meeting-card-body { flex: 1; min-width: 0; }
+.meeting-card-right { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.brief-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-bottom: 8px;
+}
+.meeting-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.meeting-meta {
+  font-size: 12.5px;
+  color: var(--ink-tertiary);
+  margin-top: 4px;
+}
+.meeting-teaser {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-top: 8px;
+  font-style: italic;
+  line-height: 1.5;
+}
+.time-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background: var(--bg-base);
+  border: 1px solid var(--border-standard);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  letter-spacing: 0.01em;
+}
+.first-session-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+.activity-list { }
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.activity-text {
+  font-size: 13.5px;
+  color: var(--ink-secondary);
+  flex: 1;
+  line-height: 1.5;
+}
+.activity-time {
+  font-size: 12px;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.see-all-link {
+  font-size: 12.5px;
+  color: var(--ink-tertiary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.12s;
+}
+.see-all-link:hover { color: var(--accent); }
+.connection-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--accent-subtle);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-text">farz<span class="sidebar-logo-dot">.</span></div>
+    </div>
+    <div class="sidebar-nav">
+      <a href="dashboard.html" class="nav-item active">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a href="search-arc.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><line x1="10.5" y1="10.5" x2="14.5" y2="14.5"/></svg>
+        Search
+      </a>
+      <a href="meeting-detail.html" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="3" width="13" height="10.5" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>
+        Meetings
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="3,8 6.5,11.5 13,4"/></svg>
+        Commitments
+        <span class="nav-badge">7</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="1.5,12 5,6.5 8.5,9 12.5,3.5 14.5,5.5"/></svg>
+        Insights
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="user-avatar">MK</div>
+        <div>
+          <div class="user-name">Murali K.</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="page-header">
+      <div class="greeting">Good morning, Murali.</div>
+      <div class="greeting-sub">Monday, 9 March 2026 · 3 meetings today · 34 sessions indexed</div>
+    </div>
+
+    <div class="page-content">
+
+      <!-- Today's Meetings -->
+      <div class="section">
+        <div class="row-between" style="margin-bottom:16px;">
+          <div class="section-label" style="margin-bottom:0;">Today's Meetings</div>
+          <a href="meeting-detail.html" class="see-all-link">View all meetings →</a>
+        </div>
+
+        <div class="meeting-card">
+          <div class="meeting-card-header">
+            <div class="meeting-card-body">
+              <div class="brief-badge">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 0l1.12 3.45H9.76L6.82 5.58l1.12 3.45L5 7l-2.94 2.03 1.12-3.45L.24 3.45H3.88z"/></svg>
+                Brief ready
+              </div>
+              <div class="meeting-title">Product Sync — Core Team</div>
+              <div class="meeting-meta">9:30 AM · 45 min · Murali, Sarah, Dev, Priya</div>
+              <div class="meeting-teaser">"Last time: Reporting feature deadline moved to Mar 14. Sarah to share wireframes."</div>
+              <div class="topic-tags">
+                <a href="search-arc.html" class="topic-tag">reporting feature</a>
+                <a href="#" class="topic-tag">Q1 roadmap</a>
+                <a href="#" class="topic-tag">design handoff</a>
+              </div>
+            </div>
+            <div class="meeting-card-right">
+              <div class="time-chip">9:30</div>
+              <a href="brief.html" class="btn btn-accent" style="font-size:12.5px; padding:7px 14px;">Open Brief →</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="meeting-card">
+          <div class="meeting-card-header">
+            <div class="meeting-card-body">
+              <div class="brief-badge">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 0l1.12 3.45H9.76L6.82 5.58l1.12 3.45L5 7l-2.94 2.03 1.12-3.45L.24 3.45H3.88z"/></svg>
+                Brief ready
+              </div>
+              <div class="meeting-title">Investor Update — Series A</div>
+              <div class="meeting-meta">2:00 PM · 60 min · Murali, Alex Chen (Sequoia), Priya</div>
+              <div class="meeting-teaser">"Last time: Alex asked for updated MRR breakdown and 90-day retention cohort data."</div>
+              <div class="topic-tags">
+                <a href="#" class="topic-tag">Series A</a>
+                <a href="#" class="topic-tag">MRR</a>
+                <a href="#" class="topic-tag">retention</a>
+              </div>
+            </div>
+            <div class="meeting-card-right">
+              <div class="time-chip">14:00</div>
+              <a href="brief.html" class="btn btn-accent" style="font-size:12.5px; padding:7px 14px;">Open Brief →</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="meeting-card" style="opacity: 0.75;">
+          <div class="meeting-card-header">
+            <div class="meeting-card-body">
+              <div class="first-session-note">First session with this group · no brief yet</div>
+              <div class="meeting-title">Design Review — Onboarding Flow</div>
+              <div class="meeting-meta">4:30 PM · 30 min · Murali, Dev, Aisha</div>
+            </div>
+            <div class="meeting-card-right">
+              <div class="time-chip">16:30</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="two-col">
+
+        <!-- Open Commitments -->
+        <div>
+          <div class="row-between" style="margin-bottom:16px;">
+            <div class="section-label" style="margin-bottom:0;">Open Commitments</div>
+            <a href="#" class="see-all-link">See all 7 →</a>
+          </div>
+
+          <div class="commitment-item">
+            <div class="commitment-bar"></div>
+            <div class="commitment-content">
+              <div class="commitment-text">Send updated MRR breakdown to Alex Chen before investor call</div>
+              <div class="commitment-footer">
+                <span class="badge badge-open" style="font-size:11px; padding:2px 9px;">open</span>
+                <span style="font-size:12px; color:#E5484D; font-weight:500;">Due today</span>
+                <span class="commitment-source">Product Sync · Feb 28</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="commitment-item">
+            <div class="commitment-bar"></div>
+            <div class="commitment-content">
+              <div class="commitment-text">Share wireframes for reporting feature with the team</div>
+              <div class="commitment-footer">
+                <span class="badge badge-open" style="font-size:11px; padding:2px 9px;">open</span>
+                <span class="commitment-source">Due Mar 11 · Product Sync · Mar 7</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="commitment-item">
+            <div class="commitment-bar"></div>
+            <div class="commitment-content">
+              <div class="commitment-text">Review Aisha's PR for data export module</div>
+              <div class="commitment-footer">
+                <span class="badge badge-open" style="font-size:11px; padding:2px 9px;">open</span>
+                <span class="commitment-source">Due Mar 14 · Eng Standup · Mar 6</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- New Connections -->
+        <div>
+          <div class="row-between" style="margin-bottom:16px;">
+            <div class="section-label" style="margin-bottom:0;">New Connections</div>
+            <span class="badge badge-subtle" style="font-size:11px;">2 new</span>
+          </div>
+
+          <div class="connection-card">
+            <div class="connection-title">
+              <div class="connection-icon">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#4A6CF7" stroke-width="1.6"><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="8" r="2"/><path d="M5.5 8h5"/></svg>
+              </div>
+              Data Export — timeline gap
+            </div>
+            <div class="connection-rationale">
+              Both the Investor Update (Feb 28) and Engineering Standup (Mar 6) raised the data export deadline independently — Alex expects Q1, the team estimates Q2.
+            </div>
+            <div class="connection-meetings">
+              <span class="connection-meeting-pill">Investor Update · Feb 28</span>
+              <span class="connection-meeting-pill">Eng Standup · Mar 06</span>
+            </div>
+            <div style="margin-top:12px;">
+              <a href="search-arc.html" class="accent-link">Explore →</a>
+            </div>
+          </div>
+
+          <div class="connection-card" style="margin-top:10px;">
+            <div class="connection-title">
+              <div class="connection-icon">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#4A6CF7" stroke-width="1.6"><circle cx="3.5" cy="8" r="2"/><circle cx="12.5" cy="8" r="2"/><path d="M5.5 8h5"/></svg>
+              </div>
+              Retention — definition mismatch
+            </div>
+            <div class="connection-rationale">
+              Product tracks D30 retention; investor narrative uses 90-day cohort. Both groups believe they're measuring the same thing.
+            </div>
+            <div class="connection-meetings">
+              <span class="connection-meeting-pill">Product Sync · Mar 07</span>
+              <span class="connection-meeting-pill">Investor Update · Mar 05</span>
+            </div>
+            <div style="margin-top:12px;">
+              <a href="#" class="accent-link">Explore →</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <hr class="divider">
+
+      <!-- Recent Activity -->
+      <div class="section">
+        <div class="section-label">Recent Activity</div>
+        <div class="activity-list">
+          <div class="activity-item">
+            <div class="activity-dot"></div>
+            <div class="activity-text">Indexed <strong>Product Sync — Core Team</strong> · 4 commitments, 3 topics extracted</div>
+            <div class="activity-time">Today, 8:12 AM</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-dot" style="background:var(--ink-muted);"></div>
+            <div class="activity-text">New connection detected: <em>Data Export</em> spans 2 meetings</div>
+            <div class="activity-time">Yesterday, 6:44 PM</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-dot" style="background:var(--ink-muted);"></div>
+            <div class="activity-text">Brief generated for <strong>Investor Update — Series A</strong></div>
+            <div class="activity-time">Yesterday, 5:30 PM</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-dot" style="background:var(--ink-muted);"></div>
+            <div class="activity-text">Topic arc updated: <em>reporting feature</em> now spans 5 meetings</div>
+            <div class="activity-time">Mar 05, 3:20 PM</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Screen nav -->
+<div style="position:fixed; bottom:20px; right:20px; display:flex; gap:8px; z-index:100;">
+  <a href="search-arc.html" class="btn btn-ghost" style="font-size:12px;">Search →</a>
+  <a href="meeting-detail.html" class="btn btn-ghost" style="font-size:12px;">Meeting →</a>
+  <a href="brief.html" class="btn btn-ghost" style="font-size:12px;">Brief →</a>
+</div>
+</body>
+</html>

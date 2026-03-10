@@ -1,0 +1,45 @@
+1:1 — Priya and Marcus — March 6, 2026
+
+Priya: Hey Marcus, thanks for making time. How are you doing overall?
+
+Marcus: Pretty good. Last week was intense with the extraction spike, but I'm feeling good about where things are landing.
+
+Priya: Good to hear. Let's start with the Farz extraction pipeline since that's top of mind. You mentioned in the team meeting that topic clustering needs more work — can you tell me more about what you're seeing?
+
+Marcus: Sure. So the commitment and entity extraction is working reliably — I tested it across six internal transcripts and the outputs were solid. Structured JSON, correct owners on commitments, entity types are accurate. Where it breaks down is topics. The model is returning topics that are too granular. Like, instead of "Q3 hiring plan," it'll give me three separate topics for recruiter interviews, headcount budgets, and offer letters. They should be one topic.
+
+Priya: Is that a prompt problem or a model problem?
+
+Marcus: Mostly prompt. I think I need to add clearer guidance on topic granularity. Dan suggested I look at how the Anthropic prompt library handles summarization hierarchies. I haven't done that yet but I will this week.
+
+Priya: Okay, let's make that a priority. When do you think you can have a revised prompt tested?
+
+Marcus: By March 11th. I want to run it against the five transcripts we're getting from the beta users.
+
+Priya: Which brings me to — have you followed up with the beta users about getting those transcripts? We were supposed to have them by last Friday.
+
+Marcus: Ah, I dropped the ball on that. I'll send a reminder to the beta group today. I'll use the Typeform we already have for the feedback form.
+
+Priya: Please do. I need those transcripts by March 10th at the latest or the evaluation timeline slips. Okay, let's talk about you for a bit. I know you mentioned wanting to move toward a more senior IC track. How are you feeling about that?
+
+Marcus: It's something I think about a lot. I feel like this project — Farz — is actually the kind of work I want to be doing. It's technically challenging, there's real product impact, and I'm owning a meaningful part of the system. So I'm energized.
+
+Priya: I'm glad. For the senior IC promotion, one of the gaps we talked about last quarter was cross-functional influence. How do you feel you're doing there?
+
+Marcus: Better. I think the investor one-pager Priya — you just asked me to do — is actually a good opportunity to practice that. Translating technical extraction quality metrics into something a non-technical audience can evaluate. I want to use that as a template going forward.
+
+Priya: That's exactly the right instinct. I'll give you detailed feedback on the draft before it goes out. One thing I want you to also work on is documentation. The extraction pipeline has no README right now.
+
+Marcus: Yeah, you're right. I'll write a README for the spike directory this week. I can get it done by March 9th.
+
+Priya: That works. And not just "how to run it" — include the design decisions, why we chose these Pydantic models, the prompt structure rationale. Future you will thank present you.
+
+Marcus: Noted. I'll make it thorough.
+
+Priya: Great. Last thing — are you blocked on anything right now?
+
+Marcus: The only blocker is Dan's code review on the Pydantic model changes. He said he'd do it today in the team meeting, so I'll follow up with him if I don't hear back by end of day.
+
+Priya: Good. If you're still waiting tomorrow morning, loop me in and I'll nudge him. Alright, I think that covers it. Thanks Marcus — this was a great check-in.
+
+Marcus: Thanks Priya. Talk soon.
