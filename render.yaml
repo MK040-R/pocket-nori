@@ -57,95 +57,15 @@ services:
         sync: false   # set to your Vercel URL e.g. https://farz.vercel.app
 
   # ---------------------------------------------------------------------------
-  # Celery worker — ingest (Google Meet transcript export + parse)
+  # Celery worker — combined (ingest + extract + embed in one process)
   # ---------------------------------------------------------------------------
   - type: worker
-    name: farz-worker-ingest
+    name: farz-worker
     runtime: python
     region: oregon
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A src.workers.ingest worker --loglevel=info --concurrency=2
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: UPSTASH_REDIS_URL
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: API_BASE_URL
-        value: placeholder
-      - key: FRONTEND_URL
-        value: placeholder
-
-  # ---------------------------------------------------------------------------
-  # Celery worker — extract (Claude AI topics/commitments/entities)
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: farz-worker-extract
-    runtime: python
-    region: oregon
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A src.workers.extract worker --loglevel=info --concurrency=2
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: UPSTASH_REDIS_URL
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: API_BASE_URL
-        value: placeholder
-      - key: FRONTEND_URL
-        value: placeholder
-
-  # ---------------------------------------------------------------------------
-  # Celery worker — embed (OpenAI pgvector embeddings)
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: farz-worker-embed
-    runtime: python
-    region: oregon
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A src.workers.embed worker --loglevel=info --concurrency=2
+    startCommand: celery -A src.workers.combined worker --loglevel=info --concurrency=2
     envVars:
       - key: ENVIRONMENT
         value: production

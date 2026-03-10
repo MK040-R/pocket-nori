@@ -14,7 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.workers.ingest import _parse_google_transcript, ingest_recording
+from src.workers.ingest import (
+    _detect_and_parse,
+    _parse_gemini_notes,
+    _parse_google_transcript,
+    ingest_recording,
+)
 
 # ---------------------------------------------------------------------------
 # _parse_google_transcript unit tests
@@ -310,3 +315,118 @@ class TestIngestRecordingUnit:
             result = self._run_task(eager_ingest, drive_file_id=file_id)
 
         assert result["drive_file_id"] == file_id
+
+
+# ---------------------------------------------------------------------------
+# _parse_gemini_notes unit tests
+# ---------------------------------------------------------------------------
+
+_SAMPLE_GEMINI_NOTES = """\
+Natasha / Murali - 2026/03/03 14:30 - Notes by Gemini
+
+Summary
+This meeting covered project status updates and upcoming deadlines for Q1.
+
+Next steps
+• Murali to send updated roadmap by Friday
+• Natasha to review the design mockups
+
+Key decisions
+The team agreed to postpone the launch by two weeks to allow for additional testing.
+"""
+
+
+@pytest.mark.unit
+class TestParseGeminiNotes:
+    def test_creates_segments_from_sections(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        assert len(segments) >= 3  # Summary, Next steps, Key decisions
+
+    def test_speaker_id_is_gemini_notes(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        for seg in segments:
+            assert seg["speaker_id"] == "Gemini Notes"
+
+    def test_all_segments_have_required_keys(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        for seg in segments:
+            assert "speaker_id" in seg
+            assert "start_ms" in seg
+            assert "end_ms" in seg
+            assert "text" in seg
+
+    def test_end_ms_greater_than_start_ms(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        for seg in segments:
+            assert seg["end_ms"] > seg["start_ms"]
+
+    def test_title_line_skipped(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        for seg in segments:
+            assert "Notes by Gemini" not in seg["text"]
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert _parse_gemini_notes("") == []
+
+    def test_content_preserved(self) -> None:
+        segments = _parse_gemini_notes(_SAMPLE_GEMINI_NOTES)
+        all_text = " ".join(s["text"] for s in segments)
+        assert "project status" in all_text.lower() or "summary" in all_text.lower()
+
+
+# ---------------------------------------------------------------------------
+# _detect_and_parse unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDetectAndParse:
+    def test_timestamped_text_uses_transcript_parser(self) -> None:
+        text = "Alice\n00:00\nHello everyone.\n\nBob\n00:15\nHi there.\n"
+        segments, source_type = _detect_and_parse(text)
+        assert source_type == "google_meet_transcript"
+        assert segments[0]["speaker_id"] == "Alice"
+
+    def test_notes_text_uses_gemini_parser(self) -> None:
+        segments, source_type = _detect_and_parse(_SAMPLE_GEMINI_NOTES)
+        assert source_type == "gemini_notes"
+        assert all(s["speaker_id"] == "Gemini Notes" for s in segments)
+
+    def test_source_type_stored_in_ingest_result(self, eager_ingest: Any) -> None:
+        """source field in the conversation row must reflect the detected format."""
+        inserted_rows: list[dict] = []
+
+        def capture_insert(data: Any) -> Any:
+            if isinstance(data, dict):
+                inserted_rows.append(data)
+            elif isinstance(data, list):
+                inserted_rows.extend(data)
+            mock_result = MagicMock()
+            mock_result.execute.return_value.data = [{"id": str(uuid.uuid4())}]
+            return mock_result
+
+        with (
+            patch("src.workers.ingest.get_client") as mock_get_client,
+            patch("src.workers.ingest.refresh_access_token_sync", return_value="token"),
+            patch("src.workers.ingest.export_transcript_sync", return_value=_SAMPLE_GEMINI_NOTES),
+            patch("src.workers.ingest.extract_from_conversation.delay"),
+            patch("src.workers.ingest.embed_conversation.delay"),
+        ):
+            db = MagicMock()
+            db.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+            db.table.return_value.insert.side_effect = capture_insert
+            mock_get_client.return_value = db
+
+            from src.workers.ingest import ingest_recording as _ingest
+
+            _ingest.delay(
+                drive_file_id="geminidoc",
+                file_name="Meeting Notes",
+                created_time_iso="2026-03-03T10:00:00+00:00",
+                user_id="user-1",
+                user_jwt="jwt",
+                google_refresh_token="refresh",
+            ).get()
+
+        conv_rows = [r for r in inserted_rows if r.get("source")]
+        assert any(r["source"] == "gemini_notes" for r in conv_rows)

@@ -20,15 +20,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from celery import Celery
-
-from src import celeryconfig, llm_client
+from src import llm_client
+from src.celery_app import celery_app
 from src.database import get_client
 
 logger = logging.getLogger(__name__)
-
-celery_app = Celery("farz")
-celery_app.config_from_object(celeryconfig)
 
 
 # ---------------------------------------------------------------------------

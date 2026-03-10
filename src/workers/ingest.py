@@ -20,9 +20,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from celery import Celery
-
-from src import celeryconfig
+from src.celery_app import celery_app
 from src.config import settings  # noqa: F401 — imported for startup validation
 from src.database import get_client
 from src.drive_client import export_transcript_sync, refresh_access_token_sync
@@ -30,9 +28,6 @@ from src.workers.embed import embed_conversation
 from src.workers.extract import extract_from_conversation
 
 logger = logging.getLogger(__name__)
-
-celery_app = Celery("farz")
-celery_app.config_from_object(celeryconfig)
 
 # Average speaking rate used to estimate end_ms when the transcript has no
 # end timestamp for a segment (130 words per minute → ~462 ms per word).
@@ -130,6 +125,63 @@ def _parse_google_transcript(text: str) -> list[dict[str, Any]]:
     return segments
 
 
+_TS_DETECT_RE = re.compile(r"^\d{1,2}:\d{2}(:\d{2})?$", re.MULTILINE)
+
+
+def _parse_gemini_notes(text: str) -> list[dict[str, Any]]:
+    """Parse a Google Meet 'Notes by Gemini' document into content segments.
+
+    Gemini Notes are AI-generated meeting summaries with sections like
+    Summary, Next steps, Action items — no speaker timestamps.
+
+    Each non-empty paragraph becomes a segment with speaker_id='Gemini Notes'
+    and start_ms estimated sequentially from word count.
+
+    Returns a list of dicts with keys:
+        speaker_id (str), start_ms (int), end_ms (int), text (str)
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    blocks = [b.strip() for b in re.split(r"\n{2,}", text) if b.strip()]
+
+    segments: list[dict[str, Any]] = []
+    cursor_ms = 0
+
+    for i, block in enumerate(blocks):
+        # Skip the document title (first block, typically the meeting name)
+        if i == 0 and len(block.splitlines()) == 1:
+            continue
+
+        word_count = len(block.split())
+        if word_count == 0:
+            continue
+
+        duration_ms = max(word_count * _MS_PER_WORD, 1000)
+        segments.append(
+            {
+                "speaker_id": "Gemini Notes",
+                "start_ms": cursor_ms,
+                "end_ms": cursor_ms + duration_ms,
+                "text": block,
+            }
+        )
+        cursor_ms += duration_ms
+
+    logger.info("Parsed %d segments from Gemini Notes document", len(segments))
+    return segments
+
+
+def _detect_and_parse(text: str) -> tuple[list[dict[str, Any]], str]:
+    """Auto-detect document format and return (segments, source_type).
+
+    - If the text contains MM:SS or HH:MM:SS timestamp lines → standard
+      Google Meet transcript format; source_type = 'google_meet_transcript'
+    - Otherwise → Gemini Notes format; source_type = 'gemini_notes'
+    """
+    if _TS_DETECT_RE.search(text):
+        return _parse_google_transcript(text), "google_meet_transcript"
+    return _parse_gemini_notes(text), "gemini_notes"
+
+
 # ---------------------------------------------------------------------------
 # Celery task
 # ---------------------------------------------------------------------------
@@ -198,9 +250,9 @@ def ingest_recording(
     self.update_state(state="PROGRESS", meta={"status": "fetching_transcript", "user_id": user_id})
     transcript_text = export_transcript_sync(access_token, drive_file_id)
 
-    # --- Step 3: Parse transcript into segments ---
+    # --- Step 3: Parse transcript into segments (auto-detects format) ---
     self.update_state(state="PROGRESS", meta={"status": "parsing", "user_id": user_id})
-    utterances = _parse_google_transcript(transcript_text)
+    utterances, source_type = _detect_and_parse(transcript_text)
 
     # --- Step 4: Persist to Postgres ---
     self.update_state(state="PROGRESS", meta={"status": "saving", "user_id": user_id})
@@ -217,7 +269,7 @@ def ingest_recording(
     conversation_row = {
         "user_id": user_id,
         "title": file_name,
-        "source": "google_meet_transcript",
+        "source": source_type,
         "meeting_date": meeting_date.isoformat(),
         "duration_seconds": duration_seconds,
         "drive_file_id": drive_file_id,

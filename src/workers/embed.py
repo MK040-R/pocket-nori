@@ -15,15 +15,11 @@ Rules:
 import logging
 from typing import Any
 
-from celery import Celery
-
-from src import celeryconfig, llm_client
+from src import llm_client
+from src.celery_app import celery_app
 from src.database import get_client
 
 logger = logging.getLogger(__name__)
-
-celery_app = Celery("farz")
-celery_app.config_from_object(celeryconfig)
 
 # OpenAI rate limit: 2048 inputs per batch for text-embedding-3-small
 _EMBED_BATCH_SIZE = 100
