@@ -4,24 +4,66 @@ LLM gateway — ALL Claude API calls must go through this module.
 Rules enforced here:
 - Transcript content is never logged.
 - Extraction uses claude-sonnet-4-6; briefs use claude-opus-4-6.
-- JSON parsing errors raise ValueError with truncated (safe) context only.
+- All extraction returns validated Pydantic objects via instructor — no raw JSON parsing.
 """
 
-import json
 import logging
 from enum import StrEnum
+from typing import Literal
 
 import anthropic
+import instructor
+from pydantic import BaseModel, Field
 
 from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Prompts (sourced from spikes/spike3_llm_extraction/prompts.py)
+# Extraction response models
 # ---------------------------------------------------------------------------
 
-_TOPIC_SYSTEM_PROMPT = """You are an expert meeting analyst. Your task is to extract the main discussion topics from a meeting transcript.
+
+class TopicResult(BaseModel):
+    label: str = Field(description="Short topic name, 3-50 characters")
+    summary: str = Field(description="1-2 sentence summary of what was discussed")
+    status: Literal["open", "resolved"]
+    key_quotes: list[str] = Field(default_factory=list, max_length=2)
+
+
+class TopicList(BaseModel):
+    topics: list[TopicResult]
+
+
+class CommitmentResult(BaseModel):
+    text: str = Field(description="The commitment statement")
+    owner: str = Field(description="Name of the person who made the commitment")
+    due_date: str | None = Field(
+        default=None, description="ISO date YYYY-MM-DD if explicitly stated, else null"
+    )
+    status: Literal["open", "resolved"] = "open"
+
+
+class CommitmentList(BaseModel):
+    commitments: list[CommitmentResult]
+
+
+class EntityResult(BaseModel):
+    name: str = Field(description="Canonical name as it appears in the transcript")
+    type: Literal["person", "project", "company", "product"]
+    mentions: int = Field(ge=1)
+
+
+class EntityList(BaseModel):
+    entities: list[EntityResult]
+
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
+
+_TOPIC_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract the main discussion topics from a meeting transcript.
 
 For each topic:
 - Provide a short, descriptive label (3-50 characters)
@@ -30,95 +72,52 @@ For each topic:
 - Include up to 2 verbatim quotes that best represent the topic
 
 Guidelines:
-- Extract only topics that are clearly discussed in the transcript — do not invent or infer topics not present
+- Extract only topics clearly discussed — do not invent or infer topics not present
 - Prefer specificity over generality (e.g., "Q3 hiring plan" not "hiring")
 - A topic should represent a coherent subject of discussion, not a single passing remark
 - Accuracy over quantity: 3 real topics is better than 8 vague ones
-- If participants returned to a subject multiple times, treat it as one topic
+- If participants returned to a subject multiple times, treat it as one topic"""
 
-Return your response as a JSON object matching this schema exactly:
-{
-  "topics": [
-    {
-      "label": "string (short topic name)",
-      "summary": "string (1-2 sentences)",
-      "status": "open | resolved",
-      "key_quotes": ["string", "string"]
-    }
-  ]
-}
+_COMMITMENT_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract commitments and action items from a meeting transcript.
 
-Return only the JSON object. No explanation or preamble."""
-
-_COMMITMENT_SYSTEM_PROMPT = """You are an expert meeting analyst. Your task is to extract commitments and action items from a meeting transcript.
-
-A commitment is a statement where a named participant agrees to do something. This includes:
+A commitment is a statement where a named participant agrees to do something:
 - Explicit action items ("I'll send the report by Friday")
 - Agreements to follow up ("Let me check on that and get back to you")
 - Assigned tasks ("Can you own the API integration? — Sure, I'll handle it")
 
 For each commitment:
-- Capture the exact text or a close paraphrase of what was committed
-- Identify the person who owns the commitment (use their name as spoken in the transcript)
-- Extract a due date if one was explicitly mentioned (ISO format: YYYY-MM-DD); leave null if not stated
-- Set status to "open" unless the transcript explicitly confirms the commitment was completed
+- Capture the exact text or a close paraphrase
+- Identify the person who owns it (use their name as spoken)
+- Extract a due date only if explicitly mentioned (ISO format YYYY-MM-DD); leave null if not stated
+- Set status to "open" unless the transcript explicitly confirms completion
 
 Guidelines:
-- Only extract commitments with a clear owner — do not include vague "we should" statements with no named owner
-- Do not fabricate due dates; only include them if stated in the transcript
-- Accuracy over quantity: a few real commitments is better than many uncertain ones
+- Only extract commitments with a clear owner — exclude vague "we should" statements
+- Do not fabricate due dates
+- Accuracy over quantity"""
 
-Return your response as a JSON object matching this schema exactly:
-{
-  "commitments": [
-    {
-      "text": "string",
-      "owner": "string (person's name)",
-      "due_date": "YYYY-MM-DD or null",
-      "status": "open | resolved"
-    }
-  ]
-}
+_ENTITY_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract named entities from a meeting transcript.
 
-Return only the JSON object. No explanation or preamble."""
-
-_ENTITY_SYSTEM_PROMPT = """You are an expert meeting analyst. Your task is to extract named entities from a meeting transcript.
-
-Extract entities of these types only:
-- person: named individuals mentioned or speaking in the transcript
+Entity types to extract:
+- person: named individuals mentioned or speaking
 - project: named projects, initiatives, or workstreams
-- company: organizations, companies, or teams (other than the speakers' own company, unless named)
+- company: organizations or teams
 - product: named software products, tools, platforms, or features
 
 For each entity:
 - Use the name exactly as it appears most completely in the transcript
-- Classify it as one of: person, project, company, or product
-- Count the total number of times it is mentioned (approximate is fine)
+- Count total mentions (approximate is fine)
 
 Guidelines:
-- Only extract entities with proper names — do not include generic references ("the backend", "the client")
-- If a person is referred to by first name only and it is unambiguous, use that name
-- If the same entity is referred to by multiple names, count them together under the canonical name
-- Accuracy over quantity
-
-Return your response as a JSON object matching this schema exactly:
-{
-  "entities": [
-    {
-      "name": "string",
-      "type": "person | project | company | product",
-      "mentions": integer
-    }
-  ]
-}
-
-Return only the JSON object. No explanation or preamble."""
+- Only extract entities with proper names — exclude generic references ("the backend", "the client")
+- If referred to by multiple names, count them together under the canonical name
+- Accuracy over quantity"""
 
 _BRIEF_SYSTEM_PROMPT = """You are an expert meeting strategist. Given context about a person's past meetings and an upcoming calendar event, write a concise pre-meeting brief.
 
-The brief should include:
+Include:
 - A 2-3 sentence situational summary: what relevant history exists with these people or topics
-- Open commitments from previous meetings that are relevant to this meeting
+- Open commitments from previous meetings relevant to this one
 - 2-3 suggested talking points or questions the person should be ready for
 - Any cross-meeting patterns or connections worth flagging
 
@@ -141,29 +140,26 @@ class _Model(StrEnum):
     BRIEF = "claude-opus-4-6"
 
 
-def _client() -> anthropic.Anthropic:
+def _instructor_client() -> instructor.Instructor:
+    return instructor.from_anthropic(anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY))
+
+
+def _raw_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-def _call(system_prompt: str, user_content: str, model: _Model, max_tokens: int = 2048) -> str:
-    """Make a single Claude API call. Transcript content is not logged."""
-    logger.debug("LLM call — model=%s max_tokens=%d", model, max_tokens)
-    response = _client().messages.create(
+def _extract(
+    system_prompt: str, transcript: str, response_model: type, model: _Model = _Model.EXTRACTION
+):
+    """Run a structured extraction call via instructor. Transcript content is not logged."""
+    logger.debug("LLM extraction call — model=%s response_model=%s", model, response_model.__name__)
+    return _instructor_client().messages.create(
         model=str(model),
-        max_tokens=max_tokens,
+        max_tokens=2048,
         system=system_prompt,
-        messages=[{"role": "user", "content": user_content}],
+        messages=[{"role": "user", "content": f"Here is the meeting transcript:\n\n{transcript}"}],
+        response_model=response_model,
     )
-    return response.content[0].text
-
-
-def _parse_json(raw: str, task_name: str) -> dict:
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
-        # Truncate to avoid leaking transcript content in error messages
-        preview = raw[:120].replace("\n", " ")
-        raise ValueError(f"LLM returned non-JSON for {task_name}. Preview: {preview!r}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -171,42 +167,31 @@ def _parse_json(raw: str, task_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def extract_topics(transcript: str) -> dict:
+def extract_topics(transcript: str) -> TopicList:
     """Extract discussion topics from a transcript.
 
     Returns:
-        dict with key "topics" — list of {label, summary, status, key_quotes}.
+        TopicList with validated Topic objects, each linked to source quotes.
     """
-    raw = _call(
-        _TOPIC_SYSTEM_PROMPT, f"Here is the meeting transcript:\n\n{transcript}", _Model.EXTRACTION
-    )
-    return _parse_json(raw, "topic extraction")
+    return _extract(_TOPIC_SYSTEM_PROMPT, transcript, TopicList)
 
 
-def extract_commitments(transcript: str) -> dict:
+def extract_commitments(transcript: str) -> CommitmentList:
     """Extract commitments and action items from a transcript.
 
     Returns:
-        dict with key "commitments" — list of {text, owner, due_date, status}.
+        CommitmentList with validated Commitment objects (owner, due_date, status).
     """
-    raw = _call(
-        _COMMITMENT_SYSTEM_PROMPT,
-        f"Here is the meeting transcript:\n\n{transcript}",
-        _Model.EXTRACTION,
-    )
-    return _parse_json(raw, "commitment extraction")
+    return _extract(_COMMITMENT_SYSTEM_PROMPT, transcript, CommitmentList)
 
 
-def extract_entities(transcript: str) -> dict:
+def extract_entities(transcript: str) -> EntityList:
     """Extract named entities from a transcript.
 
     Returns:
-        dict with key "entities" — list of {name, type, mentions}.
+        EntityList with validated Entity objects (name, type, mention count).
     """
-    raw = _call(
-        _ENTITY_SYSTEM_PROMPT, f"Here is the meeting transcript:\n\n{transcript}", _Model.EXTRACTION
-    )
-    return _parse_json(raw, "entity extraction")
+    return _extract(_ENTITY_SYSTEM_PROMPT, transcript, EntityList)
 
 
 def generate_brief(context: str) -> str:
@@ -218,5 +203,11 @@ def generate_brief(context: str) -> str:
     Returns:
         Plain-text brief as a single string.
     """
-    logger.debug("LLM call — generating brief")
-    return _call(_BRIEF_SYSTEM_PROMPT, context, _Model.BRIEF, max_tokens=1024)
+    logger.debug("LLM call — generating brief model=%s", _Model.BRIEF)
+    response = _raw_client().messages.create(
+        model=str(_Model.BRIEF),
+        max_tokens=1024,
+        system=_BRIEF_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": context}],
+    )
+    return response.content[0].text
