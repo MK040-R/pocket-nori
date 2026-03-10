@@ -54,6 +54,10 @@ dev = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+exclude = [
+    "scripts",
+    "spikes",
+]
 
 [tool.ruff.lint]
 select = [
@@ -76,6 +80,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106"]  # Allow assert + hardcoded test credentials
+"src/llm_client.py" = ["E501"]  # Prompt strings cannot be wrapped without affecting the LLM
 
 [tool.ruff.format]
 quote-style = "double"

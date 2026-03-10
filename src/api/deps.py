@@ -33,15 +33,15 @@ async def get_current_user(
             algorithms=[settings.JWT_ALGORITHM],
         )
         return payload
-    except ExpiredSignatureError:
+    except ExpiredSignatureError as exc:
         logger.warning("JWT validation failed: token expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        )
-    except JWTError:
+        ) from exc
+    except JWTError as exc:
         logger.warning("JWT validation failed: invalid token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        )
+        ) from exc

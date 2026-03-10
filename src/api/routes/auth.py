@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-_GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+_GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"  # noqa: S105
 
 _SCOPES = [
     "openid",
@@ -88,12 +88,10 @@ async def callback(
             )
     except httpx.RequestError as exc:
         logger.error("HTTP request to Google token endpoint failed: %s", type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Token exchange failed")
+        raise HTTPException(status_code=400, detail="Token exchange failed") from exc
 
     if token_response.status_code != 200:
-        logger.error(
-            "Google token endpoint returned status %d", token_response.status_code
-        )
+        logger.error("Google token endpoint returned status %d", token_response.status_code)
         raise HTTPException(status_code=400, detail="Token exchange failed")
 
     token_data: dict[str, Any] = token_response.json()
@@ -112,7 +110,7 @@ async def callback(
         )
     except Exception as exc:
         logger.error("Supabase sign-in failed: %s", type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Authentication failed")
+        raise HTTPException(status_code=400, detail="Authentication failed") from exc
 
     session = auth_response.session
     user = auth_response.user

@@ -6,7 +6,7 @@ jobs:
   rls-test:
     runs-on: ubuntu-latest
     # Skip when Supabase credentials are not yet configured as repo secrets
-    if: ${{ secrets.SUPABASE_URL != '' }}
+    if: ${{ vars.SUPABASE_URL != '' }}
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
