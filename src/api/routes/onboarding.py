@@ -117,7 +117,7 @@ def _get_google_tokens(db: Any, user_id: str) -> tuple[str, str]:
     summary="List Drive recordings available to import",
 )
 async def available_recordings(
-    lookback_days: int = 60,
+    lookback_days: int = 365,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[AvailableRecording]:
     """Return Google Drive video files from the last lookback_days, annotated

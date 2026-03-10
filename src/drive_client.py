@@ -118,7 +118,7 @@ async def _get_meet_folder_ids(
 
 async def list_meet_recordings(
     access_token: str,
-    lookback_days: int = 60,
+    lookback_days: int = 365,
 ) -> list[DriveRecording]:
     """List Google Meet recording files from Drive created in the last lookback_days.
 
