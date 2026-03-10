@@ -1,0 +1,7 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff          # lint + auto-fix (isort, pyupgrade, etc.)
+        args: [--fix]
+      - id: ruff-format   # auto-format (black-compatible)
