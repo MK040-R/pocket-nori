@@ -31,15 +31,18 @@ class TopicSummary(BaseModel):
     latest_date: str | None
 
 
+class TopicConversation(BaseModel):
+    id: str
+    title: str
+    meeting_date: str
+
+
 class TopicDetail(BaseModel):
     id: str
     label: str
     summary: str
-    status: str
     key_quotes: list[str]
-    conversation_id: str
-    conversation_title: str
-    meeting_date: str
+    conversations: list[TopicConversation]
 
 
 # ---------------------------------------------------------------------------
@@ -49,27 +52,22 @@ class TopicDetail(BaseModel):
 
 @router.get(
     "",
-    response_model=list[TopicDetail],
+    response_model=list[TopicSummary],
     summary="List all topics across all conversations",
 )
 def list_topics(
     limit: int = 100,
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
-) -> list[TopicDetail]:
-    """Return all topics for the current user, newest conversation first.
-
-    Each topic includes its source conversation title and date for context.
-    """
+) -> list[TopicSummary]:
+    """Return all topics for the current user, newest conversation first."""
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    # Fetch topics joined with conversation metadata via two queries
-    # (supabase-py doesn't support JOINs — fetch conversations separately)
     topics_result = (
         db.table("topics")
-        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
+        .select("id, label, conversation_id, created_at")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .range(offset, offset + limit - 1)
@@ -79,27 +77,23 @@ def list_topics(
     if not topics:
         return []
 
-    # Fetch conversation metadata for all referenced conversations
+    # Fetch conversation meeting_date for latest_date
     conv_ids = list({t["conversation_id"] for t in topics})
     convs_result = (
         db.table("conversations")
-        .select("id, title, meeting_date")
+        .select("id, meeting_date")
         .eq("user_id", user_id)
         .in_("id", conv_ids)
         .execute()
     )
-    conv_map = {c["id"]: c for c in (convs_result.data or [])}
+    conv_date_map = {c["id"]: c.get("meeting_date") for c in (convs_result.data or [])}
 
     return [
-        TopicDetail(
+        TopicSummary(
             id=t["id"],
             label=t["label"],
-            summary=t["summary"],
-            status=t["status"],
-            key_quotes=t.get("key_quotes") or [],
-            conversation_id=t["conversation_id"],
-            conversation_title=conv_map.get(t["conversation_id"], {}).get("title", ""),
-            meeting_date=conv_map.get(t["conversation_id"], {}).get("meeting_date", ""),
+            conversation_count=1,
+            latest_date=conv_date_map.get(t["conversation_id"]),
         )
         for t in topics
     ]
@@ -113,20 +107,20 @@ def list_topics(
 @router.get(
     "/{topic_id}",
     response_model=TopicDetail,
-    summary="Get a single topic with its source conversation",
+    summary="Get a single topic with its source conversations",
 )
 def get_topic(
     topic_id: str,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> TopicDetail:
-    """Return a single topic with its key quotes and source conversation."""
+    """Return a single topic with its key quotes and source conversations."""
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
     topic_result = (
         db.table("topics")
-        .select("id, label, summary, status, key_quotes, conversation_id")
+        .select("id, label, summary, key_quotes, conversation_id")
         .eq("id", topic_id)
         .eq("user_id", user_id)
         .execute()
@@ -144,14 +138,20 @@ def get_topic(
         .execute()
     )
     conv = conv_result.data[0] if conv_result.data else {}
+    conversations = (
+        [TopicConversation(
+            id=conv["id"],
+            title=conv.get("title", ""),
+            meeting_date=conv.get("meeting_date", ""),
+        )]
+        if conv
+        else []
+    )
 
     return TopicDetail(
         id=t["id"],
         label=t["label"],
         summary=t["summary"],
-        status=t["status"],
         key_quotes=t.get("key_quotes") or [],
-        conversation_id=t["conversation_id"],
-        conversation_title=conv.get("title", ""),
-        meeting_date=conv.get("meeting_date", ""),
+        conversations=conversations,
     )

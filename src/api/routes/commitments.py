@@ -8,7 +8,7 @@ PATCH /commitments/{id} — mark a commitment as resolved (or re-open it)
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from src.api.deps import get_current_user
@@ -50,23 +50,25 @@ class CommitmentPatch(BaseModel):
 )
 def list_commitments(
     filter_status: str | None = None,
+    status_param: str | None = Query(default=None, alias="status"),
     limit: int = 100,
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[CommitmentOut]:
     """Return all commitments for the current user.
 
-    Optional query parameter ``filter_status`` accepts ``open`` or ``resolved``
-    to filter by status. Without it, all commitments are returned.
+    Optional query parameter ``filter_status`` or ``status`` accepts ``open``
+    or ``resolved`` to filter by status. Without it, all commitments are returned.
     """
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    if filter_status and filter_status not in ("open", "resolved"):
+    effective_filter = filter_status or status_param
+    if effective_filter and effective_filter not in ("open", "resolved"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="filter_status must be 'open' or 'resolved'",
+            detail="status filter must be 'open' or 'resolved'",
         )
 
     query = (
@@ -75,8 +77,8 @@ def list_commitments(
         .eq("user_id", user_id)
         .order("created_at", desc=True)
     )
-    if filter_status:
-        query = query.eq("status", filter_status)
+    if effective_filter:
+        query = query.eq("status", effective_filter)
 
     result = query.range(offset, offset + limit - 1).execute()
     commitments = result.data or []

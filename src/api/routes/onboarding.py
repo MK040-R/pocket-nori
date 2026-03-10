@@ -54,6 +54,7 @@ class ImportResponse(BaseModel):
 
 class JobStatus(BaseModel):
     job_id: str
+    file_id: str | None = None
     status: str   # pending | progress | success | failure
     detail: str | None = None
     result: dict[str, Any] | None = None
@@ -284,12 +285,13 @@ async def start_import(
 )
 def import_status_aggregate(
     job_ids: str = "",
+    file_ids: str = "",
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> AggregateImportStatus:
     """Return aggregate status across a comma-separated list of job IDs.
 
     Pass the job IDs returned by POST /import as a comma-separated query
-    parameter: ``?job_ids=id1,id2,id3``
+    parameter: ``?job_ids=id1,id2,id3&file_ids=fid1,fid2,fid3``
 
     Returns per-job status plus summary counts.
     """
@@ -298,31 +300,50 @@ def import_status_aggregate(
             total=0, pending=0, processing=0, succeeded=0, failed=0, jobs=[]
         )
 
+    user_id: str = current_user["sub"]
     ids = [j.strip() for j in job_ids.split(",") if j.strip()]
+    fids = [f.strip() for f in file_ids.split(",") if f.strip()]
+    # Pad file_ids list to match job_ids length (None for unmatched positions)
+    fid_map: dict[str, str | None] = {
+        ids[i]: fids[i] if i < len(fids) else None for i in range(len(ids))
+    }
+
     job_statuses: list[JobStatus] = []
     counts = {"pending": 0, "processing": 0, "succeeded": 0, "failed": 0}
 
     for job_id in ids:
         result = AsyncResult(job_id, app=celery_app)
         state = result.state.lower()
+        file_id = fid_map.get(job_id)
 
         if state == "pending":
-            js = JobStatus(job_id=job_id, status="pending")
+            js = JobStatus(job_id=job_id, file_id=file_id, status="pending")
             counts["pending"] += 1
         elif state == "progress":
             meta = result.info or {}
-            js = JobStatus(job_id=job_id, status="progress", detail=meta.get("status", "processing"))
-            counts["processing"] += 1
-        elif state == "success":
+            if meta.get("user_id") and meta["user_id"] != user_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Job not found")
             js = JobStatus(
                 job_id=job_id,
+                file_id=file_id,
+                status="progress",
+                detail=meta.get("status", "processing"),
+            )
+            counts["processing"] += 1
+        elif state == "success":
+            task_result: dict[str, Any] = result.result if isinstance(result.result, dict) else {}
+            if task_result.get("user_id") and task_result["user_id"] != user_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Job not found")
+            js = JobStatus(
+                job_id=job_id,
+                file_id=file_id or task_result.get("drive_file_id"),
                 status="success",
-                result=result.result if isinstance(result.result, dict) else {},
+                result=task_result,
             )
             counts["succeeded"] += 1
         else:
             error_detail: str = str(result.result) if result.result else "Unknown error"
-            js = JobStatus(job_id=job_id, status="failure", detail=error_detail)
+            js = JobStatus(job_id=job_id, file_id=file_id, status="failure", detail=error_detail)
             counts["failed"] += 1
 
         job_statuses.append(js)
@@ -359,6 +380,7 @@ def import_status(
     - success   — job completed; result contains conversation_id and segment_count
     - failure   — job failed; detail contains the error message
     """
+    user_id: str = current_user["sub"]
     result = AsyncResult(job_id, app=celery_app)
     state = result.state.lower()
 
@@ -367,6 +389,8 @@ def import_status(
 
     if state == "progress":
         meta = result.info or {}
+        if meta.get("user_id") and meta["user_id"] != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Job not found")
         return JobStatus(
             job_id=job_id,
             status="progress",
@@ -374,10 +398,14 @@ def import_status(
         )
 
     if state == "success":
+        task_result: dict[str, Any] = result.result if isinstance(result.result, dict) else {}
+        if task_result.get("user_id") and task_result["user_id"] != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Job not found")
         return JobStatus(
             job_id=job_id,
+            file_id=task_result.get("drive_file_id"),
             status="success",
-            result=result.result if isinstance(result.result, dict) else {},
+            result=task_result,
         )
 
     # failure or revoked

@@ -139,15 +139,15 @@ def ingest_recording(
         }
 
     # --- Step 1: Refresh Google access token ---
-    self.update_state(state="PROGRESS", meta={"status": "authenticating"})
+    self.update_state(state="PROGRESS", meta={"status": "authenticating", "user_id": user_id})
     access_token = refresh_access_token_sync(google_refresh_token)
 
     # --- Step 2: Download audio to memory ---
-    self.update_state(state="PROGRESS", meta={"status": "downloading"})
+    self.update_state(state="PROGRESS", meta={"status": "downloading", "user_id": user_id})
     audio_bytes = download_recording_sync(access_token, drive_file_id)
 
     # --- Step 3: Transcribe ---
-    self.update_state(state="PROGRESS", meta={"status": "transcribing"})
+    self.update_state(state="PROGRESS", meta={"status": "transcribing", "user_id": user_id})
     try:
         utterances = _transcribe_bytes(audio_bytes, mime_type=mime_type)
     finally:
@@ -157,7 +157,7 @@ def ingest_recording(
         logger.info("Audio bytes deleted from memory — file_id=%s", drive_file_id)
 
     # --- Step 5: Persist to Postgres ---
-    self.update_state(state="PROGRESS", meta={"status": "saving"})
+    self.update_state(state="PROGRESS", meta={"status": "saving", "user_id": user_id})
 
     # Parse recording timestamp
     try:
@@ -228,4 +228,6 @@ def ingest_recording(
         "conversation_id": conversation_id,
         "segment_count": len(utterances),
         "already_existed": False,
+        "user_id": user_id,
+        "drive_file_id": drive_file_id,
     }
