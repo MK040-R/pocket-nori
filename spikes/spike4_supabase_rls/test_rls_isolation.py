@@ -13,12 +13,12 @@ Run with:
 
 import json
 import os
-import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client, create_client
 
 # ---------------------------------------------------------------------------
 # Environment & credential loading
@@ -219,7 +219,8 @@ class TestRLSIsolation:
                 {
                     "user_id": user_b_id,  # Attempting to spoof user_b
                     "title": "Spoofed row",
-                    "content": "This row should never be created.",
+                    "source": "spike4-rls-test",
+                    "meeting_date": datetime.now(tz=UTC).isoformat(),
                 }
             ).execute()
 

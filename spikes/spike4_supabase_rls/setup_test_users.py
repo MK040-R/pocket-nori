@@ -13,13 +13,14 @@ Run once before executing the test suite:
 """
 
 import json
+import logging
 import os
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
+from supabase import Client, create_client
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -37,8 +38,8 @@ TEST_USERS = [
         "password": "TestPassword_UserA_1!",
         "label": "user_a",
         "conversations": [
-            {"title": "Q1 Planning", "content": "Discussed roadmap priorities for Q1."},
-            {"title": "Design Review", "content": "Reviewed wireframes for dashboard."},
+            {"title": "Q1 Planning"},
+            {"title": "Design Review"},
         ],
     },
     {
@@ -46,12 +47,13 @@ TEST_USERS = [
         "password": "TestPassword_UserB_1!",
         "label": "user_b",
         "conversations": [
-            {"title": "Budget Meeting", "content": "Allocated budget for infra spend."},
+            {"title": "Budget Meeting"},
         ],
     },
 ]
 
 CREDENTIALS_PATH = Path(__file__).parent / "test_credentials.json"
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ CREDENTIALS_PATH = Path(__file__).parent / "test_credentials.json"
 
 def get_admin_client() -> Client:
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        raise EnvironmentError(
+        raise OSError(
             "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env"
         )
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -69,7 +71,7 @@ def get_admin_client() -> Client:
 
 def get_anon_client() -> Client:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise EnvironmentError(
+        raise OSError(
             "SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env"
         )
     return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -88,13 +90,13 @@ def create_or_get_user(admin: Client, email: str, password: str) -> dict:
     """Create a Supabase auth user if they don't exist; return the user object."""
     existing = find_existing_user(admin, email)
     if existing:
-        print(f"  User already exists: {email} (id={existing.id})")
+        logger.info("  User already exists: %s (id=%s)", email, existing.id)
         return existing
 
     user = admin.auth.admin.create_user(
         {"email": email, "password": password, "email_confirm": True}
     )
-    print(f"  Created user: {email} (id={user.user.id})")
+    logger.info("  Created user: %s (id=%s)", email, user.user.id)
     return user.user
 
 
@@ -111,7 +113,8 @@ def insert_conversations_for_user(
     admin: Client, user_id: str, conversations: list[dict]
 ) -> None:
     """Insert sample conversations owned by *user_id* (uses service key to bypass RLS)."""
-    for convo in conversations:
+    now = datetime.now(tz=UTC)
+    for index, convo in enumerate(conversations):
         # Check whether a row with this title already exists for this user
         existing = (
             admin.table("conversations")
@@ -121,17 +124,21 @@ def insert_conversations_for_user(
             .execute()
         )
         if existing.data:
-            print(f"    Row already exists: '{convo['title']}' — skipping")
+            logger.info("    Row already exists: '%s' — skipping", convo["title"])
             continue
 
         admin.table("conversations").insert(
             {
                 "user_id": user_id,
                 "title": convo["title"],
-                "content": convo.get("content"),
+                "source": "spike4-rls-test",
+                "meeting_date": (
+                    convo.get("meeting_date")
+                    or (now - timedelta(days=index + 1)).isoformat()
+                ),
             }
         ).execute()
-        print(f"    Inserted row: '{convo['title']}'")
+        logger.info("    Inserted row: '%s'", convo["title"])
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +147,8 @@ def insert_conversations_for_user(
 
 
 def main() -> None:
-    print("=== Farz Spike 4 — Test User Setup ===\n")
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger.info("=== Farz Spike 4 — Test User Setup ===\n")
     admin = get_admin_client()
 
     credentials: dict[str, dict] = {}
@@ -158,17 +166,17 @@ def main() -> None:
         email = spec["email"]
         password = spec["password"]
 
-        print(f"[{label}] {email}")
+        logger.info("[%s] %s", label, email)
 
         user = create_or_get_user(admin, email, password)
         user_id = user.id if hasattr(user, "id") else user["id"]
 
         # Insert sample rows using admin (service key) so RLS does not interfere
-        print(f"  Inserting sample conversations...")
+        logger.info("  Inserting sample conversations...")
         insert_conversations_for_user(admin, user_id, spec["conversations"])
 
         # Sign in to obtain a user-scoped JWT
-        print(f"  Signing in to obtain JWT...")
+        logger.info("  Signing in to obtain JWT...")
         session = sign_in_user(email, password)
 
         credentials[label] = {
@@ -177,20 +185,20 @@ def main() -> None:
             "access_token": session.access_token,
             "refresh_token": session.refresh_token,
         }
-        print(f"  JWT obtained.\n")
+        logger.info("  JWT obtained.\n")
 
     # Persist credentials for the test suite
     with CREDENTIALS_PATH.open("w") as fh:
         json.dump(credentials, fh, indent=2)
 
-    print(f"Credentials written to: {CREDENTIALS_PATH}")
-    print("\nSetup complete. Run the tests with:")
-    print("  pytest test_rls_isolation.py -v\n")
+    logger.info("Credentials written to: %s", CREDENTIALS_PATH)
+    logger.info("\nSetup complete. Run the tests with:")
+    logger.info("  pytest test_rls_isolation.py -v\n")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except EnvironmentError as exc:
-        print(f"\nConfiguration error: {exc}", file=sys.stderr)
+    except OSError as exc:
+        logger.error("Configuration error: %s", exc)
         sys.exit(1)
