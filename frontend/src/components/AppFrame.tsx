@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { BASE_URL, getSession, logout, type Session } from "@/lib/api";
+import { BASE_URL, getSession, logout, subscribeToAuth, type Session } from "@/lib/api";
 
 const navItems = [
   { href: "/", label: "Dashboard" },
@@ -26,12 +26,15 @@ export function AppFrame({ children }: AppFrameProps) {
   const [loadingSession, setLoadingSession] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const loadSession = useCallback(async () => {
-    setLoadingSession(true);
-    setAuthError(null);
+  const loadSession = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setLoadingSession(true);
+      setAuthError(null);
+    }
     try {
       const current = await getSession();
       setSession(current);
+      setAuthError(null);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Failed to load session");
     } finally {
@@ -41,6 +44,45 @@ export function AppFrame({ children }: AppFrameProps) {
 
   useEffect(() => {
     void loadSession();
+  }, [loadSession]);
+
+  useEffect(() => {
+    return subscribeToAuth((event) => {
+      if (event.type === "refreshed") {
+        setSession(event.session);
+        setAuthError(null);
+        setLoadingSession(false);
+        return;
+      }
+      if (event.type === "expired") {
+        setSession(null);
+        setAuthError("Session expired. Sign in again.");
+        setLoadingSession(false);
+        return;
+      }
+      setSession(null);
+      setAuthError(null);
+      setLoadingSession(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    const refreshVisibleSession = () => {
+      void loadSession({ silent: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshVisibleSession();
+      }
+    };
+
+    window.addEventListener("focus", refreshVisibleSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refreshVisibleSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [loadSession]);
 
   const loginUrl = useMemo(() => `${BASE_URL}/auth/login`, []);
@@ -120,8 +162,6 @@ export function AppFrame({ children }: AppFrameProps) {
                       try {
                         await logout();
                       } finally {
-                        setSession(null);
-                        setAuthError(null);
                         router.push("/");
                         router.refresh();
                       }

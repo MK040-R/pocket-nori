@@ -5,7 +5,8 @@ GET  /auth/login     — redirects the browser to the Google consent screen.
 GET  /auth/callback  — exchanges the authorization code for tokens, sets
                        an HttpOnly session cookie, and redirects to the frontend.
 GET  /auth/session   — returns the current user's id and email (requires session).
-POST /auth/logout    — clears the session cookie.
+POST /auth/refresh   — exchanges the refresh cookie for a fresh session cookie.
+POST /auth/logout    — clears the session cookies.
 """
 
 import logging
@@ -14,8 +15,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from supabase import create_client
 
 from src.api.deps import get_current_user
@@ -37,8 +38,61 @@ _SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
-# Session cookie lifetime: 1 hour (matches Supabase default JWT expiry)
+# Session access token lifetime: 1 hour (matches Supabase default JWT expiry)
 _SESSION_COOKIE_MAX_AGE = 3600
+_REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+_SESSION_COOKIE_NAME = "session"
+_REFRESH_COOKIE_NAME = "session_refresh"
+
+
+def _set_session_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str | None,
+) -> None:
+    response.set_cookie(
+        key=_SESSION_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        samesite="none",
+        secure=True,
+        max_age=_SESSION_COOKIE_MAX_AGE,
+        path="/",
+    )
+    if refresh_token:
+        response.set_cookie(
+            key=_REFRESH_COOKIE_NAME,
+            value=refresh_token,
+            httponly=True,
+            samesite="none",
+            secure=True,
+            max_age=_REFRESH_COOKIE_MAX_AGE,
+            path="/",
+        )
+
+
+def _clear_session_cookies(response: Response) -> None:
+    response.delete_cookie(
+        key=_SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="none",
+        secure=True,
+    )
+    response.delete_cookie(
+        key=_REFRESH_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="none",
+        secure=True,
+    )
+
+
+def _session_payload(user: Any) -> dict[str, Any]:
+    return {
+        "user_id": str(user.id),
+        "email": str(getattr(user, "email", "") or ""),
+    }
 
 
 def _redirect_uri() -> str:
@@ -154,17 +208,9 @@ async def callback(
         # Non-fatal: token storage failing should not block login.
         logger.error("Failed to upsert user_index for user=%s: %s", user.id, type(exc).__name__)
 
-    # --- Set HttpOnly session cookie and redirect to frontend ---
+    # --- Set HttpOnly session cookies and redirect to frontend ---
     redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}/onboarding")
-    redirect.set_cookie(
-        key="session",
-        value=session.access_token,
-        httponly=True,
-        samesite="none",
-        secure=True,
-        max_age=_SESSION_COOKIE_MAX_AGE,
-        path="/",
-    )
+    _set_session_cookies(redirect, session.access_token, session.refresh_token)
     return redirect
 
 
@@ -183,11 +229,50 @@ async def get_session(
     }
 
 
+@router.post("/refresh")
+async def refresh_session(request: Request) -> JSONResponse:
+    """Refresh the Supabase session using the long-lived refresh cookie."""
+    refresh_token = request.cookies.get(_REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Sign in again.",
+        )
+
+    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+
+    try:
+        auth_response = supabase.auth.refresh_session(refresh_token)
+    except Exception as exc:
+        logger.warning("Supabase session refresh failed: %s", type(exc).__name__)
+        response = JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Session expired. Sign in again."},
+        )
+        _clear_session_cookies(response)
+        return response
+
+    session = auth_response.session
+    user = auth_response.user
+    if session is None or user is None:
+        logger.warning("Supabase session refresh returned no session or user")
+        response = JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Session expired. Sign in again."},
+        )
+        _clear_session_cookies(response)
+        return response
+
+    response = JSONResponse(content=_session_payload(user))
+    _set_session_cookies(response, session.access_token, session.refresh_token or refresh_token)
+    return response
+
+
 @router.post("/logout")
 async def logout(response: Response) -> dict[str, bool]:
-    """Clear the session cookie and sign the user out.
+    """Clear the session cookies and sign the user out.
 
     Always returns 200 — even if the user was not logged in.
     """
-    response.delete_cookie(key="session", path="/")
+    _clear_session_cookies(response)
     return {"ok": True}

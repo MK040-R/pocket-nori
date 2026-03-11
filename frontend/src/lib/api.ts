@@ -5,6 +5,10 @@ export type Session = {
   email: string;
 };
 
+export type AuthEvent =
+  | { type: "refreshed"; session: Session }
+  | { type: "expired" | "signed_out" };
+
 export type RecordingItem = {
   file_id: string;
   name: string;
@@ -262,26 +266,80 @@ class ApiError extends Error {
 
 type RequestOptions = RequestInit & {
   expectNoContent?: boolean;
+  skipAuthRefresh?: boolean;
 };
 
-async function request(path: string, init: RequestOptions & { expectNoContent: true }): Promise<void>;
-async function request<T>(path: string, init?: RequestOptions): Promise<T>;
-async function request<T>(path: string, init: RequestOptions = {}): Promise<T | void> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+type AuthListener = (event: AuthEvent) => void;
+
+const authListeners = new Set<AuthListener>();
+let refreshPromise: Promise<Session | null> | null = null;
+
+function emitAuthEvent(event: AuthEvent): void {
+  for (const listener of authListeners) {
+    listener(event);
+  }
+}
+
+export function subscribeToAuth(listener: AuthListener): () => void {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
+function buildHeaders(init?: RequestInit): Headers {
+  const headers = new Headers(init?.headers);
+  const hasBody = init?.body !== undefined && init?.body !== null;
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  if (hasBody && !isFormData && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
+}
+
+async function fetchResponse(path: string, init: RequestOptions = {}): Promise<Response> {
+  return fetch(`${BASE_URL}${path}`, {
     ...init,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: buildHeaders(init),
   });
+}
 
+async function refreshSession(): Promise<Session | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const response = await fetchResponse("/auth/refresh", {
+        method: "POST",
+        skipAuthRefresh: true,
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const session = (await response.json()) as Session;
+      emitAuthEvent({ type: "refreshed", session });
+      return session;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+function shouldAttemptRefresh(path: string, init: RequestOptions, response: Response): boolean {
+  if (response.status !== 401 || init.skipAuthRefresh) {
+    return false;
+  }
+  return path !== "/auth/refresh" && path !== "/auth/logout";
+}
+
+async function parseResponse<T>(response: Response, init: RequestOptions): Promise<T | void> {
   if (!response.ok) {
-    let message = `Request failed (${response.status})`;
+    let message =
+      response.status === 401 ? "Session expired. Sign in again." : `Request failed (${response.status})`;
     try {
       const payload = (await response.json()) as { detail?: string };
       if (payload?.detail) {
-        message = payload.detail;
+        message = response.status === 401 ? "Session expired. Sign in again." : payload.detail;
       }
     } catch {
       // ignore JSON parse issues for error payloads
@@ -303,9 +361,31 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T | 
   return (await response.json()) as T;
 }
 
+async function request(path: string, init: RequestOptions & { expectNoContent: true }): Promise<void>;
+async function request<T>(path: string, init?: RequestOptions): Promise<T>;
+async function request<T>(path: string, init: RequestOptions = {}): Promise<T | void> {
+  let response = await fetchResponse(path, init);
+  if (shouldAttemptRefresh(path, init, response)) {
+    const refreshedSession = await refreshSession();
+    if (refreshedSession) {
+      response = await fetchResponse(path, { ...init, skipAuthRefresh: true });
+    }
+  }
+
+  if (response.status === 401 && path !== "/auth/session") {
+    emitAuthEvent({ type: "expired" });
+  }
+
+  return parseResponse<T>(response, init);
+}
+
 export async function getSession(): Promise<Session | null> {
   try {
-    return await request<Session>("/auth/session", { method: "GET" });
+    const session = await request<Session>("/auth/session", { method: "GET" });
+    if (session) {
+      emitAuthEvent({ type: "refreshed", session });
+    }
+    return session;
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 404)) {
       return null;
@@ -316,6 +396,7 @@ export async function getSession(): Promise<Session | null> {
 
 export async function logout(): Promise<void> {
   await request<{ ok: boolean }>("/auth/logout", { method: "POST", body: JSON.stringify({}) });
+  emitAuthEvent({ type: "signed_out" });
 }
 
 // Real onboarding endpoints

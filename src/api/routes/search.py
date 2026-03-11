@@ -14,6 +14,8 @@ How it works:
 The query text is never logged. Only result counts and user_id are logged.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -30,6 +32,97 @@ router = APIRouter()
 
 _DEFAULT_LIMIT = 10
 _MAX_LIMIT = 50
+
+
+def _semantic_search(
+    user_id: str,
+    query_vector: list[float],
+    limit: int,
+) -> list[SearchResult]:
+    vector_literal = "[" + ",".join(str(v) for v in query_vector) + "]"
+    sql = """
+        SELECT
+            ts.id            AS segment_id,
+            ts.text          AS text,
+            ts.conversation_id,
+            c.title          AS conversation_title,
+            c.meeting_date   AS meeting_date,
+            1 - (ts.embedding <=> %s::vector) AS score
+        FROM transcript_segments ts
+        JOIN conversations c
+          ON c.id = ts.conversation_id
+         AND c.user_id = %s
+        WHERE ts.user_id = %s
+          AND ts.embedding IS NOT NULL
+        ORDER BY ts.embedding <=> %s::vector
+        LIMIT %s
+    """
+    conn = get_direct_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (vector_literal, user_id, user_id, vector_literal, limit))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        SearchResult(
+            segment_id=str(row["segment_id"]),
+            text=row["text"],
+            conversation_id=str(row["conversation_id"]),
+            conversation_title=row["conversation_title"],
+            meeting_date=str(row["meeting_date"]),
+            score=float(row["score"]),
+        )
+        for row in rows
+    ]
+
+
+def _lexical_search(user_id: str, query: str, limit: int) -> list[SearchResult]:
+    sql = """
+        WITH search_query AS (
+            SELECT websearch_to_tsquery('simple', %s) AS query
+        )
+        SELECT
+            ts.id            AS segment_id,
+            ts.text          AS text,
+            ts.conversation_id,
+            c.title          AS conversation_title,
+            c.meeting_date   AS meeting_date,
+            ts_rank_cd(
+                to_tsvector('simple', coalesce(c.title, '') || ' ' || coalesce(ts.text, '')),
+                search_query.query
+            ) AS score
+        FROM transcript_segments ts
+        JOIN conversations c
+          ON c.id = ts.conversation_id
+         AND c.user_id = %s
+        CROSS JOIN search_query
+        WHERE ts.user_id = %s
+          AND to_tsvector('simple', coalesce(c.title, '') || ' ' || coalesce(ts.text, ''))
+              @@ search_query.query
+        ORDER BY score DESC, c.meeting_date DESC
+        LIMIT %s
+    """
+    conn = get_direct_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (query, user_id, user_id, limit))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        SearchResult(
+            segment_id=str(row["segment_id"]),
+            text=row["text"],
+            conversation_id=str(row["conversation_id"]),
+            conversation_title=row["conversation_title"],
+            meeting_date=str(row["meeting_date"]),
+            score=float(row["score"]),
+        )
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -75,67 +168,47 @@ def search(
     """
     user_id: str = current_user["sub"]
 
+    semantic_results: list[SearchResult] = []
+
     # --- Embed the search query ---
     try:
         vectors = llm_client.embed_texts([body.q])
     except Exception as exc:
-        logger.error("Embedding failed for search query — user=%s: %s", user_id, type(exc).__name__)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Search service temporarily unavailable.",
-        ) from exc
-
-    query_vector = vectors[0]
-    # Format vector as a Postgres literal: '[0.1,0.2,...]'
-    vector_literal = "[" + ",".join(str(v) for v in query_vector) + "]"
-
-    # --- pgvector cosine similarity search ---
-    # user_id filter is applied BEFORE the ANN index scan (WHERE clause).
-    # score = 1 - cosine_distance  (pgvector <=> returns distance, not similarity)
-    sql = """
-        SELECT
-            ts.id            AS segment_id,
-            ts.text          AS text,
-            ts.conversation_id,
-            c.title          AS conversation_title,
-            c.meeting_date   AS meeting_date,
-            1 - (ts.embedding <=> %s::vector) AS score
-        FROM transcript_segments ts
-        JOIN conversations c
-          ON c.id = ts.conversation_id
-         AND c.user_id = %s
-        WHERE ts.user_id = %s
-          AND ts.embedding IS NOT NULL
-        ORDER BY ts.embedding <=> %s::vector
-        LIMIT %s
-    """
-
-    conn = get_direct_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (vector_literal, user_id, user_id, vector_literal, body.limit),
-            )
-            rows = cur.fetchall()
-    finally:
-        conn.close()
-
-    results = [
-        SearchResult(
-            segment_id=str(row["segment_id"]),
-            text=row["text"],
-            conversation_id=str(row["conversation_id"]),
-            conversation_title=row["conversation_title"],
-            meeting_date=str(row["meeting_date"]),
-            score=float(row["score"]),
+        logger.warning(
+            "Embedding failed for search query — user=%s fallback=lexical error=%s",
+            user_id,
+            type(exc).__name__,
         )
-        for row in rows
-    ]
+    else:
+        try:
+            semantic_results = _semantic_search(user_id, vectors[0], body.limit)
+        except Exception as exc:
+            logger.warning(
+                "Semantic search query failed — user=%s fallback=lexical error=%s",
+                user_id,
+                type(exc).__name__,
+            )
+
+    if semantic_results:
+        results = semantic_results
+    else:
+        try:
+            results = _lexical_search(user_id, body.q, body.limit)
+        except Exception as exc:
+            logger.error(
+                "Lexical fallback failed for search query — user=%s: %s",
+                user_id,
+                type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Search service temporarily unavailable.",
+            ) from exc
 
     logger.info(
-        "Search complete — user=%s results=%d",
+        "Search complete — user=%s results=%d mode=%s",
         user_id,
         len(results),
+        "semantic" if semantic_results else "lexical",
     )
     return results

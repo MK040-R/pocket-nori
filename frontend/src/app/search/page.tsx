@@ -48,6 +48,7 @@ export default function SearchPage() {
     setHasSubmitted(true);
     setLoading(true);
     setError(null);
+    setResults([]);
     try {
       const data = await search(query, 10);
       setResults(data);
@@ -85,6 +86,7 @@ export default function SearchPage() {
                     setHasSubmitted(true);
                     setLoading(true);
                     setError(null);
+                    setResults([]);
                     try {
                       const data = await search(topic.label, 10);
                       setResults(data);
@@ -127,7 +129,7 @@ export default function SearchPage() {
         </section>
       )}
 
-      {hasSubmitted && !loading && results.length === 0 && (
+      {hasSubmitted && !loading && !error && results.length === 0 && (
         <section className="card p-4 text-sm text-ink-tertiary">No results for this query.</section>
       )}
 

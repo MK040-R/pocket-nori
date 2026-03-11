@@ -173,17 +173,86 @@ class TestSearchErrorHandling:
         _clear_auth()
 
     def test_502_when_embedding_fails(self) -> None:
-        """If OpenAI embedding call fails, return 502."""
-        with patch(
-            "src.api.routes.search.llm_client.embed_texts",
-            side_effect=RuntimeError("OpenAI down"),
+        """If both semantic and lexical search fail, return 502."""
+        with (
+            patch(
+                "src.api.routes.search.llm_client.embed_texts",
+                side_effect=RuntimeError("OpenAI down"),
+            ),
+            patch(
+                "src.api.routes.search.get_direct_connection",
+                side_effect=RuntimeError("DB unavailable"),
+            ),
         ):
             response = client.post("/search", json={"q": "something"})
 
         assert response.status_code == 502
 
+    def test_lexical_fallback_when_embedding_fails(self) -> None:
+        """If embeddings are unavailable, keyword search should still return results."""
+        fake_rows = [
+            {
+                "segment_id": "seg-lexical",
+                "text": "Phase one crawl strategy task list is still pending.",
+                "conversation_id": "conv-1",
+                "conversation_title": "Planning call",
+                "meeting_date": "2026-01-20T10:00:00+00:00",
+                "score": 0.8,
+            }
+        ]
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = fake_rows
+        mock_cursor.__enter__ = lambda s: s
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with (
+            patch(
+                "src.api.routes.search.llm_client.embed_texts",
+                side_effect=RuntimeError("OpenAI down"),
+            ),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            response = client.post("/search", json={"q": "crawl"})
+
+        assert response.status_code == 200
+        assert response.json()[0]["segment_id"] == "seg-lexical"
+
+    def test_lexical_fallback_when_semantic_search_is_empty(self) -> None:
+        """If semantic search returns nothing, fallback keyword search should fill the gap."""
+        lexical_rows = [
+            {
+                "segment_id": "seg-lexical",
+                "text": "Crawl phase strategy and risk mitigation were discussed.",
+                "conversation_id": "conv-1",
+                "conversation_title": "Planning call",
+                "meeting_date": "2026-01-20T10:00:00+00:00",
+                "score": 0.6,
+            }
+        ]
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.side_effect = [[], lexical_rows]
+        mock_cursor.__enter__ = lambda s: s
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            response = client.post("/search", json={"q": "crawl"})
+
+        assert response.status_code == 200
+        assert response.json()[0]["segment_id"] == "seg-lexical"
+
     def test_db_connection_closed_after_query(self) -> None:
-        """psycopg2 connection must be closed even on success."""
+        """psycopg2 connections must be closed after semantic and lexical paths."""
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = []
         mock_cursor.__enter__ = lambda s: s
@@ -198,7 +267,7 @@ class TestSearchErrorHandling:
         ):
             client.post("/search", json={"q": "test"})
 
-        mock_conn.close.assert_called_once()
+        assert mock_conn.close.call_count == 2
 
     def test_user_id_passed_to_query(self) -> None:
         """The validated user_id must appear in the SQL parameters (isolation check)."""
