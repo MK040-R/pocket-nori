@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getIndexStats, getTodayBriefing, type IndexStats, type TodayBriefing } from "@/lib/api";
@@ -98,6 +99,29 @@ export default function TodayPage() {
       </section>
 
       <section className="card p-5">
+        <h2 className="text-lg font-semibold">Recent indexed activity</h2>
+        <div className="mt-3 space-y-2">
+          {briefing.recent_activity.map((activity) => (
+            <article key={activity.conversation_id} className="rounded border border-soft p-3">
+              <p className="font-medium">{activity.title}</p>
+              <p className="mt-1 text-xs text-ink-tertiary">
+                {new Date(activity.meeting_date).toLocaleString()} · {activity.status}
+              </p>
+              <Link
+                href={`/meetings/${activity.conversation_id}`}
+                className="mt-2 inline-block text-xs text-accent underline decoration-accent/40 underline-offset-2"
+              >
+                Open meeting
+              </Link>
+            </article>
+          ))}
+          {briefing.recent_activity.length === 0 && (
+            <p className="text-sm text-ink-tertiary">No indexed meetings yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="card p-5">
         <h2 className="text-lg font-semibold">Open commitments</h2>
         <div className="mt-3 space-y-2">
           {briefing.open_commitments.map((commitment) => (
@@ -107,10 +131,45 @@ export default function TodayPage() {
                 {commitment.owner} · due {commitment.due_date ?? "not specified"} · from{" "}
                 {commitment.conversation_title}
               </p>
+              <Link
+                href={`/meetings/${commitment.conversation_id}`}
+                className="mt-2 inline-block text-xs text-accent underline decoration-accent/40 underline-offset-2"
+              >
+                Open source meeting
+              </Link>
             </article>
           ))}
           {briefing.open_commitments.length === 0 && (
             <p className="text-sm text-ink-tertiary">No open commitments right now.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <h2 className="text-lg font-semibold">New cross-meeting connections</h2>
+        <div className="mt-3 space-y-2">
+          {briefing.recent_connections.map((connection) => (
+            <article key={connection.id} className="rounded border border-soft p-3">
+              <p className="font-medium">{connection.label}</p>
+              <p className="mt-1 text-xs text-ink-tertiary">{connection.summary}</p>
+              <p className="mt-1 text-xs text-ink-tertiary">
+                {connection.linked_type} · detected {new Date(connection.created_at).toLocaleString()}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {connection.related_conversations.map((conversation) => (
+                  <Link
+                    key={conversation.conversation_id}
+                    href={`/meetings/${conversation.conversation_id}`}
+                    className="rounded border border-soft px-2 py-1 text-xs text-ink-secondary hover:border-emphasis hover:text-ink-primary"
+                  >
+                    {conversation.title}
+                  </Link>
+                ))}
+              </div>
+            </article>
+          ))}
+          {briefing.recent_connections.length === 0 && (
+            <p className="text-sm text-ink-tertiary">No new cross-meeting links detected yet.</p>
           )}
         </div>
       </section>

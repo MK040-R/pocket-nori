@@ -1,8 +1,14 @@
 # Farz — Codex Brief: Parallel Work Division
 
-> This file is a temporary handshake document for coordinating work between
-> **Claude Code** (backend AI agent) and **OpenAI Codex** (frontend AI agent).
-> Delete it once Phase 1 is fully integrated and shipped.
+> Status update (2026-03-11): This document is now **historical reference only**.
+> Active execution tracking has moved to:
+> - `.planning/ROADMAP.md`
+> - `.planning/STATE.md`
+> - `.planning/PROJECT.md`
+> - `PROGRESS.md`
+>
+> Current ownership model is Codex end-to-end (backend + frontend), so the old
+> Claude/Codex split described below is no longer active.
 
 ---
 

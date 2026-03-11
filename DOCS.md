@@ -54,18 +54,24 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 
 ### `agent_docs/CODEX_BRIEF.md` — Cross-Agent Integration Brief
 **Audience:** Claude Code + Codex
-**Purpose:** Temporary live contract for frontend/backend wave coordination, API shape expectations, and integration boundaries.
-**When to read:** Before changing frontend-facing API contracts during active wave work.
+**Purpose:** Historical contract for earlier Claude/Codex parallel wave coordination and API shape expectations.
+**When to read:** Reference only. Current execution ownership is Codex end-to-end.
 
 ---
 
-### `docs/working-notes/PROGRESS.md` — Shared Progress Log
-**Audience:** Claude Code + Codex + humans tracking execution
+### `PROGRESS.md` — Shared Progress Log
+**Audience:** Codex + humans tracking execution
 **Purpose:** Append-only log of completed tasks and wave milestones.
 **When to read:** Before starting work to avoid duplicate effort; update after each completed task.
 
 ---
 
+### `POST_MVP_HARDENING_PLAN.md` — Pilot Hardening Execution Plan
+**Audience:** Codex + humans running post-MVP pilot prep
+**Purpose:** Single-source plan for moving from MVP-complete to pilot-ready (privacy/legal guardrails, observability, reliability, security ops, support readiness, rollout gate).
+**When to read:** At the start of any post-MVP session before implementing hardening milestones.
+
+---
 ### `competitive-analysis.md` — Competitive Analysis
 **Audience:** Product, engineering (background reading)
 **Purpose:** Static research on Granola, Otter.ai, Fireflies.ai, Notion, and Mem0. Informs product positioning and informed several architectural decisions (e.g., no-bot approach from Granola).
@@ -123,8 +129,11 @@ When a decision changes, all affected documents must be updated in the same sess
 | Tech stack version | Tech requirements + UI spec (Section 8) |
 | Design token | Design system only (UI spec references tokens by name, not value) |
 | OAuth scopes | Tech requirements (Section 6) only |
+| Milestone completion / phase closure | `PROGRESS.md` + `.planning/ROADMAP.md` + `.planning/STATE.md` + `.planning/PROJECT.md` + assistant instruction file (`AGENTS.md` / `CLAUDE.md`) if status text changed |
 
 **Rule:** If you change one document without updating the others in this table, the documentation suite is out of sync. Future engineers and AI assistants will receive conflicting instructions. Update all affected docs before closing the session.
+
+**Milestone Rule:** After every completed milestone, append an entry to `PROGRESS.md` in the same session with date, scope completed, validation commands, and next focus.
 
 ---
 

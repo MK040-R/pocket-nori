@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Farz** — a personal intelligence layer for working professionals. Captures and synthesizes context from meetings (starting with Google Meet/Calendar), surfacing topical search, cross-meeting connections, pre-meeting briefings, and a personal context dashboard.
 
-**Current stage:** Phase 0a (technical spikes) complete. Phase 0 foundation build is next.
+**Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). Current execution target is post-MVP planning and hardening.
 
 ---
 
@@ -23,7 +23,8 @@ Read these before writing any code — they are the source of truth for all deci
 | `.interface-design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
 | `spikes/PHASE_0A_SUMMARY.md` | QA summary of all 5 spikes — go/no-go decisions, bugs found and fixed | Before Phase 0 build |
 | `agent_docs/CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
-| `docs/working-notes/PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
+| `PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
+| `POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
 | `docs/later-stages/farz-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
 | `competitive-analysis.md` | Competitor profiles (Granola, Otter, Fireflies, Notion, Mem0) | Background reading |
 
@@ -55,15 +56,14 @@ Read these before writing any code — they are the source of truth for all deci
 source .venv/bin/activate   # Python 3.13 venv with FastAPI, Pydantic v2, uvicorn, anyio
 ```
 
-No `pyproject.toml`, `requirements.txt`, or application source yet — Phase 0 creates these.
-
-**Planned source layout** (to be created in Phase 0):
+Core source layout:
 ```
 src/api/        FastAPI routes and middleware
 src/workers/    Celery task definitions
 src/models/     Pydantic models for all 9 entities
 migrations/     Supabase SQL migrations
 tests/
+frontend/       Next.js 15 web app
 ```
 
 ---
@@ -175,3 +175,10 @@ Key tokens (full list in `.interface-design/system.md`):
 ## CI Requirement
 
 Isolation tests must run on every PR: verify User A's JWT cannot read User B's rows in any user-owned table. (Test harness exists in `spikes/spike4_supabase_rls/` — promote to `tests/` in Phase 0.)
+
+## Milestone Documentation Rule
+
+After every completed milestone, update docs in the same session:
+- `PROGRESS.md` (append milestone entry with validation results)
+- `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/PROJECT.md`
+- `CLAUDE.md` if stage/status instructions changed
