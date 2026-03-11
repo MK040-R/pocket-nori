@@ -57,7 +57,7 @@ jobs:
         env:
           # Unit tests must run without any live credentials.
           # Integration tests are gated behind the `integration` mark
-          # and run separately in the rls-test workflow or manually.
+          # and run separately in the rls-isolation job below or manually.
           ENVIRONMENT: test
 
   rls-isolation:
@@ -65,6 +65,10 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when Supabase credentials are available (set as repo secrets)
     if: ${{ vars.SUPABASE_URL != '' }}
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout
@@ -79,9 +83,11 @@ jobs:
         run: |
           pip install -r spikes/spike4_supabase_rls/requirements.txt
 
+      - name: Set up RLS test users and seed data
+        run: python spikes/spike4_supabase_rls/setup_test_users.py
+
+      - name: Verify RLS test credentials artifact exists
+        run: test -f spikes/spike4_supabase_rls/test_credentials.json
+
       - name: Run RLS isolation tests
         run: pytest spikes/spike4_supabase_rls/test_rls_isolation.py -v
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

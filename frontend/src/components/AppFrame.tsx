@@ -74,8 +74,8 @@ export function AppFrame({ children }: AppFrameProps) {
           </nav>
 
           <div className="mt-8 rounded-md border border-soft px-3 py-3 text-xs text-ink-tertiary">
-            Live backend mode active. Phase 1 stubs remain for conversation connections and
-            upcoming meetings.
+            Live backend mode active. Calendar sync is now wired to Google Calendar. Phase 4
+            brief generation is the next milestone.
           </div>
         </aside>
 

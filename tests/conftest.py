@@ -19,6 +19,7 @@ without real credentials during offline unit-test runs.
 import json
 import os
 import socket
+import ssl
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -27,6 +28,9 @@ from urllib.parse import urlparse
 import pytest
 from celery import Celery
 from dotenv import load_dotenv
+from redis import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 # Load .env first so real values take precedence over stubs.
 load_dotenv()
@@ -174,7 +178,7 @@ def user_b_client(supabase_url: str, _supabase_credentials: TestCredentials) -> 
 @pytest.fixture
 def eager_extract() -> Generator[Celery]:
     """Eager-mode fixture scoped to the extract_from_conversation Celery app."""
-    from src.workers.extract import celery_app as extract_celery_app
+    from src.celery_app import celery_app as extract_celery_app
 
     original_eager = bool(extract_celery_app.conf.task_always_eager)
     original_propagates = bool(extract_celery_app.conf.task_eager_propagates)
@@ -283,6 +287,34 @@ def require_redis() -> str:
     except OSError:
         pytest.skip(
             "UPSTASH_REDIS_URL is set but unreachable from this environment — "
+            "skipping Celery integration tests."
+        )
+
+    # Validate end-to-end broker connectivity before running integration tests.
+    # A plain TCP connect can pass while TLS verification fails during the first
+    # actual Redis command.
+    try:
+        Redis.from_url(
+            url,
+            socket_connect_timeout=2.0,
+            socket_timeout=2.0,
+        ).ping()
+    except ssl.SSLCertVerificationError:
+        pytest.skip(
+            "UPSTASH_REDIS_URL is reachable but TLS certificate verification "
+            "fails in this environment — skipping Celery integration tests."
+        )
+    except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
+        reason = str(exc).lower()
+        if "certificate verify failed" in reason:
+            pytest.skip(
+                "UPSTASH_REDIS_URL is reachable but TLS certificate verification "
+                "fails in this environment — skipping Celery integration tests."
+            )
+        if "invalid password" in reason or "authentication" in reason or "wrongpass" in reason:
+            pytest.fail(f"UPSTASH_REDIS_URL appears misconfigured (auth failed): {exc}")
+        pytest.skip(
+            "UPSTASH_REDIS_URL is set but Redis ping failed from this environment — "
             "skipping Celery integration tests."
         )
 

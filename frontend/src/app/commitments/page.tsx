@@ -10,6 +10,8 @@ export default function CommitmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [assigneeInput, setAssigneeInput] = useState("");
+  const [activeAssignee, setActiveAssignee] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -18,9 +20,11 @@ export default function CommitmentsPage() {
       setLoading(true);
       setError(null);
       try {
+        const assignee = activeAssignee.trim();
+        const options = assignee ? { assignee } : {};
         const [openData, resolvedData] = await Promise.all([
-          getCommitments("open"),
-          getCommitments("resolved"),
+          getCommitments("open", options),
+          getCommitments("resolved", options),
         ]);
         if (mounted) {
           setOpenItems(openData);
@@ -42,16 +46,56 @@ export default function CommitmentsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeAssignee]);
 
   return (
     <div className="space-y-6">
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Commitments</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Live commitments list and status updates using `GET /commitments` and
-          `PATCH /commitments/{"{id}"}`.
+          Live commitments list and status updates using `GET /commitments` and `PATCH /commitments/{"{id}"}`.
         </p>
+
+        <form
+          className="mt-4 flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setActiveAssignee(assigneeInput.trim());
+          }}
+        >
+          <input
+            value={assigneeInput}
+            onChange={(event) => {
+              setAssigneeInput(event.target.value);
+            }}
+            placeholder="Filter by assignee"
+            className="min-w-[220px] flex-1 rounded border border-standard bg-bg-control px-3 py-2 text-sm text-ink-primary outline-none focus:border-emphasis"
+          />
+          <button
+            type="submit"
+            className="rounded border border-emphasis bg-accent-subtle px-3 py-2 text-xs font-medium text-accent"
+          >
+            Apply
+          </button>
+          {activeAssignee && (
+            <button
+              type="button"
+              onClick={() => {
+                setAssigneeInput("");
+                setActiveAssignee("");
+              }}
+              className="rounded border border-standard px-3 py-2 text-xs text-ink-secondary hover:border-emphasis hover:text-ink-primary"
+            >
+              Clear
+            </button>
+          )}
+        </form>
+
+        {activeAssignee && (
+          <p className="mt-2 text-xs text-ink-tertiary">
+            Filtering by assignee: <span className="mono text-ink-secondary">{activeAssignee}</span>
+          </p>
+        )}
       </section>
 
       {loading && <section className="card p-4 text-sm text-ink-secondary">Loading commitments...</section>}
@@ -82,10 +126,15 @@ export default function CommitmentsPage() {
                       setError(null);
                       try {
                         const resolved = await resolveCommitment(item.id);
+                        const matchesAssignee =
+                          !activeAssignee ||
+                          resolved.owner.toLowerCase().includes(activeAssignee.toLowerCase());
                         setOpenItems((current) =>
                           current.filter((candidate) => candidate.id !== resolved.id),
                         );
-                        setResolvedItems((current) => [resolved, ...current]);
+                        if (matchesAssignee) {
+                          setResolvedItems((current) => [resolved, ...current]);
+                        }
                       } catch (resolveError) {
                         setError(
                           resolveError instanceof Error

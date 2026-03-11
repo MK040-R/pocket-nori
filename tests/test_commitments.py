@@ -48,10 +48,23 @@ def _clear_auth() -> None:
     app.dependency_overrides.pop(get_current_user, None)
 
 
-def _make_list_db(commitments: list, conversations: list) -> MagicMock:
+def _make_list_db(
+    commitments: list[dict[str, Any]],
+    conversations: list[dict[str, Any]],
+) -> MagicMock:
     """Mock DB for GET /commitments — two-table query."""
     mock_commitments = MagicMock()
-    mock_commitments.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = commitments
+    base_query = mock_commitments.select.return_value.eq.return_value.order.return_value
+    base_query.range.return_value.execute.return_value.data = commitments
+    base_query.eq.return_value.range.return_value.execute.return_value.data = commitments
+    base_query.or_.return_value.range.return_value.execute.return_value.data = commitments
+    base_query.ilike.return_value.range.return_value.execute.return_value.data = commitments
+    base_query.eq.return_value.ilike.return_value.range.return_value.execute.return_value.data = (
+        commitments
+    )
+    base_query.or_.return_value.ilike.return_value.range.return_value.execute.return_value.data = (
+        commitments
+    )
 
     mock_conversations = MagicMock()
     mock_conversations.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = conversations
@@ -65,7 +78,11 @@ def _make_list_db(commitments: list, conversations: list) -> MagicMock:
     return mock_db
 
 
-def _make_patch_db(exists: bool, updated: list, conv_title: str = "Weekly Sync") -> MagicMock:
+def _make_patch_db(
+    exists: bool,
+    updated: list[dict[str, Any]],
+    conv_title: str = "Weekly Sync",
+) -> MagicMock:
     """Mock DB for PATCH /commitments/{id}."""
     mock_commitments = MagicMock()
     # ownership check: .select().eq().eq().execute()
@@ -114,6 +131,13 @@ class TestCommitmentsInputValidation:
         mock_db = _make_list_db([], [])
         with patch("src.api.routes.commitments.get_client", return_value=mock_db):
             response = client.get("/commitments?status=bad")
+        assert response.status_code == 422
+
+    def test_conflicting_assignee_aliases_rejected(self) -> None:
+        """assignee and attributed_to must match when both are present."""
+        mock_db = _make_list_db([], [])
+        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+            response = client.get("/commitments?assignee=alex&attributed_to=jamie")
         assert response.status_code == 422
 
     def test_invalid_patch_status_rejected(self) -> None:
@@ -168,6 +192,18 @@ class TestCommitmentsListHappyPath:
         mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
         with patch("src.api.routes.commitments.get_client", return_value=mock_db):
             response = client.get("/commitments?filter_status=open")
+        assert response.status_code == 200
+
+    def test_assignee_filter_accepted(self) -> None:
+        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
+        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+            response = client.get("/commitments?assignee=alex")
+        assert response.status_code == 200
+
+    def test_attributed_to_filter_accepted(self) -> None:
+        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
+        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+            response = client.get("/commitments?attributed_to=alex")
         assert response.status_code == 200
 
     def test_response_shape(self) -> None:

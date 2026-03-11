@@ -47,6 +47,21 @@ export type ConversationSummary = {
   meeting_date: string;
   duration_seconds: number | null;
   status: "indexed" | "processing";
+  latest_brief_id?: string | null;
+  latest_brief_generated_at?: string | null;
+};
+
+export type ConversationConnection = {
+  id: string;
+  linked_type: "conversation" | "topic";
+  label: string;
+  summary: string;
+  connected_conversation_id: string;
+  connected_conversation_title: string;
+  connected_meeting_date: string | null;
+  shared_topics: string[];
+  shared_entities: string[];
+  shared_commitments: string[];
 };
 
 export type ConversationDetail = {
@@ -55,6 +70,8 @@ export type ConversationDetail = {
     title: string;
     meeting_date: string;
     duration_seconds: number | null;
+    latest_brief_id?: string | null;
+    latest_brief_generated_at?: string | null;
   };
   topics: Array<{
     id: string;
@@ -83,7 +100,7 @@ export type ConversationDetail = {
     end_ms: number;
     text: string;
   }>;
-  connections: Array<unknown>;
+  connections: ConversationConnection[];
 };
 
 export type SearchResult = {
@@ -123,6 +140,29 @@ export type TopicDetail = {
   key_quotes: string[];
 };
 
+export type TopicArcPoint = {
+  topic_id: string;
+  conversation_id: string;
+  conversation_title: string;
+  occurred_at: string;
+  summary: string;
+  topic_status: "open" | "resolved";
+  citation_segment_id: string | null;
+  transcript_offset_seconds: number | null;
+  citation_snippet: string | null;
+};
+
+export type TopicArc = {
+  id: string;
+  topic_id: string;
+  label: string;
+  summary: string;
+  status: "open" | "resolved";
+  trend: "growing" | "stable" | "resolved";
+  conversation_count: number;
+  arc_points: TopicArcPoint[];
+};
+
 export type Commitment = {
   id: string;
   text: string;
@@ -146,8 +186,69 @@ export type TodayBriefing = {
     text: string;
     owner: string;
     due_date: string | null;
+    conversation_id: string;
     conversation_title: string;
   }>;
+  recent_activity: Array<{
+    conversation_id: string;
+    title: string;
+    meeting_date: string;
+    status: string;
+  }>;
+  recent_connections: Array<{
+    id: string;
+    label: string;
+    summary: string;
+    linked_type: "conversation" | "topic";
+    created_at: string;
+    related_conversations: Array<{
+      conversation_id: string;
+      title: string;
+      meeting_date: string | null;
+    }>;
+  }>;
+};
+
+export type BriefCitation = {
+  segment_id: string;
+  conversation_id: string;
+  speaker_id: string;
+  start_ms: number;
+  text: string;
+};
+
+export type BriefDetail = {
+  id: string;
+  conversation_id: string;
+  calendar_event_id: string | null;
+  content: string;
+  generated_at: string;
+  topic_arcs: Array<{
+    id: string;
+    topic_id: string;
+    summary: string;
+    trend: "growing" | "stable" | "resolved";
+  }>;
+  commitments: Array<{
+    id: string;
+    text: string;
+    owner: string;
+    due_date: string | null;
+    status: "open" | "resolved";
+  }>;
+  connections: Array<{
+    id: string;
+    label: string;
+    summary: string;
+    linked_type: "conversation" | "topic";
+  }>;
+  citations: BriefCitation[];
+};
+
+export type BriefLatest = {
+  brief_id: string;
+  generated_at: string;
+  preview: string;
 };
 
 class ApiError extends Error {
@@ -254,6 +355,14 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
   return request<ConversationDetail>(`/conversations/${encodeURIComponent(id)}`, { method: "GET" });
 }
 
+export async function getConversationConnections(id: string): Promise<ConversationConnection[]> {
+  const response = await request<{ connections: ConversationConnection[] }>(
+    `/conversations/${encodeURIComponent(id)}/connections`,
+    { method: "GET" },
+  );
+  return response.connections;
+}
+
 export async function search(q: string, limit = 10): Promise<SearchResult[]> {
   const normalized = q.toLowerCase().trim();
   if (!normalized) {
@@ -316,10 +425,23 @@ export async function getTopic(id: string): Promise<TopicDetail> {
   };
 }
 
-export async function getCommitments(status?: "open" | "resolved"): Promise<Commitment[]> {
+export async function getTopicArc(id: string): Promise<TopicArc> {
+  return request<TopicArc>(`/topics/${encodeURIComponent(id)}/arc`, { method: "GET" });
+}
+
+export async function getCommitments(
+  status?: "open" | "resolved",
+  options: { assignee?: string; attributedTo?: string } = {},
+): Promise<Commitment[]> {
   const params = new URLSearchParams();
   if (status) {
     params.set("status", status);
+  }
+  if (options.assignee?.trim()) {
+    params.set("assignee", options.assignee.trim());
+  }
+  if (options.attributedTo?.trim()) {
+    params.set("attributed_to", options.attributedTo.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request<Commitment[]>(`/commitments${suffix}`, { method: "GET" });
@@ -334,4 +456,22 @@ export async function resolveCommitment(id: string): Promise<Commitment> {
 
 export async function getTodayBriefing(): Promise<TodayBriefing> {
   return request<TodayBriefing>("/calendar/today", { method: "GET" });
+}
+
+export async function getBrief(id: string): Promise<BriefDetail> {
+  return request<BriefDetail>(`/briefs/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export async function getLatestBrief(params: {
+  conversationId?: string;
+  calendarEventId?: string;
+}): Promise<BriefLatest> {
+  const query = new URLSearchParams();
+  if (params.conversationId) {
+    query.set("conversation_id", params.conversationId);
+  }
+  if (params.calendarEventId) {
+    query.set("calendar_event_id", params.calendarEventId);
+  }
+  return request<BriefLatest>(`/briefs/latest?${query.toString()}`, { method: "GET" });
 }

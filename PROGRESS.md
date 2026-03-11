@@ -1,7 +1,7 @@
 # Farz — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-10 (Backend hardening complete — 60 tests passing, Render deployment config ready, frontend integration in progress)
+> Last updated: 2026-03-11 (Phase 5 complete: personal context dashboard delivered)
 
 ---
 
@@ -22,7 +22,7 @@ Building a software product from scratch happens in stages, like constructing a 
 | **Phase 1 — First Working Product** | Putting up walls and a roof | The first version users can actually interact with — import past meetings, get AI summaries, search across meetings |
 | **Phase 2 — Full Product** | Interior design, finishing, furniture | The complete dashboard — topic timelines, pre-meeting briefs, commitment tracker, cross-meeting connections |
 
-**Phase 0 is complete.** We are now starting **Phase 1 — First Working Product**.
+**Phases 0, 1, 2, 3, 4, and 5 are complete.** Current execution focus is **post-MVP planning and hardening**.
 
 ---
 
@@ -51,11 +51,170 @@ Building a software product from scratch happens in stages, like constructing a 
 | Phase 1 Wave 3 — Semantic search + supporting endpoints | ✅ Complete | POST /search, topics, commitments, index stats, calendar |
 | Backend security hardening | ✅ Complete | Job ownership checks, API contract fixes, 60 tests |
 | Render deployment config | ✅ Complete | render.yaml — 1 API + 3 workers, ready to connect |
-| Phase 1 Wave 4 — Web UI | ⏳ In progress | Next.js frontend (Codex building) |
-| Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
-| Phase 2 — Full dashboard | ⏳ Weeks 13–20 | |
-| Phase 2 — Pre-meeting briefs | ⏳ Weeks 13–20 | |
-| Phase 2 — Full dashboard | ⏳ Weeks 13–20 | |
+| Phase 1 Wave 4 — Web UI | ✅ Complete | Next.js frontend screens live (dashboard, onboarding, meetings, topics, search, commitments) |
+| Phase 1 complete | ✅ Complete | End-to-end validation complete |
+| Phase 2 milestone — Topic Arc + Commitment tracker | ✅ Complete | `/topics/{id}/arc` timeline + citations, assignee filter + resolve flow |
+| Phase 3 — Connection graph | ✅ Complete | Detection backend + API + meeting UI connection cards |
+| Repository-wide QA hardening pass | ✅ Complete | Ruff + mypy issues fixed, full validation gate green |
+| Phase 4 plan 04-01 — Calendar sync backend | ✅ Complete | `/calendar/today` now serves real events + conversation/event linking |
+| Phase 4 plan 04-02 — Brief generation backend | ✅ Complete | `generate_brief` worker composes context + persists brief/link rows |
+| Phase 4 plan 04-03 — Recurring brief scheduler | ✅ Complete | T-12 scheduling for eligible recurring events with prior indexed history |
+| Phase 4 plan 04-04 — Brief API + frontend citation surface | ✅ Complete | `/briefs/latest`, `/briefs/{id}`, meeting latest-brief link, `/briefs/[id]` |
+| Phase 4 — Calendar sync + recurring briefs | ✅ Complete | 4/4 plans delivered and validated |
+| Phase 5 plan 05-01 — Dashboard backend aggregation | ✅ Complete | `/calendar/today` now returns recent activity + recent connections |
+| Phase 5 plan 05-02 — Dashboard UI completion | ✅ Complete | `/today` renders all required sections with meeting deep links |
+| Phase 5 — Personal context dashboard | ✅ Complete | 2/2 plans delivered and validated |
+
+---
+
+## ✅ Milestone Update — 2026-03-11 (Phase 4 plan 04-02)
+
+### What was completed in this milestone
+
+- Replaced `generate_brief` Celery stub with real backend generation flow
+- Enforced worker ownership/auth constraints:
+  - requires `user_jwt`
+  - validates conversation ownership under RLS
+- Built brief context assembly from:
+  - topic arcs
+  - open commitments
+  - cross-meeting connections
+- Wired LLM generation through the single approved gateway:
+  - `src/llm_client.py::generate_brief`
+- Persisted output and traceability rows:
+  - `briefs`
+  - `brief_topic_arc_links`
+  - `brief_commitment_links`
+  - `brief_connection_links`
+- Upgraded worker tests for real behavior and JWT requirement
+
+### Validation results
+
+- Ruff: `ruff check src tests` → **pass**
+- Mypy: `mypy src tests` → **pass**
+- Backend tests: `pytest -q` → **92 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Phase 4 — Scheduler + brief surface**
+  - recurring-meeting eligibility + T-12 dispatch scheduler
+  - brief retrieval API + citation display in frontend
+
+---
+
+## ✅ Milestone Update — 2026-03-11 (Phase 4 plan 04-01)
+
+### What was completed in this milestone
+
+- Implemented live Google Calendar integration in `GET /calendar/today`
+- Added token-refresh flow for calendar reads (refresh token → new access token persisted in `user_index`)
+- Added conversation-to-calendar linking by meeting-time window
+  - writes `conversations.calendar_event_id` for matched meetings
+- Added dedicated unit tests for calendar endpoint behavior and linking logic
+- Added migration `006_calendar_sync_indexes.sql` for calendar sync query performance
+
+### Validation results
+
+- Ruff: `ruff check src tests` → **pass**
+- Mypy: `mypy src tests` → **pass**
+- Backend tests: `pytest -q` → **91 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass** (one transient Next.js filesystem ENOENT on first run; immediate rerun passed)
+
+### What comes next
+
+- **Phase 4 — Recurring pre-meeting briefs**
+  - brief generation task (topic arcs + commitments + connections)
+  - scheduler at T-12 minutes
+  - brief API + citation surfaces
+
+---
+
+## ✅ Milestone Update — 2026-03-11 (QA Hardening)
+
+### What was completed in this milestone
+
+- Ran a full-codebase QA sweep (not feature-local only)
+- Fixed all blocking quality issues:
+  - Ruff line-length violations in topic arc API route
+  - mypy strict typing failures in test helpers/fixtures
+- Synced planning/progress docs with validation evidence
+
+### Validation results
+
+- Ruff: `ruff check src tests` → **pass**
+- Mypy: `mypy src tests` → **pass**
+- Backend tests: `pytest -q` → **87 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Phase 4 — Calendar sync + recurring pre-meeting briefs**
+  - event linking
+  - brief generation task
+  - T-12 scheduler
+  - brief API + UI citation surfaces
+
+---
+
+## ✅ Milestone Update — 2026-03-11 (Phase 3)
+
+### What was completed in this milestone
+
+- Implemented real connection detection and persistence:
+  - Shared topic overlap
+  - Shared entity overlap
+  - Commitment-thread signature overlap
+- Replaced connection stub with live endpoint:
+  - `GET /conversations/{id}/connections`
+- Added meeting detail UI connection cards with:
+  - linked meeting
+  - rationale
+  - what exactly was shared (topics/entities/commitment thread)
+- Added unit tests for new endpoint contract
+
+### Validation results
+
+- Backend tests: `pytest -q` → **87 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Phase 4 — Calendar sync + recurring pre-meeting briefs**
+  - Event linking
+  - Brief generation task
+  - T-12 scheduler
+  - Brief API + UI citation surfaces
+
+---
+
+## ✅ Milestone Update — 2026-03-11 (Phase 1 + Phase 2)
+
+### What was completed in this milestone
+
+- **Phase 1 fully closed** (frontend web app delivered and validated)
+- **Phase 2 milestone completed** for:
+  - Topic Arc backend compute/store and API endpoint (`GET /topics/{id}/arc`)
+  - Commitment tracker hardening (assignee filtering + status update flow)
+  - Topic Arc and Commitment tracker UI integration in frontend
+- **Documentation synced** in planning docs and agent instructions for ongoing tracking
+
+### Validation results
+
+- Backend tests: `pytest -q` → **85 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Phase 3 — Connection graph**
+  - Build connection detection persistence
+  - Implement real `/conversations/{id}/connections`
+  - Surface connections in meeting UI/dashboard
 
 ---
 
@@ -409,3 +568,60 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 ---
 
 *This document is updated automatically after every completed task.*
+
+---
+
+## ✅ 2026-03-11 — Phase 4 Closure (04-03 + 04-04)
+
+### Scope completed
+
+- ✅ **04-03 Brief scheduler**: Added user-scoped recurring brief scheduling via `schedule_recurring_briefs` in `src/workers/tasks.py`.
+  - Reads upcoming recurring events from Google Calendar.
+  - Requires at least one prior indexed session in the same recurring series.
+  - Schedules `generate_brief` at T-12 minutes (or runs immediately if already inside the window).
+  - Uses user JWT for all reads/writes (RLS enforced).
+- ✅ **04-04 Brief API + citation surface**:
+  - Added `GET /briefs/latest` and `GET /briefs/{id}` in `src/api/routes/briefs.py`.
+  - Brief detail resolves transcript citation segments from topic/commitment segment links.
+  - Added frontend brief detail route (`frontend/src/app/briefs/[id]/page.tsx`).
+  - Meeting detail now links to latest generated brief.
+
+### Validation
+
+- `ruff check src tests` ✅
+- `mypy src tests` ✅
+- `pytest -q` ✅ (**97 passed, 7 skipped**)
+- `frontend: npm run lint && npm run build` ✅
+
+### Milestone result
+
+- ✅ **Phase 4 complete (4/4 plans).**
+- ▶️ Next focus: **Phase 5 — Personal Context Dashboard** (`DASH-01`).
+
+---
+
+## ✅ 2026-03-11 — Phase 5 Closure (05-01 + 05-02)
+
+### Scope completed
+
+- ✅ **05-01 Dashboard backend aggregation** (`src/api/routes/calendar.py`):
+  - Extended `GET /calendar/today` to return two new dashboard feeds:
+    - `recent_activity` (latest indexed meetings)
+    - `recent_connections` (latest detected cross-meeting links with related meeting refs)
+  - Preserved privacy constraints (user JWT + RLS-scoped table access).
+- ✅ **05-02 Dashboard UI completion** (`frontend/src/app/today/page.tsx`):
+  - Added **Recent indexed activity** section with links to meeting detail.
+  - Added **New cross-meeting connections** section with related-meeting chips/links.
+  - Added deep-link from **Open commitments** cards to source meeting.
+
+### Validation
+
+- `ruff check src tests` ✅
+- `mypy src tests` ✅
+- `pytest -q` ✅ (**97 passed, 7 skipped**)
+- `frontend: npm run lint && npm run build` ✅
+
+### Milestone result
+
+- ✅ **Phase 5 complete (2/2 plans).**
+- ✅ MVP execution roadmap complete across Phases 1–5.

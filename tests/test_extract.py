@@ -9,7 +9,7 @@ Run:
 """
 
 import uuid
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -118,11 +118,12 @@ class TestExtractInputValidation:
         user_id: str = "user-1",
         user_jwt: str = "jwt-token",
     ) -> dict[str, Any]:
-        return extract_from_conversation.delay(
+        result = extract_from_conversation.delay(
             conversation_id=conversation_id,
             user_id=user_id,
             user_jwt=user_jwt,
         ).get()
+        return cast(dict[str, Any], result)
 
     def test_raises_on_empty_conversation_id(self, eager_extract: Any) -> None:
         with pytest.raises(ValueError, match="required"):
@@ -293,7 +294,7 @@ class TestExtractHappyPath:
             original_side_effect = db.table.side_effect
 
             def table_router_with_capture(table_name: str) -> MagicMock:
-                m = original_side_effect(table_name)
+                m = cast(MagicMock, original_side_effect(table_name))
                 if table_name not in ("conversations", "transcript_segments", "user_index"):
                     m.insert.side_effect = capture_insert
                 return m

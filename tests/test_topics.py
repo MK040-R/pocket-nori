@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from src.api.deps import get_current_user
@@ -48,6 +49,29 @@ _FAKE_CONVERSATION = {
     "meeting_date": "2025-03-01T10:00:00+00:00",
 }
 
+_FAKE_TOPIC_ARC = {
+    "id": "arc-1",
+    "topic_id": "topic-1",
+    "label": "Q3 Budget",
+    "summary": "Q3 Budget appears across 2 meetings from 2025-03-01 to 2025-03-08.",
+    "status": "open",
+    "trend": "stable",
+    "conversation_count": 2,
+    "arc_points": [
+        {
+            "topic_id": "topic-1",
+            "conversation_id": "conv-1",
+            "conversation_title": "Weekly Sync",
+            "occurred_at": "2025-03-01T10:00:00+00:00",
+            "summary": "Budget allocation discussed.",
+            "topic_status": "open",
+            "citation_segment_id": "seg-1",
+            "transcript_offset_seconds": 42,
+            "citation_snippet": "We need to cut 10%.",
+        }
+    ],
+}
+
 
 def _override_auth() -> None:
     app.dependency_overrides[get_current_user] = lambda: _FAKE_USER_PAYLOAD
@@ -57,7 +81,7 @@ def _clear_auth() -> None:
     app.dependency_overrides.pop(get_current_user, None)
 
 
-def _make_list_db(topics: list, conversations: list) -> MagicMock:
+def _make_list_db(topics: list[dict[str, Any]], conversations: list[dict[str, Any]]) -> MagicMock:
     """Mock DB for GET /topics."""
     mock_topics = MagicMock()
     mock_topics.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = topics
@@ -74,7 +98,7 @@ def _make_list_db(topics: list, conversations: list) -> MagicMock:
     return mock_db
 
 
-def _make_detail_db(topic: list, conversation: list) -> MagicMock:
+def _make_detail_db(topic: list[dict[str, Any]], conversation: list[dict[str, Any]]) -> MagicMock:
     """Mock DB for GET /topics/{id}."""
     mock_topics = MagicMock()
     mock_topics.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
@@ -221,3 +245,45 @@ class TestTopicsDetail:
             response = client.get("/topics/topic-1")
         assert response.status_code == 200
         assert response.json()["conversations"] == []
+
+
+# ---------------------------------------------------------------------------
+# GET /topics/{id}/arc — timeline
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestTopicArc:
+    def setup_method(self) -> None:
+        _override_auth()
+
+    def teardown_method(self) -> None:
+        _clear_auth()
+
+    def test_returns_topic_arc_payload(self) -> None:
+        mock_db = MagicMock()
+        with (
+            patch("src.api.routes.topics.get_client", return_value=mock_db),
+            patch("src.api.routes.topics._build_and_store_topic_arc", return_value=_FAKE_TOPIC_ARC),
+        ):
+            response = client.get("/topics/topic-1/arc")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "arc-1"
+        assert data["topic_id"] == "topic-1"
+        assert data["conversation_count"] == 2
+        assert len(data["arc_points"]) == 1
+
+    def test_returns_404_when_topic_missing(self) -> None:
+        mock_db = MagicMock()
+        with (
+            patch("src.api.routes.topics.get_client", return_value=mock_db),
+            patch(
+                "src.api.routes.topics._build_and_store_topic_arc",
+                side_effect=HTTPException(status_code=404, detail="Topic not found"),
+            ),
+        ):
+            response = client.get("/topics/nonexistent/arc")
+
+        assert response.status_code == 404

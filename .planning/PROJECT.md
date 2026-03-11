@@ -29,29 +29,30 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - ✓ Semantic search: POST /search returns ranked segment results with citations — Phase 1 Wave 3
 - ✓ API routes: auth, conversations, topics, commitments, search, onboarding, index_stats, health — Phase 1 Wave 3
 - ✓ Cookie-first auth (HttpOnly session cookie) with Bearer fallback — Phase 1 Wave 3
-- ✓ 38 unit tests passing — Phase 1 Wave 3
+- ✓ Frontend web app routes live (dashboard, onboarding, meetings, topics, search, commitments) — Phase 1 Wave 4
+- ✓ Topic Arc backend + API (`GET /topics/{id}/arc`) with citation timeline persistence — Phase 2
+- ✓ Commitments tracker hardening (assignee filtering + resolve flow) and UI — Phase 2
+- ✓ Connection graph backend + API (`GET /conversations/{id}/connections`) with persisted linked items — Phase 3
+- ✓ Connection UI in meeting detail with rationale + shared signals — Phase 3
+- ✓ Calendar sync backend: `/calendar/today` reads real Google Calendar events and links conversations to `calendar_event_id` — Phase 4 (04-01)
+- ✓ Brief generation worker: `generate_brief` now assembles topic arcs + commitments + connections context and persists briefs/link tables — Phase 4 (04-02)
+- ✓ Recurring brief scheduler: `schedule_recurring_briefs` dispatches user-scoped brief generation at T-12 for eligible recurring series with prior indexed sessions — Phase 4 (04-03)
+- ✓ Brief API + citation surface: `/briefs/latest` and `/briefs/{id}` plus frontend brief page and meeting deep-link to latest brief — Phase 4 (04-04)
+- ✓ Personal context dashboard completion: `/calendar/today` now serves upcoming meetings + open commitments + recent activity + recent connections; `/today` renders all dashboard sections with deep links — Phase 5 (05-01/05-02)
+- ✓ Full QA gate green: `ruff check src tests`, `mypy src tests`, `pytest -q` (97 passed, 7 skipped), and frontend `npm run lint` + `npm run build` — 2026-03-11 validation
 
 ### Active
 
-<!-- Phase 1 Wave 4 + Phase 2 — building toward these -->
+<!-- MVP v1 execution requirements complete -->
 
-- [ ] User can log in and see a dashboard showing their indexed meetings and stats
-- [ ] User can initiate Google Drive retro-import and see live progress (% imported)
-- [ ] User can browse their meeting list and open a conversation to see topics and commitments extracted
-- [ ] User can click a commitment/topic to see the source quote with speaker attribution
-- [ ] User can type a question and get semantically matched meeting segments with citations
-- [ ] User can see a topic timeline view showing how a subject evolved across meetings (Topic Arc)
-- [ ] User can see meetings that are connected by shared topics or entities (Connection graph)
-- [ ] User receives a pre-meeting brief 10–15 minutes before a calendar event
-- [ ] User can view and filter their open commitments with assignee and deadline
-- [ ] Google Calendar sync auto-links imported meetings to calendar events by time window
+- [ ] Post-MVP roadmap definition (v2 integrations, infra scaling, evaluation framework)
 
 ### Out of Scope
 
 - Electron desktop app — Phase 3 only (system audio capture, no bot)
 - Mobile app — explicitly excluded, web-first
 - Admin panel with user content visibility — architectural constraint (no admin can read user data)
-- Gmail integration — Phase 4
+- Gmail integration — post-MVP (deferred v2 scope)
 - AWS infrastructure — Phase 3+ (currently Render.com)
 - Deepgram real-time streaming WebSocket — Phase 3 (currently batch file transcription)
 - Manual file upload endpoint — retro-import only for MVP
@@ -60,17 +61,15 @@ A working professional can ask "What did we decide about X?" and get an accurate
 
 ## Context
 
-**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, Phase 1 Waves 1–3 complete (backend intelligence pipeline fully built). Phase 1 Wave 4 is the Next.js frontend — being built by Codex in `frontend/`. Claude Code stays out of `frontend/`.
+**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Full QA gate is green at 97 passed / 7 skipped. Next focus is post-MVP planning.
 
-**Backend is complete.** 17 tables (9 core + 8 junction), all with FORCE RLS. Full Celery pipeline: ingest → extract → embed. FastAPI with 10 routes. 38 unit tests. Deployed on Render.com.
+**Backend is complete through Phase 4.** 17 tables (9 core + 8 junction), all with FORCE RLS. Full Celery pipeline: ingest → extract → embed + recurring brief scheduling/generation. FastAPI includes topic arc, commitment tracker, live connection graph, live calendar sync, and brief retrieval APIs. Current QA gate is fully green (`ruff`, `mypy`, `pytest`, frontend lint/build). Deployed on Render.com.
 
 **Tech environment:** Python 3.13 + FastAPI + Pydantic v2, Supabase PostgreSQL 16 + pgvector, Upstash Redis (Celery broker + cache), Celery 5.4.0, Claude via instructor, OpenAI embeddings, Deepgram Nova-3.
 
 **Known concerns from codebase map:**
-- `process_transcript` and `generate_brief` in `src/workers/tasks.py` are stub placeholders — real work is in `ingest.py`, `extract.py`, `embed.py`
+- `process_transcript` in `src/workers/tasks.py` remains a legacy placeholder; `generate_brief` is now implemented for Phase 4
 - No pagination on list endpoints (acceptable for MVP user count)
-- Brief generation not yet implemented (Phase 2)
-- `/calendar/today` and `/conversations/{id}/connections` are stubs (Phase 2)
 - No pgvector ANN index yet (ivfflat/hnsw) — full scan acceptable for MVP
 
 **User:** Murali, non-technical founder. Building for internal testing first (solo + first engineer hire), ~50 meetings indexed, before any external users. No DPA required for MVP phase.
@@ -83,7 +82,7 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - **LLM**: All calls through `src/llm_client.py` — no direct SDK imports elsewhere
 - **Audio**: Never stored — transient fetch → transcribe → discard
 - **Cost**: ~$50/month target for MVP (Render ~$25 + Supabase free + Upstash free)
-- **Frontend**: `frontend/` is Codex's domain — Claude Code does not touch it
+- **Execution ownership**: Codex handles both backend and frontend delivery
 - **Hosting**: Render.com for MVP — AWS migration is Phase 3
 
 ## Key Decisions
@@ -100,4 +99,4 @@ A working professional can ask "What did we decide about X?" and get an accurate
 | Google Drive as transcript source (not Google Meet API) | Meet API lacks diarization; Drive has full recordings | ✓ Good |
 
 ---
-*Last updated: 2026-03-11 after initialization*
+*Last updated: 2026-03-11 after Phase 5 closure (dashboard complete)*

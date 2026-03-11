@@ -18,7 +18,7 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 **Audience:** Engineers building Phases 0a through 2
 **Purpose:** Records every major engineering decision with its rationale. Stack choices, database strategy, authentication, ingestion pipeline, async job design, infrastructure, per-user isolation enforcement. Explicitly overrides the PRD on implementation choices where the two conflict.
 **When to read:** Before any architecture or infrastructure work. The definitive source for "why did we choose X?"
-**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `Later stages/farz-tech-requirements-full.md`.
+**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `docs/later-stages/farz-tech-requirements-full.md`.
 
 ---
 
@@ -45,10 +45,31 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 
 ---
 
-### `Later stages/farz-tech-requirements-full.md` — Full Architecture (Phase 3+)
+### `docs/later-stages/farz-tech-requirements-full.md` — Full Architecture (Phase 3+)
 **Audience:** Engineers planning Phase 3 and beyond
 **Purpose:** Covers the full architectural vision: AWS ECS/RDS migration, Electron desktop app, formal compliance (SOC 2, GDPR, ADGM), enterprise multi-tenancy.
 **When to read:** Phase 3+ planning only. Do not apply Phase 3+ decisions to MVP work.
+
+---
+
+### `agent_docs/CODEX_BRIEF.md` — Cross-Agent Integration Brief
+**Audience:** Claude Code + Codex
+**Purpose:** Historical contract for earlier Claude/Codex parallel wave coordination and API shape expectations.
+**When to read:** Reference only. Current execution ownership is Codex end-to-end.
+
+---
+
+### `PROGRESS.md` — Shared Progress Log
+**Audience:** Codex + humans tracking execution
+**Purpose:** Append-only log of completed tasks and wave milestones.
+**When to read:** Before starting work to avoid duplicate effort; update after each completed task.
+
+---
+
+### `POST_MVP_HARDENING_PLAN.md` — Pilot Hardening Execution Plan
+**Audience:** Codex + humans running post-MVP pilot prep
+**Purpose:** Single-source plan for moving from MVP-complete to pilot-ready (privacy/legal guardrails, observability, reliability, security ops, support readiness, rollout gate).
+**When to read:** At the start of any post-MVP session before implementing hardening milestones.
 
 ---
 
@@ -109,8 +130,11 @@ When a decision changes, all affected documents must be updated in the same sess
 | Tech stack version | Tech requirements + UI spec (Section 8) |
 | Design token | Design system only (UI spec references tokens by name, not value) |
 | OAuth scopes | Tech requirements (Section 6) only |
+| Milestone completion / phase closure | `PROGRESS.md` + `.planning/ROADMAP.md` + `.planning/STATE.md` + `.planning/PROJECT.md` + assistant instruction file (`AGENTS.md` / `CLAUDE.md`) if status text changed |
 
 **Rule:** If you change one document without updating the others in this table, the documentation suite is out of sync. Future engineers and AI assistants will receive conflicting instructions. Update all affected docs before closing the session.
+
+**Milestone Rule:** After every completed milestone, append an entry to `PROGRESS.md` in the same session with date, scope completed, validation commands, and next focus.
 
 ---
 

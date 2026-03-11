@@ -9,7 +9,7 @@ Run:
 """
 
 import uuid
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -126,7 +126,7 @@ class TestIngestRecordingUnit:
         user_jwt: str = "jwt-token",
         google_refresh_token: str = "refresh-token",
     ) -> dict[str, Any]:
-        return ingest_recording.delay(
+        result = ingest_recording.delay(
             drive_file_id=drive_file_id,
             file_name=file_name,
             created_time_iso=created_time_iso,
@@ -134,6 +134,7 @@ class TestIngestRecordingUnit:
             user_jwt=user_jwt,
             google_refresh_token=google_refresh_token,
         ).get()
+        return cast(dict[str, Any], result)
 
     def test_raises_on_empty_drive_file_id(self, eager_ingest: Any) -> None:
         with pytest.raises(ValueError, match="required"):
@@ -242,7 +243,7 @@ class TestIngestRecordingUnit:
     def test_user_id_isolation_in_conversation_insert(self, eager_ingest: Any) -> None:
         """The user_id passed to the task must appear in the inserted conversation row."""
         expected_user_id = "user-isolation-test"
-        inserted_rows: list[dict] = []
+        inserted_rows: list[dict[str, Any]] = []
         transcript_text = "Alice\n00:00\nHello world.\n"
 
         def capture_insert(data: Any) -> Any:
@@ -394,7 +395,7 @@ class TestDetectAndParse:
 
     def test_source_type_stored_in_ingest_result(self, eager_ingest: Any) -> None:
         """source field in the conversation row must reflect the detected format."""
-        inserted_rows: list[dict] = []
+        inserted_rows: list[dict[str, Any]] = []
 
         def capture_insert(data: Any) -> Any:
             if isinstance(data, dict):

@@ -7,7 +7,7 @@
 **Audience:** You (founder) + engineer building with Claude Code
 **Cost target:** ~$50/month
 
-> This document covers what to build now. For the full architectural vision including Phase 3+ (Electron app, AWS, formal compliance, Intelligence Evaluation Contract), see `farz-tech-requirements-full.md`.
+> This document covers what to build now. For the full architectural vision including Phase 3+ (Electron app, AWS, formal compliance, Intelligence Evaluation Contract), see `docs/later-stages/farz-tech-requirements-full.md`.
 
 ---
 

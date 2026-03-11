@@ -38,6 +38,12 @@ class CommitmentPatch(BaseModel):
     status: str  # "open" | "resolved"
 
 
+def _normalize_commitment_status(value: str | None) -> str:
+    if value == "open":
+        return "open"
+    return "resolved"
+
+
 # ---------------------------------------------------------------------------
 # GET /commitments
 # ---------------------------------------------------------------------------
@@ -51,6 +57,8 @@ class CommitmentPatch(BaseModel):
 def list_commitments(
     filter_status: str | None = None,
     status_param: str | None = Query(default=None, alias="status"),
+    assignee: str | None = None,
+    attributed_to: str | None = Query(default=None, alias="attributed_to"),
     limit: int = 100,
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -67,8 +75,15 @@ def list_commitments(
     effective_filter = filter_status or status_param
     if effective_filter and effective_filter not in ("open", "resolved"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="status filter must be 'open' or 'resolved'",
+        )
+
+    effective_assignee = (assignee or attributed_to or "").strip()
+    if assignee and attributed_to and assignee.strip().lower() != attributed_to.strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="assignee and attributed_to must match when both are provided",
         )
 
     query = (
@@ -77,8 +92,18 @@ def list_commitments(
         .eq("user_id", user_id)
         .order("created_at", desc=True)
     )
-    if effective_filter:
+    if effective_filter == "open":
         query = query.eq("status", effective_filter)
+    elif effective_filter == "resolved":
+        query = query.or_("status.eq.resolved,status.eq.done,status.eq.cancelled")
+
+    if effective_assignee:
+        if effective_assignee.lower() == "me":
+            email = str(current_user.get("email") or "").strip()
+            if email:
+                query = query.ilike("owner", f"%{email}%")
+        else:
+            query = query.ilike("owner", f"%{effective_assignee}%")
 
     result = query.range(offset, offset + limit - 1).execute()
     commitments = result.data or []
@@ -102,7 +127,7 @@ def list_commitments(
             text=c["text"],
             owner=c["owner"],
             due_date=c.get("due_date"),
-            status=c["status"],
+            status=_normalize_commitment_status(c.get("status")),
             conversation_id=c["conversation_id"],
             conversation_title=conv_map.get(c["conversation_id"], ""),
         )
@@ -136,7 +161,7 @@ def update_commitment(
 
     if body.status not in ("open", "resolved"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="status must be 'open' or 'resolved'",
         )
 
@@ -151,20 +176,47 @@ def update_commitment(
     if not existing.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commitment not found")
 
-    update_result = (
-        db.table("commitments")
-        .update({"status": body.status})
-        .eq("id", commitment_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
+    storage_statuses = [body.status]
+    if body.status == "resolved":
+        # Backward compatibility for older DBs that still allow `done`.
+        storage_statuses.append("done")
 
-    if not update_result.data:
+    update_result_data: list[dict[str, Any]] = []
+    last_error: Exception | None = None
+    for storage_status in storage_statuses:
+        try:
+            update_result = (
+                db.table("commitments")
+                .update({"status": storage_status})
+                .eq("id", commitment_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as exc:  # pragma: no cover - only triggered with DB constraint mismatch
+            last_error = exc
+            continue
+        update_result_data = update_result.data or []
+        if update_result_data:
+            break
+
+    if not update_result_data and last_error is not None:
+        logger.error(
+            "Commitment status update failed — commitment=%s user=%s error=%s",
+            commitment_id,
+            user_id,
+            type(last_error).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update commitment status",
+        )
+
+    if not update_result_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Commitment not found or update failed",
         )
-    updated = update_result.data[0]
+    updated = update_result_data[0]
 
     # Fetch conversation title
     conv_result = (
@@ -188,7 +240,7 @@ def update_commitment(
         text=updated["text"],
         owner=updated["owner"],
         due_date=updated.get("due_date"),
-        status=updated["status"],
+        status=_normalize_commitment_status(updated.get("status")),
         conversation_id=updated["conversation_id"],
         conversation_title=conv_title,
     )
