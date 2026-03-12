@@ -4,19 +4,14 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import {
-  getConversation,
-  getConversationConnections,
-  type ConversationConnection,
-  type ConversationDetail,
-} from "@/lib/api";
+import { getConversation, type ConversationDetail } from "@/lib/api";
+import { formatDateTime, formatDueDate, formatMeetingTitle } from "@/lib/presentation";
 
 export default function MeetingDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
 
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
-  const [connections, setConnections] = useState<ConversationConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,13 +22,9 @@ export default function MeetingDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const [conversationData, connectionData] = await Promise.all([
-          getConversation(id),
-          getConversationConnections(id),
-        ]);
+        const conversationData = await getConversation(id);
         if (mounted) {
           setDetail(conversationData);
-          setConnections(connectionData);
         }
       } catch (loadError) {
         if (mounted) {
@@ -68,9 +59,9 @@ export default function MeetingDetailPage() {
   return (
     <div className="space-y-4">
       <section className="card p-6">
-        <h1 className="text-2xl font-semibold">{detail.conversation.title}</h1>
+        <h1 className="text-2xl font-semibold">{formatMeetingTitle(detail.conversation.title)}</h1>
         <p className="mt-2 text-sm text-ink-tertiary">
-          {new Date(detail.conversation.meeting_date).toLocaleString()} ·{" "}
+          {formatDateTime(detail.conversation.meeting_date)} ·{" "}
           {detail.conversation.duration_seconds
             ? `${Math.round(detail.conversation.duration_seconds / 60)} min`
             : "Duration pending"}
@@ -86,7 +77,7 @@ export default function MeetingDetailPage() {
             {detail.conversation.latest_brief_generated_at && (
               <span className="text-ink-tertiary">
                 {" "}
-                · generated {new Date(detail.conversation.latest_brief_generated_at).toLocaleString()}
+                · generated {formatDateTime(detail.conversation.latest_brief_generated_at)}
               </span>
             )}
           </p>
@@ -121,7 +112,7 @@ export default function MeetingDetailPage() {
             <article key={commitment.id} className="rounded border border-soft p-3">
               <p className="text-sm text-ink-primary">{commitment.text}</p>
               <p className="mt-1 text-xs text-ink-tertiary">
-                {commitment.owner} · due {commitment.due_date ?? "not specified"} · {commitment.status}
+                {commitment.owner} · due {formatDueDate(commitment.due_date)} · {commitment.status}
               </p>
             </article>
           ))}
@@ -139,57 +130,6 @@ export default function MeetingDetailPage() {
             >
               {entity.name} · {entity.type} · {entity.mentions} mentions
             </span>
-          ))}
-        </div>
-      </section>
-
-      <section className="card p-5">
-        <h2 className="text-lg font-semibold">Connections</h2>
-        <div className="mt-3 space-y-3">
-          {connections.length === 0 && (
-            <p className="text-sm text-ink-tertiary">No cross-meeting connections detected yet.</p>
-          )}
-          {connections.map((connection) => (
-            <article key={connection.id} className="rounded border border-soft p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-ink-primary">{connection.label}</p>
-                  <p className="mt-1 text-xs text-ink-tertiary">
-                    Linked meeting: {connection.connected_conversation_title}
-                    {connection.connected_meeting_date
-                      ? ` · ${new Date(connection.connected_meeting_date).toLocaleString()}`
-                      : ""}
-                  </p>
-                </div>
-                <span className="rounded border border-soft px-2 py-0.5 text-xs text-ink-tertiary">
-                  {connection.linked_type}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-ink-secondary">{connection.summary}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {connection.shared_topics.map((topic) => (
-                  <span
-                    key={`${connection.id}-topic-${topic}`}
-                    className="rounded border border-soft bg-bg-control px-2 py-0.5 text-xs text-ink-tertiary"
-                  >
-                    Topic: {topic}
-                  </span>
-                ))}
-                {connection.shared_entities.map((entity) => (
-                  <span
-                    key={`${connection.id}-entity-${entity}`}
-                    className="rounded border border-soft bg-bg-control px-2 py-0.5 text-xs text-ink-tertiary"
-                  >
-                    Entity: {entity}
-                  </span>
-                ))}
-                {connection.shared_commitments.length > 0 && (
-                  <span className="rounded border border-soft bg-bg-control px-2 py-0.5 text-xs text-ink-tertiary">
-                    Commitment thread overlap
-                  </span>
-                )}
-              </div>
-            </article>
           ))}
         </div>
       </section>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getTopics, search, type SearchResult, type TopicSummary } from "@/lib/api";
+import { formatDate, formatMeetingTitle } from "@/lib/presentation";
 
 const FEATURED_TOPICS_LIMIT = 12;
 const SEARCH_RESULTS_LIMIT = 10;
@@ -17,14 +18,6 @@ function formatTopicDate(value: string): string {
   if (!value) {
     return "Unknown";
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleDateString();
-}
-
-function formatMeetingDate(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -236,8 +229,8 @@ export default function SearchPage() {
             <article key={result.segment_id} className="card p-4">
               <p className="text-sm text-ink-primary">{truncateText(result.text)}</p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-tertiary">
-                <span>{result.conversation_title}</span>
-                <span>{formatMeetingDate(result.meeting_date)}</span>
+                <span>{formatMeetingTitle(result.conversation_title)}</span>
+                <span>{formatDate(result.meeting_date)}</span>
                 <span className="mono">score {result.score.toFixed(2)}</span>
               </div>
               <div className="mt-3">

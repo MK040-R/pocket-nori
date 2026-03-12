@@ -12,6 +12,7 @@ const navItems = [
   { href: "/search", label: "Search" },
   { href: "/topics", label: "Topics" },
   { href: "/commitments", label: "Commitments" },
+  { href: "/entities", label: "Entities" },
   { href: "/onboarding", label: "Onboarding" },
 ];
 
@@ -116,8 +117,8 @@ export function AppFrame({ children }: AppFrameProps) {
           </nav>
 
           <div className="mt-8 rounded-md border border-soft px-3 py-3 text-xs text-ink-tertiary">
-            Live backend mode active. Calendar sync is now wired to Google Calendar. Phase 4
-            brief generation is the next milestone.
+            MVP pilot mode. Use Search, Topics, Commitments, and Entities to review the indexed
+            meeting history before broadening rollout.
           </div>
         </aside>
 

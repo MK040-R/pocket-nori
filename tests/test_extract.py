@@ -254,6 +254,142 @@ class TestExtractHappyPath:
         assert result["commitment_count"] == 1
         assert result["entity_count"] == 3
 
+    def test_placeholder_and_duplicate_topics_are_not_persisted(self, eager_extract: Any) -> None:
+        from src.llm_client import CommitmentList, EntityList, TopicList, TopicResult
+
+        inserted_topics: list[dict[str, Any]] = []
+        segments = [_make_segment("We discussed the crawl plan.")]
+
+        mock_topics = TopicList(
+            topics=[
+                TopicResult(
+                    label="No substantive content available",
+                    summary="placeholder",
+                    status="open",
+                    key_quotes=[],
+                ),
+                TopicResult(
+                    label="Crawl strategy",
+                    summary="Discussed the crawl plan.",
+                    status="open",
+                    key_quotes=[],
+                ),
+                TopicResult(
+                    label="crawl strategy",
+                    summary="Duplicate casing variant.",
+                    status="open",
+                    key_quotes=[],
+                ),
+            ]
+        )
+
+        with (
+            patch("src.workers.extract.get_client") as mock_get_client,
+            patch("src.workers.extract.llm_client.extract_topics", return_value=mock_topics),
+            patch(
+                "src.workers.extract.llm_client.extract_commitments",
+                return_value=CommitmentList(commitments=[]),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_entities",
+                return_value=EntityList(entities=[]),
+            ),
+        ):
+            db = _make_full_db_mock(segments=segments)
+            original_side_effect = db.table.side_effect
+
+            def table_router_with_capture(table_name: str) -> MagicMock:
+                table = cast(MagicMock, original_side_effect(table_name))
+                if table_name == "topics":
+
+                    def capture_insert(data: Any) -> MagicMock:
+                        inserted_topics.append(cast(dict[str, Any], data))
+                        result = MagicMock()
+                        result.execute.return_value.data = [{"id": str(uuid.uuid4())}]
+                        return result
+
+                    table.insert.side_effect = capture_insert
+                return table
+
+            db.table.side_effect = table_router_with_capture
+            mock_get_client.return_value = db
+
+            result = extract_from_conversation.delay(
+                conversation_id="conv-1",
+                user_id="user-1",
+                user_jwt="jwt",
+            ).get()
+
+        assert result["topic_count"] == 1
+        assert len(inserted_topics) == 1
+        assert inserted_topics[0]["label"] == "Crawl strategy"
+
+    def test_invalid_structural_commitments_are_not_persisted(self, eager_extract: Any) -> None:
+        from src.llm_client import CommitmentList, CommitmentResult, EntityList, TopicList
+
+        inserted_commitments: list[dict[str, Any]] = []
+        segments = [_make_segment("We reviewed the plan and Alex will send the update tomorrow.")]
+
+        mock_commitments = CommitmentList(
+            commitments=[
+                CommitmentResult(
+                    text="Need follow-up?",
+                    owner="",
+                    due_date=None,
+                    status="open",
+                ),
+                CommitmentResult(
+                    text="Alex will send the update tomorrow.",
+                    owner="Alex",
+                    due_date=None,
+                    status="open",
+                ),
+            ]
+        )
+
+        with (
+            patch("src.workers.extract.get_client") as mock_get_client,
+            patch(
+                "src.workers.extract.llm_client.extract_topics", return_value=TopicList(topics=[])
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_commitments", return_value=mock_commitments
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_entities",
+                return_value=EntityList(entities=[]),
+            ),
+        ):
+            db = _make_full_db_mock(segments=segments)
+            original_side_effect = db.table.side_effect
+
+            def table_router_with_capture(table_name: str) -> MagicMock:
+                table = cast(MagicMock, original_side_effect(table_name))
+                if table_name == "commitments":
+
+                    def capture_insert(data: Any) -> MagicMock:
+                        inserted_commitments.append(cast(dict[str, Any], data))
+                        result = MagicMock()
+                        result.execute.return_value.data = [{"id": str(uuid.uuid4())}]
+                        return result
+
+                    table.insert.side_effect = capture_insert
+                return table
+
+            db.table.side_effect = table_router_with_capture
+            mock_get_client.return_value = db
+
+            result = extract_from_conversation.delay(
+                conversation_id="conv-1",
+                user_id="user-1",
+                user_jwt="jwt",
+            ).get()
+
+        assert result["commitment_count"] == 1
+        assert len(inserted_commitments) == 1
+        assert inserted_commitments[0]["owner"] == "Alex"
+        assert inserted_commitments[0]["text"] == "Alex will send the update tomorrow."
+
     def test_user_id_isolation_in_all_inserts(self, eager_extract: Any) -> None:
         """All inserted rows must carry the correct user_id."""
         from src.llm_client import CommitmentList, EntityList, TopicList, TopicResult

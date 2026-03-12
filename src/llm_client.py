@@ -78,10 +78,12 @@ For each topic:
 
 Guidelines:
 - Extract only topics clearly discussed — do not invent or infer topics not present
-- Prefer specificity over generality (e.g., "Q3 hiring plan" not "hiring")
+- Prefer canonical labels over over-specific labels (e.g., "Consultant incentive structure" not "Consultant incentive structure for phase one onboarding")
 - A topic should represent a coherent subject of discussion, not a single passing remark
 - Accuracy over quantity: 3 real topics is better than 8 vague ones
-- If participants returned to a subject multiple times, treat it as one topic"""
+- If participants returned to a subject multiple times, treat it as one topic
+- Return at most 5 topics for one meeting
+- Do not return placeholders such as "No substantive content available", "No extractable transcript content", or any equivalent "no content" label"""
 
 _COMMITMENT_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract commitments and action items from a meeting transcript.
 
@@ -98,6 +100,8 @@ For each commitment:
 
 Guidelines:
 - Only extract commitments with a clear owner — exclude vague "we should" statements
+- Exclude observations, summaries, decisions, and status updates that are not forward-looking commitments
+- Keep only action items with a clear owner and a concrete intended action
 - Do not fabricate due dates
 - Accuracy over quantity"""
 

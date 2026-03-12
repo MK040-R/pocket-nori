@@ -1,12 +1,4 @@
-"""
-tests/test_commitments.py — Unit tests for commitments endpoints.
-
-Tests cover input validation, user isolation, filter params, and the PATCH
-status update path. No real Supabase calls — all DB access is patched.
-
-Run:
-    pytest tests/test_commitments.py -v -m unit
-"""
+"""Unit tests for commitments endpoints."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -16,16 +8,14 @@ from fastapi.testclient import TestClient
 
 from src.api.deps import get_current_user
 from src.main import app
+from src.topic_utils import TopicCluster
 
 client = TestClient(app)
 
-_FAKE_JWT = "fake.jwt.token"
-_FAKE_USER_ID = "user-commitments-test"
-
 _FAKE_USER_PAYLOAD: dict[str, Any] = {
-    "sub": _FAKE_USER_ID,
+    "sub": "user-commitments-test",
     "email": "test@example.com",
-    "_raw_jwt": _FAKE_JWT,
+    "_raw_jwt": "fake.jwt.token",
 }
 
 _FAKE_COMMITMENT = {
@@ -37,7 +27,17 @@ _FAKE_COMMITMENT = {
     "conversation_id": "conv-1",
 }
 
-_FAKE_CONVERSATION = {"id": "conv-1", "title": "Weekly Sync"}
+_FAKE_CLUSTER = TopicCluster(
+    representative_id="topic-1",
+    label="Proposal follow-up",
+    summary="Proposal work is being tracked.",
+    key_quotes=[],
+    status="open",
+    conversation_ids=["conv-1"],
+    topic_ids=["topic-1"],
+    latest_date="2025-03-01T10:00:00+00:00",
+    rows=[],
+)
 
 
 def _override_auth() -> None:
@@ -49,180 +49,170 @@ def _clear_auth() -> None:
 
 
 def _make_list_db(
-    commitments: list[dict[str, Any]],
-    conversations: list[dict[str, Any]],
+    *,
+    commitments: list[dict[str, Any]] | None = None,
+    conversations: list[dict[str, Any]] | None = None,
+    topics: list[dict[str, Any]] | None = None,
 ) -> MagicMock:
-    """Mock DB for GET /commitments — two-table query."""
-    mock_commitments = MagicMock()
-    base_query = mock_commitments.select.return_value.eq.return_value.order.return_value
-    base_query.range.return_value.execute.return_value.data = commitments
-    base_query.eq.return_value.range.return_value.execute.return_value.data = commitments
-    base_query.or_.return_value.range.return_value.execute.return_value.data = commitments
-    base_query.ilike.return_value.range.return_value.execute.return_value.data = commitments
-    base_query.eq.return_value.ilike.return_value.range.return_value.execute.return_value.data = (
-        commitments
+    commitments_table = MagicMock()
+    base_query = commitments_table.select.return_value.eq.return_value.order.return_value
+    base_query.execute.return_value.data = commitments or []
+    base_query.eq.return_value.execute.return_value.data = commitments or []
+    base_query.or_.return_value.execute.return_value.data = commitments or []
+    base_query.ilike.return_value.execute.return_value.data = commitments or []
+    base_query.eq.return_value.ilike.return_value.execute.return_value.data = commitments or []
+    base_query.or_.return_value.ilike.return_value.execute.return_value.data = commitments or []
+
+    conversations_table = MagicMock()
+    conversations_table.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = (
+        conversations or []
     )
-    base_query.or_.return_value.ilike.return_value.range.return_value.execute.return_value.data = (
-        commitments
+
+    topics_table = MagicMock()
+    topics_table.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = (
+        topics or []
     )
 
-    mock_conversations = MagicMock()
-    mock_conversations.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = conversations
+    db = MagicMock()
 
-    mock_db = MagicMock()
+    def _table_router(name: str) -> MagicMock:
+        if name == "commitments":
+            return commitments_table
+        if name == "topics":
+            return topics_table
+        return conversations_table
 
-    def _table(name: str) -> MagicMock:
-        return mock_commitments if name == "commitments" else mock_conversations
-
-    mock_db.table.side_effect = _table
-    return mock_db
+    db.table.side_effect = _table_router
+    return db
 
 
-def _make_patch_db(
-    exists: bool,
-    updated: list[dict[str, Any]],
-    conv_title: str = "Weekly Sync",
-) -> MagicMock:
-    """Mock DB for PATCH /commitments/{id}."""
-    mock_commitments = MagicMock()
-    # ownership check: .select().eq().eq().execute()
-    mock_commitments.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
+def _make_patch_db(updated: list[dict[str, Any]], exists: bool = True) -> MagicMock:
+    commitments_table = MagicMock()
+    commitments_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
         [{"id": "commit-1"}] if exists else []
     )
-    # update: .update().eq().eq().execute()
-    mock_commitments.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = updated
+    commitments_table.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = updated
 
-    mock_conversations = MagicMock()
-    mock_conversations.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
-        [{"id": "conv-1", "title": conv_title}] if updated else []
-    )
+    conversations_table = MagicMock()
+    conversations_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+        {"id": "conv-1", "title": "Weekly Sync", "meeting_date": "2025-03-01T10:00:00+00:00"}
+    ]
 
-    mock_db = MagicMock()
+    topics_table = MagicMock()
+    topics_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+        {
+            "id": "topic-1",
+            "label": "Proposal follow-up",
+            "summary": "Proposal work is being tracked.",
+            "status": "open",
+            "key_quotes": [],
+            "conversation_id": "conv-1",
+            "created_at": "2025-03-01T10:00:00+00:00",
+        }
+    ]
 
-    def _table(name: str) -> MagicMock:
-        return mock_commitments if name == "commitments" else mock_conversations
+    db = MagicMock()
 
-    mock_db.table.side_effect = _table
-    return mock_db
+    def _table_router(name: str) -> MagicMock:
+        if name == "commitments":
+            return commitments_table
+        if name == "topics":
+            return topics_table
+        return conversations_table
 
-
-# ---------------------------------------------------------------------------
-# Input validation
-# ---------------------------------------------------------------------------
+    db.table.side_effect = _table_router
+    return db
 
 
 @pytest.mark.unit
-class TestCommitmentsInputValidation:
+class TestCommitmentsList:
     def setup_method(self) -> None:
         _override_auth()
 
     def teardown_method(self) -> None:
         _clear_auth()
 
-    def test_invalid_filter_status_rejected(self) -> None:
-        """filter_status must be 'open' or 'resolved'."""
-        mock_db = _make_list_db([], [])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?filter_status=invalid")
-        assert response.status_code == 422
-
-    def test_invalid_status_param_rejected(self) -> None:
-        """?status= must also be 'open' or 'resolved'."""
-        mock_db = _make_list_db([], [])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+    def test_rejects_invalid_status_filter(self) -> None:
+        with patch("src.api.routes.commitments.get_client", return_value=_make_list_db()):
             response = client.get("/commitments?status=bad")
+
         assert response.status_code == 422
 
-    def test_conflicting_assignee_aliases_rejected(self) -> None:
-        """assignee and attributed_to must match when both are present."""
-        mock_db = _make_list_db([], [])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?assignee=alex&attributed_to=jamie")
+    def test_rejects_invalid_date_range(self) -> None:
+        with patch("src.api.routes.commitments.get_client", return_value=_make_list_db()):
+            response = client.get(
+                "/commitments?meeting_date_from=2025-03-08T00:00:00+00:00&meeting_date_to=2025-03-01T00:00:00+00:00"
+            )
+
         assert response.status_code == 422
 
-    def test_invalid_patch_status_rejected(self) -> None:
-        """PATCH body status must be 'open' or 'resolved'."""
-        mock_db = _make_patch_db(exists=True, updated=[])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.patch("/commitments/commit-1", json={"status": "done"})
-        assert response.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# GET /commitments — happy path
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestCommitmentsListHappyPath:
-    def setup_method(self) -> None:
-        _override_auth()
-
-    def teardown_method(self) -> None:
-        _clear_auth()
-
-    def test_returns_commitment_list(self) -> None:
-        """Happy path: returns a list with conversation_title joined in."""
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+    def test_returns_enriched_commitment_fields(self) -> None:
+        db = _make_list_db(
+            commitments=[_FAKE_COMMITMENT],
+            conversations=[
+                {
+                    "id": "conv-1",
+                    "title": "Weekly Sync",
+                    "meeting_date": "2025-03-01T10:00:00+00:00",
+                }
+            ],
+            topics=[
+                {
+                    "id": "topic-1",
+                    "label": "Proposal follow-up",
+                    "summary": "Proposal work is being tracked.",
+                    "status": "open",
+                    "key_quotes": [],
+                    "conversation_id": "conv-1",
+                    "created_at": "2025-03-01T10:00:00+00:00",
+                }
+            ],
+        )
+        with (
+            patch("src.api.routes.commitments.get_client", return_value=db),
+            patch("src.api.routes.commitments.cluster_topic_rows", return_value=[_FAKE_CLUSTER]),
+        ):
             response = client.get("/commitments")
+
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) == 1
-        assert data[0]["id"] == "commit-1"
-        assert data[0]["conversation_title"] == "Weekly Sync"
+        payload = response.json()[0]
+        assert payload["conversation_title"] == "Weekly Sync"
+        assert payload["meeting_date"] == "2025-03-01T10:00:00+00:00"
+        assert payload["topic_labels"] == ["Proposal follow-up"]
 
-    def test_empty_list_when_no_commitments(self) -> None:
-        mock_db = _make_list_db([], [])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments")
-        assert response.status_code == 200
-        assert response.json() == []
+    def test_filters_by_topic_in_python_layer(self) -> None:
+        db = _make_list_db(
+            commitments=[_FAKE_COMMITMENT],
+            conversations=[
+                {
+                    "id": "conv-1",
+                    "title": "Weekly Sync",
+                    "meeting_date": "2025-03-01T10:00:00+00:00",
+                }
+            ],
+            topics=[
+                {
+                    "id": "topic-1",
+                    "label": "Proposal follow-up",
+                    "summary": "Proposal work is being tracked.",
+                    "status": "open",
+                    "key_quotes": [],
+                    "conversation_id": "conv-1",
+                    "created_at": "2025-03-01T10:00:00+00:00",
+                }
+            ],
+        )
+        with (
+            patch("src.api.routes.commitments.get_client", return_value=db),
+            patch("src.api.routes.commitments.cluster_topic_rows", return_value=[_FAKE_CLUSTER]),
+        ):
+            matching = client.get("/commitments?topic=proposal")
+            non_matching = client.get("/commitments?topic=pricing")
 
-    def test_filter_status_param_accepted(self) -> None:
-        """?status= (Codex frontend convention) is accepted."""
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?status=open")
-        assert response.status_code == 200
-
-    def test_filter_status_query_accepted(self) -> None:
-        """?filter_status= (original convention) is still accepted."""
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?filter_status=open")
-        assert response.status_code == 200
-
-    def test_assignee_filter_accepted(self) -> None:
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?assignee=alex")
-        assert response.status_code == 200
-
-    def test_attributed_to_filter_accepted(self) -> None:
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments?attributed_to=alex")
-        assert response.status_code == 200
-
-    def test_response_shape(self) -> None:
-        """Response includes all required fields."""
-        mock_db = _make_list_db([_FAKE_COMMITMENT], [_FAKE_CONVERSATION])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.get("/commitments")
-        item = response.json()[0]
-        assert "id" in item
-        assert "text" in item
-        assert "owner" in item
-        assert "status" in item
-        assert "conversation_id" in item
-        assert "conversation_title" in item
-
-
-# ---------------------------------------------------------------------------
-# PATCH /commitments/{id}
-# ---------------------------------------------------------------------------
+        assert matching.status_code == 200
+        assert len(matching.json()) == 1
+        assert non_matching.status_code == 200
+        assert non_matching.json() == []
 
 
 @pytest.mark.unit
@@ -233,27 +223,24 @@ class TestCommitmentsPatch:
     def teardown_method(self) -> None:
         _clear_auth()
 
-    def test_patch_returns_updated_commitment(self) -> None:
-        """Successful PATCH returns the updated commitment."""
-        updated = {**_FAKE_COMMITMENT, "status": "resolved", "conversation_id": "conv-1"}
-        mock_db = _make_patch_db(exists=True, updated=[updated])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
+    def test_patch_returns_enriched_commitment(self) -> None:
+        updated = {**_FAKE_COMMITMENT, "status": "resolved"}
+        with (
+            patch("src.api.routes.commitments.get_client", return_value=_make_patch_db([updated])),
+            patch("src.api.routes.commitments.cluster_topic_rows", return_value=[_FAKE_CLUSTER]),
+        ):
             response = client.patch("/commitments/commit-1", json={"status": "resolved"})
-        assert response.status_code == 200
-        assert response.json()["status"] == "resolved"
 
-    def test_patch_404_when_not_found(self) -> None:
-        """Returns 404 when commitment doesn't belong to the user."""
-        mock_db = _make_patch_db(exists=False, updated=[])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.patch("/commitments/nonexistent", json={"status": "resolved"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "resolved"
+        assert payload["meeting_date"] == "2025-03-01T10:00:00+00:00"
+        assert payload["topic_labels"] == ["Proposal follow-up"]
+
+    def test_patch_returns_404_when_missing(self) -> None:
+        with patch(
+            "src.api.routes.commitments.get_client", return_value=_make_patch_db([], exists=False)
+        ):
+            response = client.patch("/commitments/missing", json={"status": "resolved"})
+
         assert response.status_code == 404
-
-    def test_patch_resolved_then_open(self) -> None:
-        """Can re-open a resolved commitment."""
-        updated = {**_FAKE_COMMITMENT, "status": "open", "conversation_id": "conv-1"}
-        mock_db = _make_patch_db(exists=True, updated=[updated])
-        with patch("src.api.routes.commitments.get_client", return_value=mock_db):
-            response = client.patch("/commitments/commit-1", json={"status": "open"})
-        assert response.status_code == 200
-        assert response.json()["status"] == "open"

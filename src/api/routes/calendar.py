@@ -1,7 +1,7 @@
 """
-Calendar route — today's briefing context.
+Calendar route — briefing context for today and tomorrow.
 
-GET /calendar/today — dashboard context for today.
+GET /calendar/today — dashboard context for the next two days.
 
 Phase 4 implementation:
 - refreshes Google Calendar access token using stored refresh token
@@ -328,12 +328,12 @@ def _load_recent_connections(db: Any, user_id: str, limit: int = 8) -> list[Rece
 @router.get(
     "/today",
     response_model=TodayBriefing,
-    summary="Today's briefing: upcoming meetings and open commitments",
+    summary="Briefing: upcoming meetings and open commitments for today and tomorrow",
 )
 async def get_today(
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> TodayBriefing:
-    """Return dashboard context: upcoming meetings, commitments, activity, and connections."""
+    """Return dashboard context for the next two days plus recent activity."""
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
@@ -356,7 +356,7 @@ async def get_today(
     )
 
     today_start = datetime.combine(date.today(), time.min, tzinfo=UTC)
-    today_end = today_start + timedelta(days=1)
+    today_end = today_start + timedelta(days=2)
     now = datetime.now(tz=UTC)
 
     try:

@@ -5,17 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { getTopic, getTopicArc, type TopicArc, type TopicDetail } from "@/lib/api";
-
-function formatDateTime(value: string): string {
-  if (!value) {
-    return "Unknown date";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
+import { formatDateTime, formatMeetingTitle } from "@/lib/presentation";
 
 function formatOffset(value: number | null): string {
   if (value === null || value < 0) {
@@ -121,7 +111,7 @@ export default function TopicDetailPage() {
                     href={`/meetings/${point.conversation_id}`}
                     className="text-sm font-medium text-ink-primary hover:text-accent"
                   >
-                    {point.conversation_title}
+                    {formatMeetingTitle(point.conversation_title)}
                   </Link>
                   <p className="mt-1 text-xs text-ink-tertiary">{formatDateTime(point.occurred_at)}</p>
                 </div>
@@ -162,7 +152,9 @@ export default function TopicDetailPage() {
               href={`/meetings/${conversation.id}`}
               className="block rounded border border-soft p-3 transition hover:border-emphasis"
             >
-              <p className="text-sm font-medium text-ink-primary">{conversation.title}</p>
+              <p className="text-sm font-medium text-ink-primary">
+                {formatMeetingTitle(conversation.title)}
+              </p>
               <p className="mt-1 text-xs text-ink-tertiary">
                 {formatDateTime(conversation.meeting_date)}
               </p>

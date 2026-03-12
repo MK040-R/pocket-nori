@@ -6,6 +6,7 @@ PATCH /commitments/{id} — mark a commitment as resolved (or re-open it)
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from src.api.deps import get_current_user
 from src.database import get_client
+from src.topic_utils import cluster_topic_rows
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,8 @@ class CommitmentOut(BaseModel):
     status: str
     conversation_id: str
     conversation_title: str
+    meeting_date: str | None = None
+    topic_labels: list[str] = []
 
 
 class CommitmentPatch(BaseModel):
@@ -42,6 +46,42 @@ def _normalize_commitment_status(value: str | None) -> str:
     if value == "open":
         return "open"
     return "resolved"
+
+
+def _parse_iso_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    candidate = value.strip()
+    if "T" in candidate and "+" not in candidate and candidate.count(" ") == 1:
+        candidate = candidate.replace(" ", "+", 1)
+    try:
+        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _build_topic_labels_by_conversation(
+    topic_rows: list[dict[str, Any]],
+    conversation_dates: dict[str, str | None],
+) -> dict[str, list[str]]:
+    if not topic_rows:
+        return {}
+
+    enriched_rows = [
+        {
+            **row,
+            "meeting_date": conversation_dates.get(str(row.get("conversation_id") or "")),
+        }
+        for row in topic_rows
+    ]
+    conversation_labels: dict[str, list[str]] = {}
+    for cluster in cluster_topic_rows(enriched_rows):
+        for conversation_id in cluster.conversation_ids:
+            conversation_labels.setdefault(conversation_id, [])
+            if cluster.label not in conversation_labels[conversation_id]:
+                conversation_labels[conversation_id].append(cluster.label)
+    return conversation_labels
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +99,10 @@ def list_commitments(
     status_param: str | None = Query(default=None, alias="status"),
     assignee: str | None = None,
     attributed_to: str | None = Query(default=None, alias="attributed_to"),
+    topic: str | None = None,
+    meeting: str | None = None,
+    meeting_date_from: str | None = None,
+    meeting_date_to: str | None = None,
     limit: int = 100,
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -86,6 +130,28 @@ def list_commitments(
             detail="assignee and attributed_to must match when both are provided",
         )
 
+    meeting_date_from_parsed = _parse_iso_timestamp(meeting_date_from)
+    meeting_date_to_parsed = _parse_iso_timestamp(meeting_date_to)
+    if meeting_date_from and meeting_date_from_parsed is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="meeting_date_from must be a valid ISO timestamp",
+        )
+    if meeting_date_to and meeting_date_to_parsed is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="meeting_date_to must be a valid ISO timestamp",
+        )
+    if (
+        meeting_date_from_parsed is not None
+        and meeting_date_to_parsed is not None
+        and meeting_date_from_parsed > meeting_date_to_parsed
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="meeting_date_from must be before or equal to meeting_date_to",
+        )
+
     query = (
         db.table("commitments")
         .select("id, text, owner, due_date, status, conversation_id")
@@ -105,21 +171,76 @@ def list_commitments(
         else:
             query = query.ilike("owner", f"%{effective_assignee}%")
 
-    result = query.range(offset, offset + limit - 1).execute()
+    result = query.execute()
     commitments = result.data or []
     if not commitments:
         return []
 
-    # Fetch conversation titles
+    # Fetch conversation titles + dates
     conv_ids = list({c["conversation_id"] for c in commitments})
     convs_result = (
         db.table("conversations")
-        .select("id, title")
+        .select("id, title, meeting_date")
         .eq("user_id", user_id)
         .in_("id", conv_ids)
         .execute()
     )
-    conv_map = {c["id"]: c["title"] for c in (convs_result.data or [])}
+    conv_rows = convs_result.data or []
+    conv_map = {str(c["id"]): c for c in conv_rows if c.get("id")}
+    conversation_dates = {
+        str(c["id"]): c.get("meeting_date") for c in conv_rows if c.get("id") is not None
+    }
+
+    topic_rows = (
+        db.table("topics")
+        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
+        .eq("user_id", user_id)
+        .in_("conversation_id", conv_ids)
+        .execute()
+    ).data or []
+    topic_labels_by_conversation = _build_topic_labels_by_conversation(
+        topic_rows, conversation_dates
+    )
+
+    effective_topic = (topic or "").strip().lower()
+    effective_meeting = (meeting or "").strip().lower()
+
+    filtered_rows: list[dict[str, Any]] = []
+    for commitment in commitments:
+        conversation_id = str(commitment.get("conversation_id") or "")
+        conversation = conv_map.get(conversation_id, {})
+        conversation_title = str(conversation.get("title") or "")
+        meeting_date_value = (
+            str(conversation.get("meeting_date"))
+            if conversation.get("meeting_date") is not None
+            else None
+        )
+        topic_labels = topic_labels_by_conversation.get(conversation_id, [])
+
+        if effective_meeting and effective_meeting not in conversation_title.lower():
+            continue
+        if effective_topic and not any(effective_topic in label.lower() for label in topic_labels):
+            continue
+        parsed_meeting_date = _parse_iso_timestamp(meeting_date_value)
+        if meeting_date_from_parsed and (
+            parsed_meeting_date is None or parsed_meeting_date < meeting_date_from_parsed
+        ):
+            continue
+        if meeting_date_to_parsed and (
+            parsed_meeting_date is None or parsed_meeting_date > meeting_date_to_parsed
+        ):
+            continue
+
+        filtered_rows.append(
+            {
+                **commitment,
+                "conversation_title": conversation_title,
+                "meeting_date": meeting_date_value,
+                "topic_labels": topic_labels,
+            }
+        )
+
+    visible_rows = filtered_rows[offset : offset + limit]
 
     return [
         CommitmentOut(
@@ -129,9 +250,11 @@ def list_commitments(
             due_date=c.get("due_date"),
             status=_normalize_commitment_status(c.get("status")),
             conversation_id=c["conversation_id"],
-            conversation_title=conv_map.get(c["conversation_id"], ""),
+            conversation_title=str(c.get("conversation_title") or ""),
+            meeting_date=c.get("meeting_date"),
+            topic_labels=list(c.get("topic_labels") or []),
         )
-        for c in commitments
+        for c in visible_rows
     ]
 
 
@@ -219,14 +342,27 @@ def update_commitment(
     updated = update_result_data[0]
 
     # Fetch conversation title
+    conversation_id = str(updated.get("conversation_id") or "")
     conv_result = (
         db.table("conversations")
-        .select("id, title")
-        .eq("id", updated.get("conversation_id", ""))
+        .select("id, title, meeting_date")
+        .eq("id", conversation_id)
         .eq("user_id", user_id)
         .execute()
     )
-    conv_title = conv_result.data[0]["title"] if conv_result.data else ""
+    conversation = conv_result.data[0] if conv_result.data else {}
+
+    topic_rows = (
+        db.table("topics")
+        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
+        .eq("user_id", user_id)
+        .eq("conversation_id", conversation_id)
+        .execute()
+    ).data or []
+    topic_labels = _build_topic_labels_by_conversation(
+        topic_rows,
+        {conversation_id: conversation.get("meeting_date")},
+    ).get(conversation_id, [])
 
     logger.info(
         "Commitment %s status updated to %s — user=%s",
@@ -241,6 +377,12 @@ def update_commitment(
         owner=updated["owner"],
         due_date=updated.get("due_date"),
         status=_normalize_commitment_status(updated.get("status")),
-        conversation_id=updated["conversation_id"],
-        conversation_title=conv_title,
+        conversation_id=conversation_id,
+        conversation_title=str(conversation.get("title") or ""),
+        meeting_date=(
+            str(conversation["meeting_date"])
+            if conversation.get("meeting_date") is not None
+            else None
+        ),
+        topic_labels=topic_labels,
     )

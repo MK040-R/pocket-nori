@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getConversations, type ConversationSummary } from "@/lib/api";
+import { formatDateTime, formatMeetingTitle, formatSourceLabel } from "@/lib/presentation";
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null) {
@@ -52,7 +53,7 @@ export default function MeetingsPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Meetings</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Live meetings list from `GET /conversations`.
+          Review indexed meetings, open each conversation, and move into topic and commitment detail.
         </p>
       </section>
 
@@ -72,7 +73,7 @@ export default function MeetingsPage() {
             className="card block p-4 transition hover:border-emphasis"
           >
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">{meeting.title}</h2>
+              <h2 className="text-base font-semibold">{formatMeetingTitle(meeting.title)}</h2>
               <span
                 className={`inline-flex items-center gap-2 rounded border px-2 py-1 text-xs ${
                   meeting.status === "indexed"
@@ -90,9 +91,9 @@ export default function MeetingsPage() {
             </div>
 
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-ink-tertiary">
-              <span>{new Date(meeting.meeting_date).toLocaleString()}</span>
+              <span>{formatDateTime(meeting.meeting_date)}</span>
               <span className="mono">{formatDuration(meeting.duration_seconds)}</span>
-              <span className="mono">{meeting.source}</span>
+              <span>{formatSourceLabel(meeting.source)}</span>
             </div>
           </Link>
         ))}
