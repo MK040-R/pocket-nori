@@ -245,22 +245,22 @@ def generate_brief(
 
     topic_rows = (
         db.table("topics")
-        .select("id, label")
+        .select("id, label, cluster_id")
         .eq("user_id", user_id)
         .eq("conversation_id", conversation_id)
         .execute()
     ).data or []
 
-    topic_ids = [str(row["id"]) for row in topic_rows if row.get("id")]
+    cluster_ids = [str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id")]
     topic_labels = [str(row["label"]) for row in topic_rows if row.get("label")]
 
     topic_arcs: list[dict[str, Any]]
-    if topic_ids:
+    if cluster_ids:
         topic_arcs = (
             db.table("topic_arcs")
-            .select("id, topic_id, summary, trend, created_at")
+            .select("id, topic_id, cluster_id, summary, trend, created_at")
             .eq("user_id", user_id)
-            .in_("topic_id", topic_ids)
+            .in_("cluster_id", cluster_ids)
             .order("created_at", desc=True)
             .limit(8)
             .execute()
@@ -269,7 +269,15 @@ def generate_brief(
         topic_arcs = []
 
     related_topics: list[dict[str, Any]]
-    if topic_labels:
+    if cluster_ids:
+        related_topics = (
+            db.table("topics")
+            .select("conversation_id")
+            .eq("user_id", user_id)
+            .in_("cluster_id", cluster_ids)
+            .execute()
+        ).data or []
+    elif topic_labels:
         related_topics = (
             db.table("topics")
             .select("conversation_id")

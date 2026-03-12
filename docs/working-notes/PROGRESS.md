@@ -1,7 +1,7 @@
 # Farz — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-10 (Linear board fully populated — FAR-276 to FAR-326 created; all 22 remaining sub-tasks added covering User Hard Delete, Data Export, and Render.com Deployment)
+> Last updated: 2026-03-12 (durable topic intelligence implemented locally; deploy + recluster next)
 
 ---
 
@@ -22,7 +22,7 @@ Building a software product from scratch happens in stages, like constructing a 
 | **Phase 1 — First Working Product** | Putting up walls and a roof | The first version users can actually interact with — import past meetings, get AI summaries, search across meetings |
 | **Phase 2 — Full Product** | Interior design, finishing, furniture | The complete dashboard — topic timelines, pre-meeting briefs, commitment tracker, cross-meeting connections |
 
-**Phase 0 is complete.** We are now starting **Phase 1 — First Working Product**.
+**Phases 0, 1, 2, 3, 4, and 5 are complete.** Current execution focus is **MVP topic intelligence cleanup**, with the stored cluster model implemented locally and awaiting deployment + per-user backfill.
 
 ---
 
@@ -471,3 +471,28 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 ### Next focus
 
 - Topic intelligence cleanup: fewer one-off labels, stronger recurring-topic merging, and cleaner topic arcs for pilot users.
+
+---
+
+## ✅ 2026-03-12 — Durable topic intelligence implemented locally
+
+### What changed
+
+- Added a stored canonical topic layer with `topic_clusters`, plus `cluster_id` on `topics` and `topic_arcs`, so Farz no longer depends on read-time clustering as the source of truth.
+- Tightened topic extraction to prefer stable initiative-level labels and added `is_background`, then filtered background/admin/introductory topics before insert.
+- Moved semantic merge to write time only: lexical match first, then bounded LLM merge through `src/llm_client.py`, never on the read path.
+- Added `POST /topics/recluster` and a worker task to rebuild stored topic clusters and arcs for already indexed meetings.
+- Updated Search, Topics, dashboard topic counts, topic detail, meeting detail topic links, briefs, and commitments to read cluster-backed topic identity instead of raw topic-row grouping.
+
+### Validation
+
+- `pytest -q` → **104 passed, 7 skipped**
+- `mypy src/ --ignore-missing-imports` → **pass**
+- `ruff check . && ruff format --check .` → **pass**
+- `frontend: npm run lint && npm run build` → **pass**
+
+### Next focus
+
+- Deploy migration `007_topic_clusters.sql` and the API/worker changes
+- Trigger per-user recluster for existing meetings
+- Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters

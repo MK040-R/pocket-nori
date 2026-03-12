@@ -1,19 +1,14 @@
-"""
-tests/test_topics.py — Unit tests for grouped topics endpoints.
-
-Tests cover grouped topic summaries, grouped detail payloads, and arc passthrough.
-"""
+"""Unit tests for durable topic cluster routes."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from src.api.deps import get_current_user
 from src.main import app
-from src.topic_utils import TopicCluster
+from src.topic_cluster_store import StoredTopicCluster
 
 client = TestClient(app)
 
@@ -23,49 +18,44 @@ _FAKE_USER_PAYLOAD: dict[str, Any] = {
     "_raw_jwt": "fake.jwt.token",
 }
 
-_RAW_TOPIC_ROWS = [
-    {
-        "id": "topic-1",
-        "label": "Consultant Incentive Structure",
-        "summary": "Compensation model discussion.",
-        "status": "open",
-        "key_quotes": ["We need to align incentive structure."],
-        "conversation_id": "conv-1",
-        "created_at": "2025-03-01T10:00:00+00:00",
-        "meeting_date": "2025-03-01T10:00:00+00:00",
-        "conversation_title": "Weekly Sync",
-    },
-    {
-        "id": "topic-2",
-        "label": "Consultant Incentive Structure",
-        "summary": "Same thread revisited.",
-        "status": "open",
-        "key_quotes": ["Let's refine the same structure."],
-        "conversation_id": "conv-2",
-        "created_at": "2025-03-08T10:00:00+00:00",
-        "meeting_date": "2025-03-08T10:00:00+00:00",
-        "conversation_title": "Leadership Review",
-    },
-]
-
-_FAKE_TOPIC_CLUSTER = TopicCluster(
-    representative_id="topic-2",
+_FAKE_CLUSTER = StoredTopicCluster(
+    id="cluster-1",
     label="Consultant Incentive Structure",
     summary="Compensation model discussion.",
+    status="open",
+    first_mentioned_at="2025-03-01T10:00:00+00:00",
+    last_mentioned_at="2025-03-08T10:00:00+00:00",
+    conversation_ids=["conv-1", "conv-2"],
+    topic_ids=["topic-2", "topic-1"],
     key_quotes=[
         "We need to align incentive structure.",
         "Let's refine the same structure.",
     ],
-    status="open",
-    conversation_ids=["conv-1", "conv-2"],
-    topic_ids=["topic-2", "topic-1"],
-    latest_date="2025-03-08T10:00:00+00:00",
-    rows=list(reversed(_RAW_TOPIC_ROWS)),
+    rows=[
+        {
+            "id": "topic-2",
+            "conversation_id": "conv-2",
+            "conversation_title": "Leadership Review",
+            "meeting_date": "2025-03-08T10:00:00+00:00",
+            "summary": "Same thread revisited.",
+            "status": "open",
+            "key_quotes": ["Let's refine the same structure."],
+        },
+        {
+            "id": "topic-1",
+            "conversation_id": "conv-1",
+            "conversation_title": "Weekly Sync",
+            "meeting_date": "2025-03-01T10:00:00+00:00",
+            "summary": "Compensation model discussion.",
+            "status": "open",
+            "key_quotes": ["We need to align incentive structure."],
+        },
+    ],
 )
 
 _FAKE_TOPIC_ARC = {
     "id": "arc-1",
-    "topic_id": "topic-2",
+    "topic_id": "cluster-1",
     "label": "Consultant Incentive Structure",
     "summary": "Consultant Incentive Structure appears across 2 meetings from 2025-03-01 to 2025-03-08.",
     "status": "open",
@@ -103,45 +93,30 @@ class TestTopicsList:
     def teardown_method(self) -> None:
         _clear_auth()
 
-    def test_returns_grouped_topic_summary_list(self) -> None:
+    def test_returns_cluster_summary_list(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch("src.api.routes.topics._load_topic_source_rows", return_value=_RAW_TOPIC_ROWS),
+            patch("src.api.routes.topics.load_topic_clusters", return_value=[_FAKE_CLUSTER]),
         ):
             response = client.get("/topics")
 
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["id"] == "topic-2"
+        assert data[0]["id"] == "cluster-1"
         assert data[0]["label"] == "Consultant Incentive Structure"
         assert data[0]["conversation_count"] == 2
 
-    def test_filters_placeholder_topics(self) -> None:
+    def test_passes_min_conversations_filter(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch(
-                "src.api.routes.topics._load_topic_source_rows",
-                return_value=[
-                    *_RAW_TOPIC_ROWS,
-                    {
-                        "id": "topic-3",
-                        "label": "No substantive content available",
-                        "summary": "placeholder",
-                        "status": "open",
-                        "key_quotes": [],
-                        "conversation_id": "conv-3",
-                        "created_at": "2025-03-09T10:00:00+00:00",
-                        "meeting_date": "2025-03-09T10:00:00+00:00",
-                        "conversation_title": "Placeholder",
-                    },
-                ],
-            ),
+            patch("src.api.routes.topics.load_topic_clusters", return_value=[]) as mock_load,
         ):
-            response = client.get("/topics")
+            response = client.get("/topics?min_conversations=1")
 
         assert response.status_code == 200
-        assert len(response.json()) == 1
+        mock_load.assert_called_once()
+        assert mock_load.call_args.kwargs["min_conversations"] == 1
 
 
 @pytest.mark.unit
@@ -152,27 +127,37 @@ class TestTopicDetail:
     def teardown_method(self) -> None:
         _clear_auth()
 
-    def test_returns_grouped_detail(self) -> None:
+    def test_returns_cluster_detail(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch("src.api.routes.topics._load_topic_cluster", return_value=_FAKE_TOPIC_CLUSTER),
+            patch("src.api.routes.topics.resolve_topic_cluster_id", return_value="cluster-1"),
+            patch("src.api.routes.topics.load_topic_cluster", return_value=_FAKE_CLUSTER),
         ):
-            response = client.get("/topics/topic-1")
+            response = client.get("/topics/cluster-1")
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["id"] == "topic-2"
+        assert payload["id"] == "cluster-1"
         assert payload["label"] == "Consultant Incentive Structure"
         assert len(payload["conversations"]) == 2
         assert payload["conversations"][0]["id"] == "conv-2"
 
+    def test_raw_topic_id_falls_back_to_cluster(self) -> None:
+        with (
+            patch("src.api.routes.topics.get_client", return_value=MagicMock()),
+            patch("src.api.routes.topics.resolve_topic_cluster_id", return_value="cluster-1"),
+            patch("src.api.routes.topics.load_topic_cluster", return_value=_FAKE_CLUSTER),
+        ):
+            response = client.get("/topics/topic-1")
+
+        assert response.status_code == 200
+        assert response.json()["id"] == "cluster-1"
+
     def test_returns_404_when_cluster_missing(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch(
-                "src.api.routes.topics._load_topic_cluster",
-                side_effect=HTTPException(status_code=404, detail="Topic not found"),
-            ),
+            patch("src.api.routes.topics.resolve_topic_cluster_id", return_value=None),
+            patch("src.api.routes.topics.load_topic_cluster", return_value=None),
         ):
             response = client.get("/topics/missing")
 
@@ -190,23 +175,44 @@ class TestTopicArc:
     def test_returns_topic_arc_payload(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch("src.api.routes.topics._build_and_store_topic_arc", return_value=_FAKE_TOPIC_ARC),
+            patch("src.api.routes.topics.resolve_topic_cluster_id", return_value="cluster-1"),
+            patch(
+                "src.api.routes.topics.upsert_topic_arc_for_cluster", return_value=_FAKE_TOPIC_ARC
+            ),
         ):
-            response = client.get("/topics/topic-2/arc")
+            response = client.get("/topics/cluster-1/arc")
 
         assert response.status_code == 200
         payload = response.json()
         assert payload["id"] == "arc-1"
+        assert payload["topic_id"] == "cluster-1"
         assert payload["conversation_count"] == 2
 
     def test_returns_404_when_topic_missing(self) -> None:
         with (
             patch("src.api.routes.topics.get_client", return_value=MagicMock()),
-            patch(
-                "src.api.routes.topics._build_and_store_topic_arc",
-                side_effect=HTTPException(status_code=404, detail="Topic not found"),
-            ),
+            patch("src.api.routes.topics.resolve_topic_cluster_id", return_value=None),
         ):
             response = client.get("/topics/missing/arc")
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestTopicRecluster:
+    def setup_method(self) -> None:
+        _override_auth()
+
+    def teardown_method(self) -> None:
+        _clear_auth()
+
+    def test_queues_recluster_job(self) -> None:
+        fake_result = MagicMock()
+        fake_result.id = "job-123"
+        with patch(
+            "src.api.routes.topics.recluster_topics_for_user.delay", return_value=fake_result
+        ):
+            response = client.post("/topics/recluster")
+
+        assert response.status_code == 202
+        assert response.json() == {"job_id": "job-123", "status": "queued"}

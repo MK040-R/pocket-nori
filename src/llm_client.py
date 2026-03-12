@@ -35,6 +35,10 @@ class TopicResult(BaseModel):
     summary: str = Field(description="1-2 sentence summary of what was discussed")
     status: Literal["open", "resolved"]
     key_quotes: list[str] = Field(default_factory=list, max_length=2)
+    is_background: bool = Field(
+        default=False,
+        description="True only for background, introductory, administrative, or low-signal topics that should not be surfaced",
+    )
 
 
 class TopicList(BaseModel):
@@ -68,19 +72,23 @@ class EntityList(BaseModel):
 # Prompts
 # ---------------------------------------------------------------------------
 
-_TOPIC_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract the main discussion topics from a meeting transcript.
+_TOPIC_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract the meaningful work topics from a meeting transcript.
 
 For each topic:
-- Provide a short, descriptive label (3-50 characters)
-- Write a 1-2 sentence summary of what was discussed
+- Provide a short, stable, initiative-level label (3-50 characters)
+- Write a 1-2 sentence summary of the substance of the discussion, not just a restatement of the label
 - Determine if the topic is "open" (unresolved, needs follow-up) or "resolved" (concluded, decided)
 - Include up to 2 verbatim quotes that best represent the topic
+- Mark is_background=true only when the discussion is introductory, administrative, purely contextual, or not important enough to surface as a user-facing topic
 
 Guidelines:
 - Extract only topics clearly discussed — do not invent or infer topics not present
-- Prefer canonical labels over over-specific labels (e.g., "Consultant incentive structure" not "Consultant incentive structure for phase one onboarding")
+- Prefer canonical labels that remain stable across meetings even when wording changes
+- Use initiative-level naming rather than one-off phrasing (e.g., "Consultant incentive structure" not "Consultant incentive structure for phase one onboarding")
+- Only surface topics that are actionable, evolving, decision-bearing, or clearly owned by the user/team
+- Exclude background/intro/admin material such as greetings, general catch-up, meeting logistics, recap-only context, or one-off side remarks
 - A topic should represent a coherent subject of discussion, not a single passing remark
-- Accuracy over quantity: 3 real topics is better than 8 vague ones
+- Accuracy over quantity: 3 real topics is better than 8 weak topics
 - If participants returned to a subject multiple times, treat it as one topic
 - Return at most 5 topics for one meeting
 - Do not return placeholders such as "No substantive content available", "No extractable transcript content", or any equivalent "no content" label"""
@@ -147,6 +155,7 @@ Return a single plain-text brief. No JSON. No headers unless they genuinely aid 
 class _Model(StrEnum):
     EXTRACTION = "claude-sonnet-4-6"
     BRIEF = "claude-opus-4-6"
+    MERGE = "claude-sonnet-4-6"
 
 
 def _instructor_client() -> instructor.Instructor:
@@ -209,6 +218,31 @@ def extract_entities(transcript: str) -> EntityList:
         EntityList with validated Entity objects (name, type, mention count).
     """
     return _extract(_ENTITY_SYSTEM_PROMPT, transcript, EntityList)
+
+
+def check_topic_merge(label_a: str, summary_a: str, label_b: str, summary_b: str) -> bool:
+    """Return True when two topics represent the same underlying initiative."""
+    prompt = f"""Two topics were extracted from different meetings for the same user.
+
+Topic A label: "{label_a}"
+Topic A summary: "{summary_a}"
+
+Topic B label: "{label_b}"
+Topic B summary: "{summary_b}"
+
+Do these represent the same underlying work initiative or discussion thread across meetings?
+Answer only YES or NO."""
+
+    logger.debug("LLM merge check — model=%s", _Model.MERGE)
+    response = _raw_client().messages.create(
+        model=str(_Model.MERGE),
+        max_tokens=8,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        raise ValueError(f"Expected TextBlock from merge check, got {type(block).__name__}")
+    return block.text.strip().upper() == "YES"
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:

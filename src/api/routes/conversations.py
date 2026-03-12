@@ -492,12 +492,30 @@ def get_conversation(
     # --- Topics ---
     topics_result = (
         db.table("topics")
-        .select("id, label, summary, status, key_quotes")
+        .select("id, cluster_id, label, summary, status, key_quotes")
         .eq("conversation_id", conversation_id)
         .eq("user_id", user_id)
         .order("created_at")
         .execute()
     )
+    topic_rows = topics_result.data or []
+    cluster_ids = sorted(
+        {str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id") is not None}
+    )
+    cluster_rows: list[dict[str, Any]] = []
+    if cluster_ids:
+        cluster_rows = (
+            db.table("topic_clusters")
+            .select("id, canonical_label")
+            .eq("user_id", user_id)
+            .in_("id", cluster_ids)
+            .execute()
+        ).data or []
+    cluster_label_by_id = {
+        str(row["id"]): str(row.get("canonical_label") or "")
+        for row in cluster_rows
+        if row.get("id")
+    }
 
     # --- Commitments ---
     commitments_result = (
@@ -559,13 +577,13 @@ def get_conversation(
         ),
         topics=[
             TopicOut(
-                id=t["id"],
-                label=t["label"],
+                id=str(t.get("cluster_id") or t["id"]),
+                label=cluster_label_by_id.get(str(t.get("cluster_id") or ""), t["label"]),
                 summary=t["summary"],
                 status=t["status"],
                 key_quotes=t.get("key_quotes") or [],
             )
-            for t in (topics_result.data or [])
+            for t in topic_rows
         ],
         commitments=[
             CommitmentOut(

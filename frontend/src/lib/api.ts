@@ -488,8 +488,15 @@ type TopicApiDetailItem = {
   }>;
 };
 
-export async function getTopics(): Promise<TopicSummary[]> {
-  const rows = await request<TopicApiSummaryItem[]>("/topics", { method: "GET" });
+export async function getTopics(options: { minConversations?: number } = {}): Promise<TopicSummary[]> {
+  const params = new URLSearchParams();
+  if (typeof options.minConversations === "number") {
+    params.set("min_conversations", String(options.minConversations));
+  }
+  const query = params.toString();
+  const rows = await request<TopicApiSummaryItem[]>(`/topics${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
   return rows
     .map((item) => ({
       id: item.id,

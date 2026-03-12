@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.api.deps import get_current_user
 from src.main import app
+from src.topic_cluster_store import StoredTopicCluster
 
 client = TestClient(app)
 
@@ -46,37 +47,6 @@ def _make_db() -> MagicMock:
     entities_table = MagicMock()
     entities_table.select.return_value.eq.return_value.execute.return_value.count = 11
 
-    topics_table = MagicMock()
-    topics_table.select.return_value.eq.return_value.execute.return_value.data = [
-        {
-            "id": "topic-1",
-            "label": "Crawl strategy",
-            "summary": "Planning the crawl work",
-            "status": "open",
-            "key_quotes": [],
-            "conversation_id": "conv-1",
-            "created_at": "2026-03-10T10:00:00+00:00",
-        },
-        {
-            "id": "topic-2",
-            "label": "crawl strategy",
-            "summary": "Same thread",
-            "status": "open",
-            "key_quotes": [],
-            "conversation_id": "conv-2",
-            "created_at": "2026-03-11T10:00:00+00:00",
-        },
-        {
-            "id": "topic-3",
-            "label": "Consultant onboarding",
-            "summary": "Separate thread",
-            "status": "open",
-            "key_quotes": [],
-            "conversation_id": "conv-3",
-            "created_at": "2026-03-09T10:00:00+00:00",
-        },
-    ]
-
     db = MagicMock()
 
     def _table_router(name: str) -> MagicMock:
@@ -88,10 +58,38 @@ def _make_db() -> MagicMock:
             return commitments_table
         if name == "entities":
             return entities_table
-        return topics_table
+        raise AssertionError(f"Unexpected table lookup: {name}")
 
     db.table.side_effect = _table_router
     return db
+
+
+_CLUSTERS = [
+    StoredTopicCluster(
+        id="cluster-1",
+        label="Crawl strategy",
+        summary="Planning the crawl work",
+        status="open",
+        first_mentioned_at="2026-03-10T10:00:00+00:00",
+        last_mentioned_at="2026-03-11T10:00:00+00:00",
+        conversation_ids=["conv-1", "conv-2"],
+        topic_ids=["topic-1", "topic-2"],
+        key_quotes=[],
+        rows=[],
+    ),
+    StoredTopicCluster(
+        id="cluster-2",
+        label="Consultant onboarding",
+        summary="Separate thread",
+        status="open",
+        first_mentioned_at="2026-03-09T10:00:00+00:00",
+        last_mentioned_at="2026-03-09T10:00:00+00:00",
+        conversation_ids=["conv-3"],
+        topic_ids=["topic-3"],
+        key_quotes=[],
+        rows=[],
+    ),
+]
 
 
 @pytest.mark.unit
@@ -103,7 +101,10 @@ class TestIndexStats:
         _clear_auth()
 
     def test_returns_live_counts_with_grouped_topics(self) -> None:
-        with patch("src.api.routes.index_stats.get_client", return_value=_make_db()):
+        with (
+            patch("src.api.routes.index_stats.get_client", return_value=_make_db()),
+            patch("src.api.routes.index_stats.load_topic_clusters", return_value=_CLUSTERS),
+        ):
             response = client.get("/index/stats")
 
         assert response.status_code == 200

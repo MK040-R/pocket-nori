@@ -100,6 +100,8 @@ _GENERIC_CLUSTER_TOKENS = _STOPWORDS | {
     "teams",
 }
 
+_MIN_TOKEN_LENGTH = 3
+
 
 @dataclass(slots=True)
 class TopicCluster:
@@ -140,7 +142,9 @@ def topic_tokens(value: str | None) -> set[str]:
     if not cleaned:
         return set()
     return {
-        token for token in _TOKEN_RE.findall(cleaned) if len(token) >= 3 and token not in _STOPWORDS
+        token
+        for token in _TOKEN_RE.findall(cleaned)
+        if len(token) >= _MIN_TOKEN_LENGTH and token not in _STOPWORDS
     }
 
 
@@ -200,6 +204,49 @@ def _datetime_sort_score(value: datetime) -> float:
 
 def _token_overlap(left: set[str], right: set[str]) -> set[str]:
     return left & right
+
+
+def topic_overlap_score(left_label: str | None, right_label: str | None) -> int:
+    """Return a lexical overlap score for two topic labels."""
+    left_normalized = normalize_topic_label(left_label)
+    right_normalized = normalize_topic_label(right_label)
+    if not left_normalized or not right_normalized:
+        return 0
+    if left_normalized == right_normalized:
+        return 100
+    if left_normalized in right_normalized or right_normalized in left_normalized:
+        return 80
+
+    overlap = _token_overlap(topic_tokens(left_label), topic_tokens(right_label))
+    specific_overlap = overlap - _GENERIC_CLUSTER_TOKENS
+    if len(specific_overlap) >= 2:
+        return 70 + len(specific_overlap)
+    if len(specific_overlap) == 1:
+        return 55
+    if len(overlap) >= 2:
+        return 40
+    return 0
+
+
+def labels_match_lexically(left_label: str | None, right_label: str | None) -> bool:
+    return topic_overlap_score(left_label, right_label) >= 55
+
+
+def is_semantic_merge_candidate(left_label: str | None, right_label: str | None) -> bool:
+    """Return True if two labels are relevant enough to justify an LLM merge check."""
+    left_normalized = normalize_topic_label(left_label)
+    right_normalized = normalize_topic_label(right_label)
+    if not left_normalized or not right_normalized:
+        return False
+    if left_normalized == right_normalized:
+        return True
+    if left_normalized in right_normalized or right_normalized in left_normalized:
+        return True
+
+    overlap = _token_overlap(topic_tokens(left_label), topic_tokens(right_label))
+    if not overlap:
+        return False
+    return bool(overlap - _GENERIC_CLUSTER_TOKENS)
 
 
 def _labels_should_cluster(

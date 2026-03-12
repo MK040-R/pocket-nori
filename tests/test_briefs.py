@@ -68,7 +68,18 @@ def _make_brief_db(
 
     topic_arcs_table = MagicMock()
     topic_arcs_table.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = [
-        {"id": "arc-1", "topic_id": "topic-1", "summary": "Budget thread", "trend": "stable"}
+        {
+            "id": "arc-1",
+            "topic_id": "topic-1",
+            "cluster_id": "cluster-1",
+            "summary": "Budget thread",
+            "trend": "stable",
+        }
+    ]
+
+    topics_table = MagicMock()
+    topics_table.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = [
+        {"id": "topic-1"}
     ]
 
     commitments_table = MagicMock()
@@ -133,6 +144,8 @@ def _make_brief_db(
             return brief_connection_links
         if name == "topic_arcs":
             return topic_arcs_table
+        if name == "topics":
+            return topics_table
         if name == "commitments":
             return commitments_table
         if name == "connections":

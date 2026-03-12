@@ -9,12 +9,13 @@ Run:
 """
 
 import uuid
+from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from src.workers.extract import extract_from_conversation
+from src.workers.extract import extract_from_conversation, recluster_topics_for_user
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -239,6 +240,13 @@ class TestExtractHappyPath:
                 "src.workers.extract.llm_client.extract_commitments", return_value=mock_commitments
             ),
             patch("src.workers.extract.llm_client.extract_entities", return_value=mock_entities),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch(
+                "src.workers.extract.assign_cluster_for_topic",
+                side_effect=["cluster-1", "cluster-2"],
+            ),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
         ):
             db = _make_full_db_mock(segments=segments)
             mock_get_client.return_value = db
@@ -275,6 +283,13 @@ class TestExtractHappyPath:
                     key_quotes=[],
                 ),
                 TopicResult(
+                    label="Agenda setup",
+                    summary="Introductory context only.",
+                    status="open",
+                    key_quotes=[],
+                    is_background=True,
+                ),
+                TopicResult(
                     label="crawl strategy",
                     summary="Duplicate casing variant.",
                     status="open",
@@ -294,6 +309,10 @@ class TestExtractHappyPath:
                 "src.workers.extract.llm_client.extract_entities",
                 return_value=EntityList(entities=[]),
             ),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.assign_cluster_for_topic", return_value="cluster-1"),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
         ):
             db = _make_full_db_mock(segments=segments)
             original_side_effect = db.table.side_effect
@@ -323,6 +342,7 @@ class TestExtractHappyPath:
         assert result["topic_count"] == 1
         assert len(inserted_topics) == 1
         assert inserted_topics[0]["label"] == "Crawl strategy"
+        assert inserted_topics[0]["cluster_id"] == "cluster-1"
 
     def test_invalid_structural_commitments_are_not_persisted(self, eager_extract: Any) -> None:
         from src.llm_client import CommitmentList, CommitmentResult, EntityList, TopicList
@@ -359,6 +379,9 @@ class TestExtractHappyPath:
                 "src.workers.extract.llm_client.extract_entities",
                 return_value=EntityList(entities=[]),
             ),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
         ):
             db = _make_full_db_mock(segments=segments)
             original_side_effect = db.table.side_effect
@@ -423,6 +446,10 @@ class TestExtractHappyPath:
                 "src.workers.extract.llm_client.extract_commitments", return_value=mock_commitments
             ),
             patch("src.workers.extract.llm_client.extract_entities", return_value=mock_entities),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.assign_cluster_for_topic", return_value="cluster-1"),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
         ):
             db = _make_full_db_mock(segments=segments, user_id=expected_user_id)
 
@@ -447,3 +474,34 @@ class TestExtractHappyPath:
         for row in inserted_rows:
             if "user_id" in row:
                 assert row["user_id"] == expected_user_id, f"Row inserted with wrong user_id: {row}"
+
+
+@pytest.mark.unit
+class TestReclusterTopics:
+    def test_reclusters_existing_topics(self, eager_extract: Any) -> None:
+        fake_cluster = SimpleNamespace(id="cluster-1")
+        with (
+            patch("src.workers.extract.get_client", return_value=MagicMock()),
+            patch("src.workers.extract.purge_placeholder_topics", return_value=2),
+            patch(
+                "src.workers.extract.load_recluster_source_rows",
+                return_value=[{"id": "topic-1", "label": "Crawl strategy"}],
+            ),
+            patch("src.workers.extract.clear_user_topic_clusters"),
+            patch(
+                "src.workers.extract.assign_clusters_to_existing_topics",
+                return_value={"cluster-1"},
+            ),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[fake_cluster]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters") as mock_upsert_arcs,
+            patch("src.workers.extract.bump_user_cache_version"),
+        ):
+            result = recluster_topics_for_user.delay(user_id="user-1", user_jwt="jwt").get()
+
+        assert result == {
+            "user_id": "user-1",
+            "cluster_count": 1,
+            "topic_count": 1,
+            "purged_topic_count": 2,
+        }
+        mock_upsert_arcs.assert_called_once_with(ANY, "user-1", {"cluster-1"})

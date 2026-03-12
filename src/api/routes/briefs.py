@@ -70,10 +70,20 @@ def _collect_citation_segments(
     topic_arc_rows: list[dict[str, Any]],
     commitment_rows: list[dict[str, Any]],
 ) -> list[BriefCitationOut]:
+    cluster_ids = [str(row["cluster_id"]) for row in topic_arc_rows if row.get("cluster_id")]
     topic_ids = [str(row["topic_id"]) for row in topic_arc_rows if row.get("topic_id")]
     commitment_ids = [str(row["id"]) for row in commitment_rows if row.get("id")]
 
     segment_ids: set[str] = set()
+    if cluster_ids:
+        cluster_topic_rows = (
+            db.table("topics")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("cluster_id", cluster_ids)
+            .execute()
+        ).data or []
+        topic_ids.extend(str(row["id"]) for row in cluster_topic_rows if row.get("id"))
     if topic_ids:
         topic_segment_rows = (
             db.table("topic_segment_links")
@@ -226,7 +236,7 @@ def get_brief(
     if topic_arc_ids:
         topic_arc_rows = (
             db.table("topic_arcs")
-            .select("id, topic_id, summary, trend")
+            .select("id, topic_id, cluster_id, summary, trend")
             .eq("user_id", user_id)
             .in_("id", topic_arc_ids)
             .execute()
@@ -271,7 +281,7 @@ def get_brief(
         topic_arcs=[
             BriefTopicArcOut(
                 id=str(row.get("id", "")),
-                topic_id=str(row.get("topic_id", "")),
+                topic_id=str(row.get("cluster_id") or row.get("topic_id", "")),
                 summary=str(row.get("summary", "")),
                 trend=str(row.get("trend", "")),
             )

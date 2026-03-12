@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, and topic-intelligence quality before broader pilot rollout.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, and topic-intelligence quality before broader pilot rollout. The durable topic-cluster implementation is now complete locally and awaiting deploy + backfill verification.
 
 ## Phases
 
@@ -120,10 +120,17 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 - [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
 - [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
 - [ ] Topic intelligence cleanup — current active workstream
-  - Favor recurring workstreams over meeting-specific fragments during extraction
-  - Reduce one-off noise in Search and Topics
-  - Strengthen canonical clustering so topic arcs represent stable threads
-  - Decide historical backfill approach for already indexed meetings
+  - Implemented locally:
+    - stored `topic_clusters` canonical layer with `topics.cluster_id` and `topic_arcs.cluster_id`
+    - background-topic filtering during extraction
+    - ingestion-time lexical-first + bounded LLM semantic merge through `src/llm_client.py`
+    - per-user `POST /topics/recluster` worker path for historical backfill
+    - cluster-backed `/topics`, topic detail, topic arc, dashboard counts, and search/topic linking
+  - Deployment gate still pending:
+    - run migration `007_topic_clusters.sql`
+    - deploy API + worker changes
+    - trigger per-user recluster
+    - verify production Search/Topics quality against stored clusters
 
 ## Quality Gate
 
@@ -171,6 +178,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `frontend: npm run lint && npm run build` ✅
 - 2026-03-12 deployed read-path performance validation:
   - `pytest -q` ✅ (98 passed, 7 skipped)
+  - `mypy src/ --ignore-missing-imports` ✅
+  - `ruff check . && ruff format --check .` ✅
+  - `frontend: npm run lint && npm run build` ✅
+- 2026-03-12 durable topic-intelligence validation (local, pre-deploy):
+  - `pytest -q` ✅ (104 passed, 7 skipped)
   - `mypy src/ --ignore-missing-imports` ✅
   - `ruff check . && ruff format --check .` ✅
   - `frontend: npm run lint && npm run build` ✅

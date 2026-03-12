@@ -11,6 +11,7 @@ class TopicArcBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     topic_id: uuid.UUID
+    cluster_id: uuid.UUID | None = None
     conversation_ids: list[uuid.UUID]
     summary: str
     trend: Literal["growing", "stable", "resolved"]

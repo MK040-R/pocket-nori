@@ -25,6 +25,16 @@ from src.cache_utils import bump_user_cache_version
 from src.celery_app import celery_app
 from src.commitment_utils import sanitize_commitment_rows
 from src.database import get_client
+from src.topic_cluster_store import (
+    assign_cluster_for_topic,
+    assign_clusters_to_existing_topics,
+    clear_user_topic_clusters,
+    load_cluster_registry,
+    load_recluster_source_rows,
+    purge_placeholder_topics,
+    refresh_clusters_metadata,
+    upsert_topic_arcs_for_clusters,
+)
 from src.topic_utils import sanitize_topic_rows
 
 logger = logging.getLogger(__name__)
@@ -74,7 +84,7 @@ def extract_from_conversation(
     # --- Validate ownership ---
     conv_result = (
         db.table("conversations")
-        .select("id, user_id")
+        .select("id, user_id, meeting_date")
         .eq("id", conversation_id)
         .eq("user_id", user_id)
         .execute()
@@ -119,6 +129,7 @@ def extract_from_conversation(
     commitment_list = llm_client.extract_commitments(transcript)
     entity_list = llm_client.extract_entities(transcript)
 
+    meeting_date = str(conv_result.data[0].get("meeting_date") or "")
     sanitized_topic_rows = sanitize_topic_rows(
         [
             {
@@ -127,8 +138,10 @@ def extract_from_conversation(
                 "status": topic.status,
                 "key_quotes": topic.key_quotes,
                 "conversation_id": conversation_id,
+                "meeting_date": meeting_date,
             }
             for topic in topic_list.topics
+            if not topic.is_background
         ]
     )
     sanitized_commitment_rows = sanitize_commitment_rows(
@@ -154,14 +167,23 @@ def extract_from_conversation(
     # --- Persist Topics ---
     self.update_state(state="PROGRESS", meta={"status": "saving_topics"})
     topic_ids: list[str] = []
+    cluster_registry = load_cluster_registry(db, user_id)
+    affected_cluster_ids: set[str] = set()
 
     for topic_row in sanitized_topic_rows:
+        cluster_id = assign_cluster_for_topic(
+            db,
+            user_id,
+            topic_row=topic_row,
+            clusters=cluster_registry,
+        )
         topic_id = str(uuid.uuid4())
         db.table("topics").insert(
             {
                 "id": topic_id,
                 "user_id": user_id,
                 "conversation_id": conversation_id,
+                "cluster_id": cluster_id,
                 "label": topic_row["label"],
                 "summary": topic_row.get("summary", ""),
                 "status": topic_row.get("status", "open"),
@@ -169,6 +191,7 @@ def extract_from_conversation(
             }
         ).execute()
         topic_ids.append(topic_id)
+        affected_cluster_ids.add(cluster_id)
 
         # Link topic → all segments (simple: link to all, since topics span the conversation)
         if segment_ids:
@@ -178,6 +201,10 @@ def extract_from_conversation(
                     for seg_id in segment_ids
                 ]
             ).execute()
+
+    if affected_cluster_ids:
+        refresh_clusters_metadata(db, user_id, affected_cluster_ids)
+        upsert_topic_arcs_for_clusters(db, user_id, affected_cluster_ids)
 
     # --- Persist Commitments ---
     self.update_state(state="PROGRESS", meta={"status": "saving_commitments"})
@@ -274,4 +301,57 @@ def extract_from_conversation(
         "topic_count": len(sanitized_topic_rows),
         "commitment_count": len(sanitized_commitment_rows),
         "entity_count": len(entity_list.entities),
+    }
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+    soft_time_limit=900,
+    time_limit=1200,
+)
+def recluster_topics_for_user(
+    self: Any,
+    user_id: str,
+    user_jwt: str,
+) -> dict[str, Any]:
+    """Rebuild durable topic clusters and arcs for a user."""
+    if not all([user_id, user_jwt]):
+        raise ValueError("user_id and user_jwt are both required")
+
+    logger.info("Topic recluster started — user=%s", user_id)
+    db = get_client(user_jwt)
+
+    self.update_state(state="PROGRESS", meta={"status": "purging_placeholders"})
+    purged_count = purge_placeholder_topics(db, user_id)
+
+    self.update_state(state="PROGRESS", meta={"status": "loading_topics"})
+    topic_rows = load_recluster_source_rows(db, user_id)
+
+    self.update_state(state="PROGRESS", meta={"status": "rebuilding_clusters"})
+    clear_user_topic_clusters(db, user_id)
+    affected_cluster_ids = assign_clusters_to_existing_topics(db, user_id, topic_rows)
+    refreshed_clusters = refresh_clusters_metadata(db, user_id, affected_cluster_ids)
+
+    self.update_state(state="PROGRESS", meta={"status": "rebuilding_arcs"})
+    upsert_topic_arcs_for_clusters(
+        db,
+        user_id,
+        {cluster.id for cluster in refreshed_clusters},
+    )
+
+    bump_user_cache_version(user_id)
+    logger.info(
+        "Topic recluster complete — user=%s clusters=%d topics=%d purged=%d",
+        user_id,
+        len(refreshed_clusters),
+        len(topic_rows),
+        purged_count,
+    )
+    return {
+        "user_id": user_id,
+        "cluster_count": len(refreshed_clusters),
+        "topic_count": len(topic_rows),
+        "purged_topic_count": purged_count,
     }

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Farz** — a personal intelligence layer for working professionals. Captures and synthesizes context from meetings (starting with Google Meet/Calendar), surfacing topical search, cross-meeting connections, pre-meeting briefings, and a personal context dashboard.
 
-**Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). `Insightful Dashboard` visual refresh and read-path performance improvements are also deployed. Current execution target is MVP topic-intelligence cleanup and pilot-critical data-quality hardening before broader rollout.
+**Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). `Insightful Dashboard` visual refresh and read-path performance improvements are deployed. The durable topic-cluster batch is now implemented locally (stored `topic_clusters`, write-time merge, `POST /topics/recluster`) and the current execution target is deploy + per-user recluster + production QA before broader rollout.
 
 ---
 
@@ -118,6 +118,8 @@ Index (per user)
 Brief
 └── composed from → Topic Arcs + Commitments + Connections + Calendar event
 ```
+
+`topic_clusters` is now the canonical storage layer behind Topics/Topic Arcs for MVP cleanup work. Raw topic rows still remain per conversation for provenance, but browse/search/detail surfaces should treat the cluster as the primary identity.
 
 ---
 

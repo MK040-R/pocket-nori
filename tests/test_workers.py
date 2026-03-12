@@ -111,10 +111,12 @@ class TestGenerateBriefUnit:
         topics_table = MagicMock()
 
         def _topics_select_router(columns: str) -> MagicMock:
-            if columns == "id, label":
+            if columns == "id, label, cluster_id":
                 query = MagicMock()
                 query.eq.return_value.eq.return_value.execute.return_value.data = (
-                    [{"id": "topic-1", "label": "Q2 Launch"}] if include_context else []
+                    [{"id": "topic-1", "label": "Q2 Launch", "cluster_id": "cluster-1"}]
+                    if include_context
+                    else []
                 )
                 return query
 
@@ -132,6 +134,7 @@ class TestGenerateBriefUnit:
                 {
                     "id": "arc-1",
                     "topic_id": "topic-1",
+                    "cluster_id": "cluster-1",
                     "summary": "Launch blockers were reviewed.",
                     "trend": "stable",
                     "created_at": "2026-03-10T10:00:00+00:00",

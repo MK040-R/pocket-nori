@@ -20,7 +20,7 @@ from src.cache_utils import (
     set_cached_json,
 )
 from src.database import get_client
-from src.topic_utils import cluster_topic_rows
+from src.topic_utils import clean_topic_label
 
 logger = logging.getLogger(__name__)
 
@@ -70,24 +70,28 @@ def _parse_iso_timestamp(value: str | None) -> datetime | None:
 
 def _build_topic_labels_by_conversation(
     topic_rows: list[dict[str, Any]],
-    conversation_dates: dict[str, str | None],
+    cluster_rows: list[dict[str, Any]],
 ) -> dict[str, list[str]]:
     if not topic_rows:
         return {}
 
-    enriched_rows = [
-        {
-            **row,
-            "meeting_date": conversation_dates.get(str(row.get("conversation_id") or "")),
-        }
-        for row in topic_rows
-    ]
+    cluster_map = {
+        str(row["id"]): str(row.get("canonical_label") or "")
+        for row in cluster_rows
+        if row.get("id")
+    }
     conversation_labels: dict[str, list[str]] = {}
-    for cluster in cluster_topic_rows(enriched_rows):
-        for conversation_id in cluster.conversation_ids:
-            conversation_labels.setdefault(conversation_id, [])
-            if cluster.label not in conversation_labels[conversation_id]:
-                conversation_labels[conversation_id].append(cluster.label)
+    for row in topic_rows:
+        conversation_id = str(row.get("conversation_id") or "")
+        if not conversation_id:
+            continue
+        cluster_id = str(row.get("cluster_id") or "")
+        label = cluster_map.get(cluster_id) or clean_topic_label(str(row.get("label") or ""))
+        if not label:
+            continue
+        conversation_labels.setdefault(conversation_id, [])
+        if label not in conversation_labels[conversation_id]:
+            conversation_labels[conversation_id].append(label)
     return conversation_labels
 
 
@@ -222,20 +226,26 @@ def list_commitments(
     )
     conv_rows = convs_result.data or []
     conv_map = {str(c["id"]): c for c in conv_rows if c.get("id")}
-    conversation_dates = {
-        str(c["id"]): c.get("meeting_date") for c in conv_rows if c.get("id") is not None
-    }
-
     topic_rows = (
         db.table("topics")
-        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
+        .select("id, cluster_id, label, conversation_id")
         .eq("user_id", user_id)
         .in_("conversation_id", conv_ids)
         .execute()
     ).data or []
-    topic_labels_by_conversation = _build_topic_labels_by_conversation(
-        topic_rows, conversation_dates
+    cluster_ids = sorted(
+        {str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id") is not None}
     )
+    cluster_rows: list[dict[str, Any]] = []
+    if cluster_ids:
+        cluster_rows = (
+            db.table("topic_clusters")
+            .select("id, canonical_label")
+            .eq("user_id", user_id)
+            .in_("id", cluster_ids)
+            .execute()
+        ).data or []
+    topic_labels_by_conversation = _build_topic_labels_by_conversation(topic_rows, cluster_rows)
 
     filtered_rows: list[dict[str, Any]] = []
     for commitment in commitments:
@@ -394,14 +404,26 @@ def update_commitment(
 
     topic_rows = (
         db.table("topics")
-        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
+        .select("id, cluster_id, label, conversation_id")
         .eq("user_id", user_id)
         .eq("conversation_id", conversation_id)
         .execute()
     ).data or []
+    cluster_ids = sorted(
+        {str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id") is not None}
+    )
+    cluster_rows: list[dict[str, Any]] = []
+    if cluster_ids:
+        cluster_rows = (
+            db.table("topic_clusters")
+            .select("id, canonical_label")
+            .eq("user_id", user_id)
+            .in_("id", cluster_ids)
+            .execute()
+        ).data or []
     topic_labels = _build_topic_labels_by_conversation(
         topic_rows,
-        {conversation_id: conversation.get("meeting_date")},
+        cluster_rows,
     ).get(conversation_id, [])
 
     logger.info(

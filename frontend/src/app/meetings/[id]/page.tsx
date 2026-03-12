@@ -89,7 +89,11 @@ export default function MeetingDetailPage() {
         <div className="mt-3 space-y-3">
           {detail.topics.length === 0 && <p className="text-sm text-ink-tertiary">No topics yet.</p>}
           {detail.topics.map((topic) => (
-            <article key={topic.id} className="rounded border border-soft p-3">
+            <Link
+              key={topic.id}
+              href={`/topics/${topic.id}`}
+              className="block rounded border border-soft p-3 transition hover:border-emphasis"
+            >
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-medium">{topic.label}</h3>
                 <span className="rounded border border-soft px-2 py-0.5 text-xs text-ink-tertiary">
@@ -97,7 +101,7 @@ export default function MeetingDetailPage() {
                 </span>
               </div>
               <p className="mt-2 text-sm text-ink-secondary">{topic.summary}</p>
-            </article>
+            </Link>
           ))}
         </div>
       </section>

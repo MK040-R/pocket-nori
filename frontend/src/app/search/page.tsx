@@ -49,7 +49,7 @@ export default function SearchPage() {
     const loadTopics = async () => {
       setTopicsLoading(true);
       try {
-        const data = await getTopics();
+        const data = await getTopics({ minConversations: 1 });
         if (mounted) {
           setTopics(data);
         }
@@ -106,6 +106,7 @@ export default function SearchPage() {
   const featuredTopics = useMemo(
     () =>
       [...topics]
+        .filter((topic) => topic.conversation_count >= 2)
         .sort((left, right) => {
           if (left.conversation_count !== right.conversation_count) {
             return right.conversation_count - left.conversation_count;
@@ -113,6 +114,15 @@ export default function SearchPage() {
           return new Date(right.latest_date).getTime() - new Date(left.latest_date).getTime();
         })
         .slice(0, FEATURED_TOPICS_LIMIT),
+    [topics],
+  );
+
+  const emergingTopics = useMemo(
+    () =>
+      [...topics]
+        .filter((topic) => topic.conversation_count === 1)
+        .sort((left, right) => new Date(right.latest_date).getTime() - new Date(left.latest_date).getTime())
+        .slice(0, 4),
     [topics],
   );
 
@@ -250,7 +260,9 @@ export default function SearchPage() {
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold">Topic directory</h2>
-            <p className="mt-1 text-sm text-ink-secondary">Jump straight into the strongest recurring topics.</p>
+            <p className="mt-1 text-sm text-ink-secondary">
+              Jump straight into the strongest recurring topics. Emerging one-off topics stay searchable without crowding the main view.
+            </p>
           </div>
           <Link href="/topics" className="text-xs text-accent hover:text-accent-hover">
             View all topics
@@ -258,6 +270,9 @@ export default function SearchPage() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {topicsLoading && <span className="text-sm text-ink-tertiary">Loading topics...</span>}
+          {!topicsLoading && featuredTopics.length === 0 && (
+            <span className="text-sm text-ink-tertiary">Recurring topics will appear here once Farz sees the same thread across meetings.</span>
+          )}
           {!topicsLoading &&
             featuredTopics.map((topic) => (
               <Link
@@ -269,6 +284,24 @@ export default function SearchPage() {
               </Link>
             ))}
         </div>
+        {!topicsLoading && emergingTopics.length > 0 && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-ink-secondary">
+              Emerging topics ({emergingTopics.length})
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {emergingTopics.map((topic) => (
+                <Link
+                  key={topic.id}
+                  href={`/topics/${topic.id}`}
+                  className="rounded border border-soft bg-bg-control px-2 py-1 text-xs text-ink-secondary hover:border-emphasis hover:text-ink-primary"
+                >
+                  {topic.label}
+                </Link>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
     </div>
   );

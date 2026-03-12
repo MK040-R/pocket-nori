@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** MVP stabilization, with topic intelligence cleanup as the active workstream
+**Current focus:** MVP stabilization, with stored topic-cluster deployment and recluster verification as the active workstream
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-12 — deployed two stabilization batches: `Insightful Dashboard` visual refresh and read-path latency reduction (user-scoped caching + less frontend overfetch). Current next step is topic intelligence cleanup so Search and Topics show stable recurring workstreams instead of noisy one-off fragments.
+Last activity: 2026-03-12 — implemented the durable topic-intelligence batch locally: stored `topic_clusters`, write-time semantic merge, background-topic filtering, and a per-user recluster worker/route. Next step is deploy + run recluster + production QA.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -64,12 +64,16 @@ Recent decisions affecting current work:
 - [UI]: `/today` now renders complete dashboard sections with deep links into `/meetings/{id}` for activity, commitments, and connection context.
 - [UI]: Design system has shifted from `Private Office` to `Insightful Dashboard`: light workspace, dark navigation rail, Inter typography, stronger card depth.
 - [Perf]: Read-heavy endpoints now use short user-scoped caching and dashboard no longer overfetches commitments; topic detail loads arc separately from core detail.
+- [Arch]: Topic intelligence now uses a durable write-time model: `topic_clusters` are canonical, `topics.cluster_id` / `topic_arcs.cluster_id` persist membership, and semantic merge is allowed only during ingestion/backfill through `src/llm_client.py`.
+- [API]: `POST /topics/recluster` now exists as a per-user trigger for rebuilding stored topic clusters and arcs for already indexed meetings.
+- [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
 - [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 
 ### Pending Todos
 
-- Topic intelligence cleanup (canonical recurring topics, one-off suppression, stronger clustering)
-- Historical topic backfill/recluster decision for already indexed meetings
+- Deploy migration `007_topic_clusters.sql` and the stored-cluster API/worker changes
+- Trigger and validate per-user topic recluster/backfill in production
+- Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters
 - Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
 ### Blockers/Concerns
@@ -80,5 +84,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Visual refresh and read-path performance batches deployed; next workstream is topic intelligence cleanup.
+Stopped at: Durable topic-intelligence batch implemented locally; next step is deploy + per-user recluster + production QA.
 Resume file: None

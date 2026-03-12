@@ -19,7 +19,7 @@ export default function TopicsPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await getTopics();
+        const data = await getTopics({ minConversations: 1 });
         if (mounted) {
           setTopics(data);
         }
@@ -49,12 +49,21 @@ export default function TopicsPage() {
     return topics.filter((topic) => topic.label.toLowerCase().includes(normalized));
   }, [topics, query]);
 
+  const recurringTopics = useMemo(
+    () => filtered.filter((topic) => topic.conversation_count >= 2),
+    [filtered],
+  );
+  const emergingTopics = useMemo(
+    () => filtered.filter((topic) => topic.conversation_count === 1),
+    [filtered],
+  );
+
   return (
     <div className="space-y-6">
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Topics</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Explore the recurring threads that keep showing up across your meetings.
+          Explore the recurring threads that keep showing up across your meetings. One-off topics stay available without dominating the directory.
         </p>
 
         <div className="mt-4">
@@ -81,25 +90,67 @@ export default function TopicsPage() {
         <section className="card p-4 text-sm text-ink-tertiary">No topics match your filter.</section>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2">
-        {filtered.map((topic) => (
-          <Link
-            key={topic.id}
-            href={`/topics/${topic.id}`}
-            className="card block p-4 transition hover:border-emphasis"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-ink-primary">{topic.label}</h2>
-              <span className="mono rounded border border-soft px-2 py-1 text-xs text-ink-tertiary">
-                {topic.conversation_count}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-ink-tertiary">
-              Last mention: {formatDate(topic.latest_date)}
-            </p>
-          </Link>
-        ))}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Recurring topics</h2>
+          <p className="text-xs text-ink-tertiary">
+            {recurringTopics.length === 1
+              ? "1 recurring topic"
+              : `${recurringTopics.length} recurring topics`}
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {recurringTopics.map((topic) => (
+            <Link
+              key={topic.id}
+              href={`/topics/${topic.id}`}
+              className="card block p-4 transition hover:border-emphasis"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-ink-primary">{topic.label}</h2>
+                <span className="mono rounded border border-soft px-2 py-1 text-xs text-ink-tertiary">
+                  {topic.conversation_count}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-ink-tertiary">
+                Last mention: {formatDate(topic.latest_date)}
+              </p>
+            </Link>
+          ))}
+        </div>
+        {!loading && !error && recurringTopics.length === 0 && (
+          <section className="card p-4 text-sm text-ink-tertiary">
+            No recurring topics yet. Emerging topics are still captured below.
+          </section>
+        )}
       </section>
+
+      {!loading && !error && emergingTopics.length > 0 && (
+        <details className="card p-4">
+          <summary className="cursor-pointer text-sm font-medium text-ink-secondary">
+            Emerging topics ({emergingTopics.length})
+          </summary>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {emergingTopics.map((topic) => (
+              <Link
+                key={topic.id}
+                href={`/topics/${topic.id}`}
+                className="rounded border border-soft p-4 transition hover:border-emphasis"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-base font-semibold text-ink-primary">{topic.label}</h2>
+                  <span className="mono rounded border border-soft px-2 py-1 text-xs text-ink-tertiary">
+                    {topic.conversation_count}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-ink-tertiary">
+                  Last mention: {formatDate(topic.latest_date)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }
