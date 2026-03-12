@@ -292,9 +292,9 @@ def cluster_topic_rows(rows: list[dict[str, Any]]) -> list[TopicCluster]:
         dated_rows = [
             _parse_datetime(row.get("meeting_date") or row.get("created_at")) for row in sorted_rows
         ]
-        dated_rows = [value for value in dated_rows if value is not None]
-        if dated_rows:
-            latest_date = max(dated_rows).isoformat()
+        dated_values: list[datetime] = [value for value in dated_rows if value is not None]
+        if dated_values:
+            latest_date = max(dated_values).isoformat()
 
         summary = str(representative.get("summary") or "").strip()
         key_quotes: list[str] = []
