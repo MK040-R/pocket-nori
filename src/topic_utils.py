@@ -98,6 +98,7 @@ _GENERIC_CLUSTER_TOKENS = _STOPWORDS | {
     "projects",
     "team",
     "teams",
+    "tracking",
 }
 
 _MIN_TOKEN_LENGTH = 3
@@ -145,6 +146,19 @@ def topic_tokens(value: str | None) -> set[str]:
         token
         for token in _TOKEN_RE.findall(cleaned)
         if len(token) >= _MIN_TOKEN_LENGTH and token not in _STOPWORDS
+    }
+
+
+def summary_tokens(value: str | None) -> set[str]:
+    cleaned = normalize_topic_label(value)
+    if not cleaned:
+        return set()
+    return {
+        token
+        for token in _TOKEN_RE.findall(cleaned)
+        if len(token) >= _MIN_TOKEN_LENGTH
+        and token not in _STOPWORDS
+        and token not in _GENERIC_CLUSTER_TOKENS
     }
 
 
@@ -229,10 +243,15 @@ def topic_overlap_score(left_label: str | None, right_label: str | None) -> int:
 
 
 def labels_match_lexically(left_label: str | None, right_label: str | None) -> bool:
-    return topic_overlap_score(left_label, right_label) >= 55
+    return topic_overlap_score(left_label, right_label) >= 70
 
 
-def is_semantic_merge_candidate(left_label: str | None, right_label: str | None) -> bool:
+def is_semantic_merge_candidate(
+    left_label: str | None,
+    right_label: str | None,
+    left_summary: str | None = None,
+    right_summary: str | None = None,
+) -> bool:
     """Return True if two labels are relevant enough to justify an LLM merge check."""
     left_normalized = normalize_topic_label(left_label)
     right_normalized = normalize_topic_label(right_label)
@@ -243,10 +262,31 @@ def is_semantic_merge_candidate(left_label: str | None, right_label: str | None)
     if left_normalized in right_normalized or right_normalized in left_normalized:
         return True
 
-    overlap = _token_overlap(topic_tokens(left_label), topic_tokens(right_label))
-    if not overlap:
+    label_overlap = (
+        _token_overlap(
+            topic_tokens(left_label),
+            topic_tokens(right_label),
+        )
+        - _GENERIC_CLUSTER_TOKENS
+    )
+    if len(label_overlap) >= 2:
+        return True
+    if not label_overlap:
+        summary_overlap = _token_overlap(
+            summary_tokens(left_summary),
+            summary_tokens(right_summary),
+        )
+        return len(summary_overlap) >= 2
+
+    summary_overlap = _token_overlap(summary_tokens(left_summary), summary_tokens(right_summary))
+    if summary_overlap:
+        return True
+
+    # A single shared label token is too weak on its own and caused false merges
+    # like "sleep tracking" vs. analytics/event tracking.
+    if len(label_overlap) == 1:
         return False
-    return bool(overlap - _GENERIC_CLUSTER_TOKENS)
+    return False
 
 
 def _labels_should_cluster(

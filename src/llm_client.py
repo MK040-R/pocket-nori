@@ -230,7 +230,10 @@ Topic A summary: "{summary_a}"
 Topic B label: "{label_b}"
 Topic B summary: "{summary_b}"
 
-Do these represent the same underlying work initiative or discussion thread across meetings?
+Do these represent the same concrete ongoing initiative or discussion thread across meetings?
+Answer YES only when both topics clearly refer to the same workstream, project, or repeated thread.
+Answer NO when they are merely adjacent, broadly related, or share one generic idea/word such as tracking, strategy, planning, education, marketing, content, or reporting.
+If one is a subtopic, analogy, example, or different operational problem inside the same business area, answer NO.
 Answer only YES or NO."""
 
     logger.debug("LLM merge check — model=%s", _Model.MERGE)
