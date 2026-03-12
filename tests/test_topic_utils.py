@@ -4,6 +4,8 @@ from src.topic_utils import (
     clean_topic_label,
     cluster_topic_rows,
     is_placeholder_topic_label,
+    is_semantic_merge_candidate,
+    labels_match_lexically,
     sanitize_topic_rows,
 )
 
@@ -90,3 +92,28 @@ def test_cluster_topic_rows_groups_recurring_crawl_thread() -> None:
 
     assert len(clusters) == 1
     assert len(clusters[0].conversation_ids) == 2
+
+
+def test_labels_match_lexically_rejects_single_weak_overlap() -> None:
+    assert not labels_match_lexically(
+        "Sleep Tracking & Sleep Cycle Education",
+        "Campaign event tracking setup",
+    )
+
+
+def test_semantic_merge_candidate_rejects_generic_tracking_overlap() -> None:
+    assert not is_semantic_merge_candidate(
+        "Sleep Tracking & Sleep Cycle Education",
+        "Campaign event tracking setup",
+        "Discussion about sleep cycles, REM/NREM, and how many cycles matter.",
+        "Discussion about campaign attribution, signup events, and missing UTM tracking.",
+    )
+
+
+def test_semantic_merge_candidate_accepts_shared_initiative_context() -> None:
+    assert is_semantic_merge_candidate(
+        "Phase one rollout",
+        "Consultant crawl expansion",
+        "Discussed the PLG crawl rollout, batch planning, and consultant onboarding.",
+        "Reviewed consultant crawl expansion, rollout sequence, and PLG ownership.",
+    )

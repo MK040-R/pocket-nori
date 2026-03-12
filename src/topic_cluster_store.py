@@ -402,7 +402,12 @@ def assign_cluster_for_topic(
         (
             cluster
             for cluster in clusters
-            if is_semantic_merge_candidate(label, cluster.get("canonical_label"))
+            if is_semantic_merge_candidate(
+                label,
+                cluster.get("canonical_label"),
+                summary,
+                str(cluster.get("canonical_summary") or ""),
+            )
         ),
         key=lambda cluster: (
             topic_overlap_score(label, str(cluster.get("canonical_label") or "")),
