@@ -6,7 +6,7 @@ This file provides guidance to Codex when working with code in this repository.
 
 **Farz** — a personal intelligence layer for working professionals. Captures and synthesizes context from meetings (starting with Google Meet/Calendar), surfacing topical search, cross-meeting connections, pre-meeting briefings, and a personal context dashboard.
 
-**Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). Current execution target is post-MVP planning and hardening.
+**Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). `Insightful Dashboard` visual refresh and read-path performance improvements are also deployed. Current execution target is MVP topic-intelligence cleanup and pilot-critical data-quality hardening before broader rollout.
 
 ---
 
@@ -162,14 +162,14 @@ pytest tests/ -v --timeout=30 -m integration # needs Upstash
 
 ## UI Design System
 
-Direction: **"The Private Office"** — dark forest green, gold accent, warm cream text. Authoritative, no decoration.
+Direction: **"Insightful Dashboard"** — light mint workspace, crisp white cards, dark saturated navigation rail, deep navy text, vivid green accent. Clear hierarchy, soft depth, no decorative noise.
 
 Key tokens (full list in `.interface-design/system.md`):
-- Background: `#0A1510` (near-black forest green)
-- Primary text: `#F0EDE4` (warm cream)
-- Accent (citations, commitments, focus): `#C9A84C` (gold) — the **only** color
-- Typography: Plus Jakarta Sans (UI) + JetBrains Mono (data/transcripts)
-- Depth: borders only — no shadows
+- Background: `#F3F8FF` / light gradient canvas
+- Primary text: `#041021` (deep navy)
+- Accent (actions, active nav, highlights): `#00C27A` (bright green)
+- Typography: Inter (UI) + JetBrains Mono (data/transcripts)
+- Depth: soft card shadows + generous radii
 
 ---
 

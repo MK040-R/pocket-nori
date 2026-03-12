@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-11)
+See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** MVP closure and next-phase planning
+**Current focus:** MVP stabilization, with topic intelligence cleanup as the active workstream
 
 ## Current Position
 
-Phase: 5 of 5 (Personal Context Dashboard)
-Plan: 2 of 2 in current phase
-Status: Complete
-Last activity: 2026-03-11 — Phase 5 plans 05-01/05-02 completed. `/calendar/today` now includes recent indexed activity and recent connections (with related meeting refs), and `/today` now renders all dashboard sections with deep links to meeting detail. Validation: `ruff check src tests`, `mypy src tests`, `pytest -q` (97 passed, 7 skipped), `npm run lint`, `npm run build`.
+Phase: Post-Phase 5 stabilization
+Plan: Active follow-up workstreams (MVP quality + pilot readiness)
+Status: In progress
+Last activity: 2026-03-12 — deployed two stabilization batches: `Insightful Dashboard` visual refresh and read-path latency reduction (user-scoped caching + less frontend overfetch). Current next step is topic intelligence cleanup so Search and Topics show stable recurring workstreams instead of noisy one-off fragments.
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% core phases complete; stabilization work active
 
 ## Performance Metrics
 
@@ -62,10 +62,15 @@ Recent decisions affecting current work:
 - [UI]: Meeting detail now exposes latest brief links; dedicated brief page renders generated content and citation transcript snippets.
 - [API]: `/calendar/today` now returns four dashboard feeds: `upcoming_meetings`, `open_commitments`, `recent_activity`, and `recent_connections`.
 - [UI]: `/today` now renders complete dashboard sections with deep links into `/meetings/{id}` for activity, commitments, and connection context.
+- [UI]: Design system has shifted from `Private Office` to `Insightful Dashboard`: light workspace, dark navigation rail, Inter typography, stronger card depth.
+- [Perf]: Read-heavy endpoints now use short user-scoped caching and dashboard no longer overfetches commitments; topic detail loads arc separately from core detail.
+- [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 
 ### Pending Todos
 
-- Define post-MVP roadmap priorities (v2 integrations, infra scaling, and evaluation framework)
+- Topic intelligence cleanup (canonical recurring topics, one-off suppression, stronger clustering)
+- Historical topic backfill/recluster decision for already indexed meetings
+- Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
 ### Blockers/Concerns
 
@@ -74,6 +79,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: MVP execution roadmap complete (Phases 1–5 all validated).
+Last session: 2026-03-12
+Stopped at: Visual refresh and read-path performance batches deployed; next workstream is topic intelligence cleanup.
 Resume file: None

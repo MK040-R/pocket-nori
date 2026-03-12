@@ -430,3 +430,44 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 ---
 
 *This document is updated automatically after every completed task.*
+
+---
+
+## ✅ 2026-03-12 — Read-path latency reduction deployed
+
+### What changed
+
+- Added short user-scoped read caching to the slowest browse endpoints:
+  - `/calendar/today`
+  - `/index/stats`
+  - `/topics`, `/topics/{id}`, `/topics/{id}/arc`
+  - `/entities`
+  - `/commitments`
+- Reduced dashboard overfetch so the main dashboard no longer makes a second commitments request just to render open items already present in the briefing payload.
+- Simplified topic detail loading so the topic page can render primary content first and fetch the arc separately.
+- Deployed to production; app responsiveness improved materially, with more optimization deferred.
+
+### Validation
+
+- `pytest -q` → **98 passed, 7 skipped**
+- `mypy src/ --ignore-missing-imports` → **pass**
+- `ruff check . && ruff format --check .` → **pass**
+- `frontend: npm run lint && npm run build` → **pass**
+
+---
+
+## ✅ 2026-03-12 — Visual refresh deployed
+
+### What changed
+
+- Updated the design system from `Private Office` to `Insightful Dashboard`.
+- Switched the app shell to a light workspace with a dark navigation rail, stronger card depth, and Inter typography.
+- Kept all route structure, data flow, and business behavior unchanged; this was a presentation-only refresh.
+
+### Validation
+
+- `frontend: npm run lint && npm run build` → **pass**
+
+### Next focus
+
+- Topic intelligence cleanup: fewer one-off labels, stronger recurring-topic merging, and cleaner topic arcs for pilot users.

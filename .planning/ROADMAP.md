@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline is fully built (Phase 0a, 0, Phase 1 Waves 1-3). This roadmap tracked user-surface delivery in five phases: frontend web app, topic arc/commitment surfaces, connection graph, calendar-driven recurring briefs, and the personal context dashboard. All five execution phases are now complete.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, and topic-intelligence quality before broader pilot rollout.
 
 ## Phases
 
@@ -115,6 +115,16 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 4. Calendar Sync and Pre-Meeting Briefs | 4/4 | Complete | 2026-03-11 |
 | 5. Personal Context Dashboard | 2/2 | Complete | 2026-03-11 |
 
+## Active Follow-up Tracks (Post-Phase 5)
+
+- [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
+- [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
+- [ ] Topic intelligence cleanup — current active workstream
+  - Favor recurring workstreams over meeting-specific fragments during extraction
+  - Reduce one-off noise in Search and Topics
+  - Strengthen canonical clustering so topic arcs represent stable threads
+  - Decide historical backfill approach for already indexed meetings
+
 ## Quality Gate
 
 - 2026-03-11 milestone validation (before Phase 4 planning):
@@ -156,4 +166,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `ruff check src tests` ✅
   - `mypy src tests` ✅
   - `pytest -q` ✅ (97 passed, 7 skipped)
+  - `frontend: npm run lint && npm run build` ✅
+- 2026-03-12 deployed visual refresh validation:
+  - `frontend: npm run lint && npm run build` ✅
+- 2026-03-12 deployed read-path performance validation:
+  - `pytest -q` ✅ (98 passed, 7 skipped)
+  - `mypy src/ --ignore-missing-imports` ✅
+  - `ruff check . && ruff format --check .` ✅
   - `frontend: npm run lint && npm run build` ✅

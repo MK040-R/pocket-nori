@@ -1,7 +1,7 @@
 # Farz — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-12 (visual refresh work in progress)
+> Last updated: 2026-03-12 (visual refresh + performance batch deployed; topic intelligence cleanup next)
 
 ---
 
@@ -637,3 +637,29 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 - Kept Tailwind wired through CSS variables (`bg-base`, `ink-primary`, `accent`, borders) and verified there are no hard-coded color values in the frontend TypeScript.
 - Added a dark saturated navigation rail and aligned the global font implementation to Inter while keeping all route/data behavior unchanged.
 - Confirmed via `npm run lint` and `npm run build` that the frontend still passes validation with the new styling.
+
+---
+
+## 2026-03-12 — Read-path latency reduction
+
+**Goal:** Improve perceived speed on the most-used screens without changing product behavior or privacy constraints.
+
+- Added a user-scoped read cache layer for slow dashboard and browse endpoints (`/calendar/today`, `/index/stats`, `/topics`, `/topics/{id}`, `/topics/{id}/arc`, `/entities`, `/commitments`).
+- Removed unnecessary dashboard overfetch so the home screen no longer makes a second commitments request just to show open items already present in the briefing payload.
+- Simplified the calendar read path so `GET /calendar/today` does not refresh Google tokens on every request and no longer performs unnecessary connection hydration on the hot path.
+- Changed topic detail loading so the page can render core topic content first and load the arc separately, improving perceived responsiveness.
+- Deployed the performance batch to production and confirmed the application feels materially faster, with additional optimization work deferred for later.
+
+### Validation
+
+- `pytest -q` ✅ (**98 passed, 7 skipped**)
+- `mypy src/ --ignore-missing-imports` ✅
+- `ruff check . && ruff format --check .` ✅
+- `frontend: npm run lint && npm run build` ✅
+
+### What comes next
+
+- **MVP topic intelligence cleanup**
+  - extract fewer, more stable recurring topics
+  - suppress or hide one-off noise by default
+  - strengthen topic merging so arcs reflect real workstreams instead of fragmented meeting remarks

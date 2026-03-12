@@ -1,6 +1,6 @@
 # Farz Post-MVP Hardening Plan (10-User Pilot)
 
-**Status:** Active planning baseline
+**Status:** Deferred until MVP topic-intelligence cleanup is complete
 **Date:** 2026-03-11
 **Scope:** Move from MVP-complete build to a controlled pilot-ready product for ~10 users (internal + one external company)
 
@@ -11,6 +11,8 @@
 MVP execution phases are complete (Phases 1-5). This document is the single handoff point for the next stage: hardening the product so real pilot users can use it safely and reliably while feedback is collected.
 
 Use this file as the first reference in any new Codex session for post-MVP work.
+
+**Current note (2026-03-12):** Do not treat this as the active execution plan yet. Farz is still in MVP cleanup mode for topic quality, topic merging, and pilot-critical UX/data quality. Resume this hardening plan only after the topic-intelligence workstream is accepted.
 
 ---
 
@@ -208,4 +210,3 @@ Farz is pilot-ready when:
 - quality gate remains green
 - legal/privacy and operational controls are documented and tested
 - pilot rollout decision is explicit and evidence-backed
-
