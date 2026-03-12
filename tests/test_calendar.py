@@ -138,6 +138,12 @@ class TestCalendarTodayEndpoint:
             start_time=now + timedelta(minutes=45),
             attendees=["Murali <murali@example.com>", "Alex <alex@example.com>"],
         )
+        tomorrow = CalendarEvent(
+            event_id="evt-tomorrow",
+            title="Tomorrow Planning",
+            start_time=now + timedelta(days=1, hours=2),
+            attendees=["Murali <murali@example.com>"],
+        )
         old_event = CalendarEvent(
             event_id="evt-past",
             title="Earlier Meeting",
@@ -201,16 +207,17 @@ class TestCalendarTodayEndpoint:
             ),
             patch(
                 "src.api.routes.calendar.list_calendar_events",
-                new=AsyncMock(return_value=[old_event, upcoming]),
+                new=AsyncMock(return_value=[old_event, upcoming, tomorrow]),
             ),
         ):
             response = client.get("/calendar/today")
 
         assert response.status_code == 200
         payload = response.json()
-        assert len(payload["upcoming_meetings"]) == 1
+        assert len(payload["upcoming_meetings"]) == 2
         assert payload["upcoming_meetings"][0]["id"] == "evt-upcoming"
         assert payload["upcoming_meetings"][0]["title"] == "Weekly Sync"
+        assert payload["upcoming_meetings"][1]["id"] == "evt-tomorrow"
         assert payload["open_commitments"][0]["conversation_title"] == "Roadmap Review"
         assert payload["open_commitments"][0]["text"] == "Ship Phase 4 sync"
         assert payload["recent_activity"][0]["conversation_id"] == "conv-2"

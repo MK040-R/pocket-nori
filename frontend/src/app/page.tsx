@@ -11,6 +11,14 @@ import {
   type IndexStats,
   type TodayBriefing,
 } from "@/lib/api";
+import { formatDueDate, formatMeetingTitle, formatDateTime } from "@/lib/presentation";
+
+const kpiCards = [
+  { label: "Conversations", href: "/meetings", key: "conversation_count" as const },
+  { label: "Topics", href: "/topics", key: "topic_count" as const },
+  { label: "Commitments", href: "/commitments", key: "commitment_count" as const },
+  { label: "Entities", href: "/entities", key: "entity_count" as const },
+];
 
 export default function DashboardPage() {
   const [briefing, setBriefing] = useState<TodayBriefing | null>(null);
@@ -71,34 +79,23 @@ export default function DashboardPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Live dashboard view using `GET /calendar/today`, `GET /index/stats`, and
-          `GET /commitments`.
+          A quick view of your indexed meetings, active commitments, and the next two days of calendar context.
         </p>
       </section>
 
       <section className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
-        <div className="card p-4">
-          <p className="text-ink-tertiary">Conversations</p>
-          <p className="mono mt-1 text-xl text-ink-primary">{stats.conversation_count}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-ink-tertiary">Topics</p>
-          <p className="mono mt-1 text-xl text-ink-primary">{stats.topic_count}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-ink-tertiary">Commitments</p>
-          <p className="mono mt-1 text-xl text-ink-primary">{stats.commitment_count}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-ink-tertiary">Entities</p>
-          <p className="mono mt-1 text-xl text-ink-primary">{stats.entity_count}</p>
-        </div>
+        {kpiCards.map((card) => (
+          <Link key={card.key} href={card.href} className="card block p-4 transition hover:border-emphasis">
+            <p className="text-ink-tertiary">{card.label}</p>
+            <p className="mono mt-1 text-xl text-ink-primary">{stats[card.key]}</p>
+          </Link>
+        ))}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="card p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Upcoming today</h2>
+            <h2 className="text-lg font-semibold">Upcoming today and tomorrow</h2>
             <Link href="/today" className="text-xs text-accent hover:text-accent-hover">
               Open full view
             </Link>
@@ -106,14 +103,14 @@ export default function DashboardPage() {
           <div className="mt-3 space-y-2">
             {briefing.upcoming_meetings.map((meeting) => (
               <div key={meeting.id} className="rounded border border-soft px-3 py-2">
-                <p className="font-medium text-ink-primary">{meeting.title}</p>
+                <p className="font-medium text-ink-primary">{formatMeetingTitle(meeting.title)}</p>
                 <p className="mt-1 text-xs text-ink-tertiary">
-                  {new Date(meeting.start_time).toLocaleString()} · {meeting.attendees.join(", ")}
+                  {formatDateTime(meeting.start_time)} · {meeting.attendees.join(", ")}
                 </p>
               </div>
             ))}
             {briefing.upcoming_meetings.length === 0 && (
-              <p className="text-sm text-ink-tertiary">No upcoming meetings from calendar yet.</p>
+              <p className="text-sm text-ink-tertiary">No upcoming meetings in the next two days.</p>
             )}
           </div>
         </article>
@@ -131,8 +128,8 @@ export default function DashboardPage() {
               <div key={commitment.id} className="rounded border border-soft px-3 py-2">
                 <p className="text-sm text-ink-primary">{commitment.text}</p>
                 <p className="mt-1 text-xs text-ink-tertiary">
-                  {commitment.owner} · due {commitment.due_date ?? "not specified"} · {" "}
-                  {commitment.conversation_title}
+                  {commitment.owner} · due {formatDueDate(commitment.due_date)} ·{" "}
+                  {formatMeetingTitle(commitment.conversation_title)}
                 </p>
               </div>
             ))}

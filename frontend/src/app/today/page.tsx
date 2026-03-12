@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getIndexStats, getTodayBriefing, type IndexStats, type TodayBriefing } from "@/lib/api";
+import { formatDateTime, formatDueDate, formatMeetingTitle } from "@/lib/presentation";
 
 export default function TodayPage() {
   const [briefing, setBriefing] = useState<TodayBriefing | null>(null);
@@ -58,26 +59,26 @@ export default function TodayPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Today&apos;s briefing</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Live view for `GET /calendar/today` and `GET /index/stats`.
+          See your next two days of meetings, the latest indexed activity, and the commitments still open.
         </p>
 
         <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
-          <div className="rounded border border-soft p-3">
+          <Link href="/meetings" className="rounded border border-soft p-3 transition hover:border-emphasis">
             <p className="text-ink-tertiary">Conversations</p>
             <p className="mono mt-1 text-lg text-ink-primary">{stats.conversation_count}</p>
-          </div>
-          <div className="rounded border border-soft p-3">
+          </Link>
+          <Link href="/topics" className="rounded border border-soft p-3 transition hover:border-emphasis">
             <p className="text-ink-tertiary">Topics</p>
             <p className="mono mt-1 text-lg text-ink-primary">{stats.topic_count}</p>
-          </div>
-          <div className="rounded border border-soft p-3">
+          </Link>
+          <Link href="/commitments" className="rounded border border-soft p-3 transition hover:border-emphasis">
             <p className="text-ink-tertiary">Commitments</p>
             <p className="mono mt-1 text-lg text-ink-primary">{stats.commitment_count}</p>
-          </div>
-          <div className="rounded border border-soft p-3">
+          </Link>
+          <Link href="/entities" className="rounded border border-soft p-3 transition hover:border-emphasis">
             <p className="text-ink-tertiary">Entities</p>
             <p className="mono mt-1 text-lg text-ink-primary">{stats.entity_count}</p>
-          </div>
+          </Link>
         </div>
       </section>
 
@@ -86,14 +87,14 @@ export default function TodayPage() {
         <div className="mt-3 space-y-2">
           {briefing.upcoming_meetings.map((meeting) => (
             <article key={meeting.id} className="rounded border border-soft p-3">
-              <p className="font-medium">{meeting.title}</p>
+              <p className="font-medium">{formatMeetingTitle(meeting.title)}</p>
               <p className="mt-1 text-xs text-ink-tertiary">
-                {new Date(meeting.start_time).toLocaleString()} · {meeting.attendees.join(", ")}
+                {formatDateTime(meeting.start_time)} · {meeting.attendees.join(", ")}
               </p>
             </article>
           ))}
           {briefing.upcoming_meetings.length === 0 && (
-            <p className="text-sm text-ink-tertiary">No upcoming meetings from calendar yet.</p>
+            <p className="text-sm text-ink-tertiary">No upcoming meetings in the next two days.</p>
           )}
         </div>
       </section>
@@ -103,9 +104,9 @@ export default function TodayPage() {
         <div className="mt-3 space-y-2">
           {briefing.recent_activity.map((activity) => (
             <article key={activity.conversation_id} className="rounded border border-soft p-3">
-              <p className="font-medium">{activity.title}</p>
+              <p className="font-medium">{formatMeetingTitle(activity.title)}</p>
               <p className="mt-1 text-xs text-ink-tertiary">
-                {new Date(activity.meeting_date).toLocaleString()} · {activity.status}
+                {formatDateTime(activity.meeting_date)} · {activity.status}
               </p>
               <Link
                 href={`/meetings/${activity.conversation_id}`}
@@ -128,8 +129,8 @@ export default function TodayPage() {
             <article key={commitment.id} className="rounded border border-soft p-3">
               <p className="text-sm text-ink-primary">{commitment.text}</p>
               <p className="mt-1 text-xs text-ink-tertiary">
-                {commitment.owner} · due {commitment.due_date ?? "not specified"} · from{" "}
-                {commitment.conversation_title}
+                {commitment.owner} · due {formatDueDate(commitment.due_date)} · from{" "}
+                {formatMeetingTitle(commitment.conversation_title)}
               </p>
               <Link
                 href={`/meetings/${commitment.conversation_id}`}
@@ -141,35 +142,6 @@ export default function TodayPage() {
           ))}
           {briefing.open_commitments.length === 0 && (
             <p className="text-sm text-ink-tertiary">No open commitments right now.</p>
-          )}
-        </div>
-      </section>
-
-      <section className="card p-5">
-        <h2 className="text-lg font-semibold">New cross-meeting connections</h2>
-        <div className="mt-3 space-y-2">
-          {briefing.recent_connections.map((connection) => (
-            <article key={connection.id} className="rounded border border-soft p-3">
-              <p className="font-medium">{connection.label}</p>
-              <p className="mt-1 text-xs text-ink-tertiary">{connection.summary}</p>
-              <p className="mt-1 text-xs text-ink-tertiary">
-                {connection.linked_type} · detected {new Date(connection.created_at).toLocaleString()}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {connection.related_conversations.map((conversation) => (
-                  <Link
-                    key={conversation.conversation_id}
-                    href={`/meetings/${conversation.conversation_id}`}
-                    className="rounded border border-soft px-2 py-1 text-xs text-ink-secondary hover:border-emphasis hover:text-ink-primary"
-                  >
-                    {conversation.title}
-                  </Link>
-                ))}
-              </div>
-            </article>
-          ))}
-          {briefing.recent_connections.length === 0 && (
-            <p className="text-sm text-ink-tertiary">No new cross-meeting links detected yet.</p>
           )}
         </div>
       </section>

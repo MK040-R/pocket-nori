@@ -22,7 +22,9 @@ from typing import Any
 
 from src import llm_client
 from src.celery_app import celery_app
+from src.commitment_utils import sanitize_commitment_rows
 from src.database import get_client
+from src.topic_utils import sanitize_topic_rows
 
 logger = logging.getLogger(__name__)
 
@@ -115,11 +117,35 @@ def extract_from_conversation(
     commitment_list = llm_client.extract_commitments(transcript)
     entity_list = llm_client.extract_entities(transcript)
 
+    sanitized_topic_rows = sanitize_topic_rows(
+        [
+            {
+                "label": topic.label,
+                "summary": topic.summary,
+                "status": topic.status,
+                "key_quotes": topic.key_quotes,
+                "conversation_id": conversation_id,
+            }
+            for topic in topic_list.topics
+        ]
+    )
+    sanitized_commitment_rows = sanitize_commitment_rows(
+        [
+            {
+                "text": commitment.text,
+                "owner": commitment.owner,
+                "due_date": commitment.due_date,
+                "status": commitment.status,
+            }
+            for commitment in commitment_list.commitments
+        ]
+    )
+
     logger.info(
         "Extraction complete — conversation=%s topics=%d commitments=%d entities=%d",
         conversation_id,
-        len(topic_list.topics),
-        len(commitment_list.commitments),
+        len(sanitized_topic_rows),
+        len(sanitized_commitment_rows),
         len(entity_list.entities),
     )
 
@@ -127,17 +153,17 @@ def extract_from_conversation(
     self.update_state(state="PROGRESS", meta={"status": "saving_topics"})
     topic_ids: list[str] = []
 
-    for topic in topic_list.topics:
+    for topic_row in sanitized_topic_rows:
         topic_id = str(uuid.uuid4())
         db.table("topics").insert(
             {
                 "id": topic_id,
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "label": topic.label,
-                "summary": topic.summary,
-                "status": topic.status,
-                "key_quotes": topic.key_quotes,
+                "label": topic_row["label"],
+                "summary": topic_row.get("summary", ""),
+                "status": topic_row.get("status", "open"),
+                "key_quotes": topic_row.get("key_quotes") or [],
             }
         ).execute()
         topic_ids.append(topic_id)
@@ -154,14 +180,14 @@ def extract_from_conversation(
     # --- Persist Commitments ---
     self.update_state(state="PROGRESS", meta={"status": "saving_commitments"})
 
-    for commitment in commitment_list.commitments:
+    for commitment in sanitized_commitment_rows:
         commitment_id = str(uuid.uuid4())
 
         # Parse due_date if present
         due_date: str | None = None
-        if commitment.due_date:
+        if commitment.get("due_date"):
             try:
-                due_date = datetime.fromisoformat(commitment.due_date).isoformat()
+                due_date = datetime.fromisoformat(str(commitment["due_date"])).isoformat()
             except ValueError:
                 due_date = None
 
@@ -170,10 +196,10 @@ def extract_from_conversation(
                 "id": commitment_id,
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "text": commitment.text,
-                "owner": commitment.owner,
+                "text": commitment["text"],
+                "owner": commitment["owner"],
                 "due_date": due_date,
-                "status": commitment.status,
+                "status": commitment.get("status", "open"),
             }
         ).execute()
 
@@ -225,8 +251,8 @@ def extract_from_conversation(
         current = existing_index.data[0]
         db.table("user_index").update(
             {
-                "topic_count": current["topic_count"] + len(topic_list.topics),
-                "commitment_count": current["commitment_count"] + len(commitment_list.commitments),
+                "topic_count": current["topic_count"] + len(sanitized_topic_rows),
+                "commitment_count": current["commitment_count"] + len(sanitized_commitment_rows),
                 "last_updated": datetime.now(tz=UTC).isoformat(),
             }
         ).eq("user_id", user_id).execute()
@@ -234,15 +260,15 @@ def extract_from_conversation(
     logger.info(
         "Extraction persisted — conversation=%s topics=%d commitments=%d entities=%d user=%s",
         conversation_id,
-        len(topic_list.topics),
-        len(commitment_list.commitments),
+        len(sanitized_topic_rows),
+        len(sanitized_commitment_rows),
         len(entity_list.entities),
         user_id,
     )
 
     return {
         "conversation_id": conversation_id,
-        "topic_count": len(topic_list.topics),
-        "commitment_count": len(commitment_list.commitments),
+        "topic_count": len(sanitized_topic_rows),
+        "commitment_count": len(sanitized_commitment_rows),
         "entity_count": len(entity_list.entities),
     }

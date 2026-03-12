@@ -175,6 +175,15 @@ export type Commitment = {
   status: "open" | "resolved";
   conversation_id: string;
   conversation_title: string;
+  meeting_date: string | null;
+  topic_labels: string[];
+};
+
+export type EntitySummary = {
+  name: string;
+  type: "person" | "project" | "company" | "product";
+  mentions: number;
+  conversation_count: number;
 };
 
 export type TodayBriefing = {
@@ -512,7 +521,14 @@ export async function getTopicArc(id: string): Promise<TopicArc> {
 
 export async function getCommitments(
   status?: "open" | "resolved",
-  options: { assignee?: string; attributedTo?: string } = {},
+  options: {
+    assignee?: string;
+    attributedTo?: string;
+    topic?: string;
+    meeting?: string;
+    meetingDateFrom?: string;
+    meetingDateTo?: string;
+  } = {},
 ): Promise<Commitment[]> {
   const params = new URLSearchParams();
   if (status) {
@@ -523,6 +539,18 @@ export async function getCommitments(
   }
   if (options.attributedTo?.trim()) {
     params.set("attributed_to", options.attributedTo.trim());
+  }
+  if (options.topic?.trim()) {
+    params.set("topic", options.topic.trim());
+  }
+  if (options.meeting?.trim()) {
+    params.set("meeting", options.meeting.trim());
+  }
+  if (options.meetingDateFrom?.trim()) {
+    params.set("meeting_date_from", options.meetingDateFrom.trim());
+  }
+  if (options.meetingDateTo?.trim()) {
+    params.set("meeting_date_to", options.meetingDateTo.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request<Commitment[]>(`/commitments${suffix}`, { method: "GET" });
@@ -537,6 +565,10 @@ export async function resolveCommitment(id: string): Promise<Commitment> {
 
 export async function getTodayBriefing(): Promise<TodayBriefing> {
   return request<TodayBriefing>("/calendar/today", { method: "GET" });
+}
+
+export async function getEntities(): Promise<EntitySummary[]> {
+  return request<EntitySummary[]>("/entities", { method: "GET" });
 }
 
 export async function getBrief(id: string): Promise<BriefDetail> {

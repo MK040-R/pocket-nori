@@ -9,6 +9,7 @@ from src.api.routes.briefs import router as briefs_router
 from src.api.routes.calendar import router as calendar_router
 from src.api.routes.commitments import router as commitments_router
 from src.api.routes.conversations import router as conversations_router
+from src.api.routes.entities import router as entities_router
 from src.api.routes.health import router as health_router
 from src.api.routes.index_stats import router as index_stats_router
 from src.api.routes.onboarding import router as onboarding_router
@@ -24,5 +25,6 @@ router.include_router(search_router, prefix="/search", tags=["search"])
 router.include_router(briefs_router, prefix="/briefs", tags=["briefs"])
 router.include_router(topics_router, prefix="/topics", tags=["topics"])
 router.include_router(commitments_router, prefix="/commitments", tags=["commitments"])
+router.include_router(entities_router, prefix="/entities", tags=["entities"])
 router.include_router(index_stats_router, prefix="/index", tags=["index"])
 router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])

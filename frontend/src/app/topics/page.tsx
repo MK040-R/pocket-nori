@@ -4,17 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { getTopics, type TopicSummary } from "@/lib/api";
-
-function formatTopicDate(value: string): string {
-  if (!value) {
-    return "Unknown";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleDateString();
-}
+import { formatDate } from "@/lib/presentation";
 
 export default function TopicsPage() {
   const [topics, setTopics] = useState<TopicSummary[]>([]);
@@ -64,7 +54,7 @@ export default function TopicsPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Topics</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Live topic directory sourced from `GET /topics`.
+          Explore the recurring threads that keep showing up across your meetings.
         </p>
 
         <div className="mt-4">
@@ -105,7 +95,7 @@ export default function TopicsPage() {
               </span>
             </div>
             <p className="mt-2 text-xs text-ink-tertiary">
-              Last mention: {formatTopicDate(topic.latest_date)}
+              Last mention: {formatDate(topic.latest_date)}
             </p>
           </Link>
         ))}

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from src.api.deps import get_current_user
 from src.database import get_client
+from src.topic_utils import TopicCluster, cluster_topic_rows
 
 logger = logging.getLogger(__name__)
 
@@ -96,49 +97,71 @@ def _format_date_label(value: str | None) -> str:
     return parsed.date().isoformat()
 
 
-def _build_and_store_topic_arc(
-    db: Any,
-    user_id: str,
-    topic_id: str,
-) -> TopicArcDetail:
-    base_topic_result = (
+def _load_topic_source_rows(db: Any, user_id: str) -> list[dict[str, Any]]:
+    topics_result = (
         db.table("topics")
-        .select("id, label, summary, status, conversation_id, created_at")
-        .eq("id", topic_id)
+        .select("id, label, summary, status, key_quotes, conversation_id, created_at")
         .eq("user_id", user_id)
+        .order("created_at", desc=True)
         .execute()
     )
-    if not base_topic_result.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-    base_topic = base_topic_result.data[0]
+    rows = topics_result.data or []
+    if not rows:
+        return []
 
-    base_label = base_topic.get("label", "")
-    related_topics_result = (
-        db.table("topics")
-        .select("id, label, summary, status, conversation_id, created_at")
-        .eq("user_id", user_id)
-        .ilike("label", base_label)
-        .execute()
+    conversation_ids = sorted(
+        {str(row["conversation_id"]) for row in rows if row.get("conversation_id")}
     )
-    related_topics = related_topics_result.data or [base_topic]
-    if not any(str(row.get("id")) == str(topic_id) for row in related_topics):
-        related_topics.append(base_topic)
-
-    topic_ids = [str(row["id"]) for row in related_topics if row.get("id")]
-    conversation_ids = list(
-        {str(row["conversation_id"]) for row in related_topics if row.get("conversation_id")}
-    )
-
     conversation_map: dict[str, dict[str, Any]] = {}
     if conversation_ids:
-        conversation_result = (
+        conversations_result = (
             db.table("conversations")
             .select("id, title, meeting_date")
             .eq("user_id", user_id)
             .in_("id", conversation_ids)
             .execute()
         )
-        conversation_map = {str(row["id"]): row for row in (conversation_result.data or [])}
+        conversation_map = {
+            str(row["id"]): row for row in (conversations_result.data or []) if row.get("id")
+        }
+
+    return [
+        {
+            **row,
+            "meeting_date": conversation_map.get(str(row.get("conversation_id") or ""), {}).get(
+                "meeting_date"
+            ),
+            "conversation_title": conversation_map.get(
+                str(row.get("conversation_id") or ""),
+                {},
+            ).get("title", ""),
+        }
+        for row in rows
+    ]
+
+
+def _load_topic_cluster(db: Any, user_id: str, topic_id: str) -> TopicCluster:
+    cluster = next(
+        (
+            candidate
+            for candidate in cluster_topic_rows(_load_topic_source_rows(db, user_id))
+            if topic_id in candidate.topic_ids
+        ),
+        None,
+    )
+    if cluster is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    return cluster
+
+
+def _build_and_store_topic_arc(
+    db: Any,
+    user_id: str,
+    topic_id: str,
+) -> TopicArcDetail:
+    cluster = _load_topic_cluster(db=db, user_id=user_id, topic_id=topic_id)
+    canonical_topic_id = cluster.representative_id
+    topic_ids = cluster.topic_ids
 
     topic_to_segment_ids: dict[str, list[str]] = {}
     if topic_ids:
@@ -171,10 +194,9 @@ def _build_and_store_topic_arc(
         segment_map = {str(row["id"]): row for row in (segment_result.data or [])}
 
     raw_points: list[TopicArcPoint] = []
-    for topic_row in related_topics:
+    for topic_row in cluster.rows:
         current_topic_id = str(topic_row.get("id", ""))
         conversation_id = str(topic_row.get("conversation_id", ""))
-        conversation = conversation_map.get(conversation_id, {})
         segment_ids = topic_to_segment_ids.get(current_topic_id, [])
         sorted_segments = sorted(
             (segment_map[segment_id] for segment_id in segment_ids if segment_id in segment_map),
@@ -194,18 +216,13 @@ def _build_and_store_topic_arc(
             segment_id = primary_segment.get("id")
             citation_segment_id = str(segment_id) if segment_id else None
 
-        occurred_at = str(
-            conversation.get("meeting_date")
-            or topic_row.get("created_at")
-            or base_topic.get("created_at")
-            or ""
-        )
+        occurred_at = str(topic_row.get("meeting_date") or topic_row.get("created_at") or "")
 
         raw_points.append(
             TopicArcPoint(
                 topic_id=current_topic_id,
                 conversation_id=conversation_id,
-                conversation_title=str(conversation.get("title") or "Untitled meeting"),
+                conversation_title=str(topic_row.get("conversation_title") or "Untitled meeting"),
                 occurred_at=occurred_at,
                 summary=str(topic_row.get("summary") or ""),
                 topic_status=_normalize_status(topic_row.get("status")),
@@ -242,21 +259,21 @@ def _build_and_store_topic_arc(
         trend = "stable"
 
     if not arc_points:
-        arc_summary = f"{base_label} has not been linked to indexed meetings yet."
+        arc_summary = f"{cluster.label} has not been linked to indexed meetings yet."
     elif len(arc_points) == 1:
-        arc_summary = f"{base_label} has appeared in one meeting so far."
+        arc_summary = f"{cluster.label} has appeared in one meeting so far."
     else:
         first_seen = _format_date_label(arc_points[0].occurred_at)
         last_seen = _format_date_label(arc_points[-1].occurred_at)
         arc_summary = (
-            f"{base_label} appears across {len(arc_points)} meetings from "
+            f"{cluster.label} appears across {len(arc_points)} meetings from "
             f"{first_seen} to {last_seen}."
         )
 
     existing_arc_result = (
         db.table("topic_arcs")
         .select("id")
-        .eq("topic_id", topic_id)
+        .eq("topic_id", canonical_topic_id)
         .eq("user_id", user_id)
         .execute()
     )
@@ -277,7 +294,7 @@ def _build_and_store_topic_arc(
             .insert(
                 {
                     "user_id": user_id,
-                    "topic_id": topic_id,
+                    "topic_id": canonical_topic_id,
                     "summary": arc_summary,
                     "trend": trend,
                 }
@@ -316,8 +333,8 @@ def _build_and_store_topic_arc(
 
     return TopicArcDetail(
         id=arc_id,
-        topic_id=topic_id,
-        label=base_label,
+        topic_id=canonical_topic_id,
+        label=cluster.label,
         summary=arc_summary,
         status=overall_status,
         trend=trend,
@@ -341,42 +358,22 @@ def list_topics(
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[TopicSummary]:
-    """Return all topics for the current user, newest conversation first."""
+    """Return grouped canonical topics for the current user."""
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    topics_result = (
-        db.table("topics")
-        .select("id, label, conversation_id, created_at")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    )
-    topics = topics_result.data or []
-    if not topics:
-        return []
-
-    # Fetch conversation meeting_date for latest_date
-    conv_ids = list({t["conversation_id"] for t in topics})
-    convs_result = (
-        db.table("conversations")
-        .select("id, meeting_date")
-        .eq("user_id", user_id)
-        .in_("id", conv_ids)
-        .execute()
-    )
-    conv_date_map = {c["id"]: c.get("meeting_date") for c in (convs_result.data or [])}
+    clusters = cluster_topic_rows(_load_topic_source_rows(db, user_id))
+    visible_clusters = clusters[offset : offset + limit]
 
     return [
         TopicSummary(
-            id=t["id"],
-            label=t["label"],
-            conversation_count=1,
-            latest_date=conv_date_map.get(t["conversation_id"]),
+            id=cluster.representative_id,
+            label=cluster.label,
+            conversation_count=len(cluster.conversation_ids),
+            latest_date=cluster.latest_date,
         )
-        for t in topics
+        for cluster in visible_clusters
     ]
 
 
@@ -394,48 +391,39 @@ def get_topic(
     topic_id: str,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> TopicDetail:
-    """Return a single topic with its key quotes and source conversations."""
+    """Return a grouped topic with its source conversations."""
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    topic_result = (
-        db.table("topics")
-        .select("id, label, summary, key_quotes, conversation_id")
-        .eq("id", topic_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
-    if not topic_result.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-
-    t = topic_result.data[0]
-
-    conv_result = (
-        db.table("conversations")
-        .select("id, title, meeting_date")
-        .eq("id", t["conversation_id"])
-        .eq("user_id", user_id)
-        .execute()
-    )
-    conv = conv_result.data[0] if conv_result.data else {}
-    conversations = (
-        [
+    cluster = _load_topic_cluster(db=db, user_id=user_id, topic_id=topic_id)
+    conversations: list[TopicConversation] = []
+    seen_conversations: set[str] = set()
+    for row in sorted(
+        cluster.rows,
+        key=lambda candidate: (
+            _parse_iso_timestamp(str(candidate.get("meeting_date") or ""))
+            or datetime.min.replace(tzinfo=UTC)
+        ),
+        reverse=True,
+    ):
+        conversation_id = str(row.get("conversation_id") or "")
+        if not conversation_id or conversation_id in seen_conversations:
+            continue
+        seen_conversations.add(conversation_id)
+        conversations.append(
             TopicConversation(
-                id=conv["id"],
-                title=conv.get("title", ""),
-                meeting_date=conv.get("meeting_date", ""),
+                id=conversation_id,
+                title=str(row.get("conversation_title") or ""),
+                meeting_date=str(row.get("meeting_date") or ""),
             )
-        ]
-        if conv
-        else []
-    )
+        )
 
     return TopicDetail(
-        id=t["id"],
-        label=t["label"],
-        summary=t["summary"],
-        key_quotes=t.get("key_quotes") or [],
+        id=cluster.representative_id,
+        label=cluster.label,
+        summary=cluster.summary,
+        key_quotes=cluster.key_quotes,
         conversations=conversations,
     )
 
