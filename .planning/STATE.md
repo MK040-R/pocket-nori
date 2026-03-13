@@ -67,14 +67,16 @@ Recent decisions affecting current work:
 - [Arch]: Topic intelligence now uses a durable write-time model: `topic_clusters` are canonical, `topics.cluster_id` / `topic_arcs.cluster_id` persist membership, and semantic merge is allowed only during ingestion/backfill through `src/llm_client.py`.
 - [API]: `POST /topics/recluster` now exists as a per-user trigger for rebuilding stored topic clusters and arcs for already indexed meetings.
 - [Ops]: Historical recluster now runs as `lexical-all + semantic-recent` rather than a full semantic pass across the entire archive, to stay within worker time limits while still testing semantic merge quality on current data.
+- [Arch]: Recluster now preserves topic-cluster IDs when rebuilt clusters overlap the same underlying topic rows, so durable topic URLs stay stable across rebuilds where lineage is clear.
 - [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
 - [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 
 ### Pending Todos
 
 - Deploy migration `007_topic_clusters.sql` and the stored-cluster API/worker changes
-- Trigger and validate per-user topic recluster/backfill in production using the bounded semantic-recent pass
+- Trigger and validate per-user topic recluster/backfill in production using the bounded semantic-recent pass and stable cluster-id reconciliation
 - Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters
+- Normalize entity aliases/types (`Opus`, `Upwork`, `N8N`/`N8`, short-form people names) after topic stability is confirmed
 - Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
 ### Blockers/Concerns
@@ -85,5 +87,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Bounded recluster patch implemented locally after the full semantic backfill hit the 20-minute worker limit; next step is deploy + rerun per-user recluster + production QA.
+Stopped at: Stable topic-identity reconciliation implemented locally after live QA showed old cluster URLs breaking across recluster; next step is deploy + rerun per-user recluster + recheck old topic links + entity normalization.
 Resume file: None

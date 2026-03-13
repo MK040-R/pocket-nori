@@ -23,6 +23,7 @@ from src.topic_utils import (
     is_placeholder_topic_label,
     is_semantic_merge_candidate,
     labels_match_lexically,
+    normalize_topic_label,
     topic_overlap_score,
 )
 
@@ -335,6 +336,127 @@ def load_topic_cluster(
         if cluster.id == cluster_id:
             return cluster
     return None
+
+
+def _cluster_identity_candidates(
+    rebuilt_clusters: list[StoredTopicCluster],
+    previous_clusters: list[StoredTopicCluster],
+) -> list[tuple[int, int, int, float, str, str]]:
+    candidates: list[tuple[int, int, int, float, str, str]] = []
+    for rebuilt in rebuilt_clusters:
+        rebuilt_topic_ids = {topic_id for topic_id in rebuilt.topic_ids if topic_id}
+        if not rebuilt_topic_ids:
+            continue
+        rebuilt_label = normalize_topic_label(rebuilt.label)
+        rebuilt_last = _parse_datetime(rebuilt.last_mentioned_at) or datetime.min.replace(
+            tzinfo=UTC
+        )
+        for previous in previous_clusters:
+            previous_topic_ids = {topic_id for topic_id in previous.topic_ids if topic_id}
+            overlap = len(rebuilt_topic_ids & previous_topic_ids)
+            if overlap == 0:
+                continue
+            exact_label = int(rebuilt_label == normalize_topic_label(previous.label))
+            lexical_score = topic_overlap_score(rebuilt.label, previous.label)
+            recency_score = _datetime_sort_score(rebuilt_last)
+            candidates.append(
+                (
+                    overlap,
+                    exact_label,
+                    lexical_score,
+                    recency_score,
+                    rebuilt.id,
+                    previous.id,
+                )
+            )
+    candidates.sort(reverse=True)
+    return candidates
+
+
+def _insert_cluster_with_id(
+    db: Any,
+    user_id: str,
+    *,
+    cluster_id: str,
+    cluster: StoredTopicCluster,
+) -> None:
+    (
+        db.table("topic_clusters")
+        .insert(
+            {
+                "id": cluster_id,
+                "user_id": user_id,
+                "canonical_label": cluster.label,
+                "canonical_summary": cluster.summary,
+                "status": cluster.status,
+                "first_mentioned_at": cluster.first_mentioned_at,
+                "last_mentioned_at": cluster.last_mentioned_at,
+            }
+        )
+        .execute()
+    )
+
+
+def stabilize_reclustered_cluster_ids(
+    db: Any,
+    user_id: str,
+    previous_clusters: list[StoredTopicCluster],
+) -> set[str]:
+    """Reuse prior cluster ids where rebuilt clusters clearly descend from them.
+
+    Reclustering currently clears and rebuilds cluster rows. Without an explicit
+    reconciliation pass, old topic URLs break after every rebuild. This helper
+    preserves ids when a rebuilt cluster shares underlying topic rows with a
+    prior cluster, using overlap-first greedy assignment.
+    """
+
+    rebuilt_clusters = load_topic_clusters(db, user_id, min_conversations=1)
+    if not rebuilt_clusters:
+        return set()
+    if not previous_clusters:
+        return {cluster.id for cluster in rebuilt_clusters}
+
+    rebuilt_by_id = {cluster.id: cluster for cluster in rebuilt_clusters}
+    final_cluster_ids = set(rebuilt_by_id)
+    assigned_rebuilt: set[str] = set()
+    assigned_previous: set[str] = set()
+
+    for _, _, _, _, rebuilt_id, previous_id in _cluster_identity_candidates(
+        rebuilt_clusters,
+        previous_clusters,
+    ):
+        if rebuilt_id in assigned_rebuilt or previous_id in assigned_previous:
+            continue
+        if rebuilt_id == previous_id:
+            assigned_rebuilt.add(rebuilt_id)
+            assigned_previous.add(previous_id)
+            continue
+
+        rebuilt_cluster = rebuilt_by_id.get(rebuilt_id)
+        if rebuilt_cluster is None:
+            continue
+
+        _insert_cluster_with_id(
+            db,
+            user_id,
+            cluster_id=previous_id,
+            cluster=rebuilt_cluster,
+        )
+        (
+            db.table("topics")
+            .update({"cluster_id": previous_id})
+            .eq("user_id", user_id)
+            .eq("cluster_id", rebuilt_id)
+            .execute()
+        )
+        (db.table("topic_clusters").delete().eq("user_id", user_id).eq("id", rebuilt_id).execute())
+
+        assigned_rebuilt.add(rebuilt_id)
+        assigned_previous.add(previous_id)
+        final_cluster_ids.discard(rebuilt_id)
+        final_cluster_ids.add(previous_id)
+
+    return final_cluster_ids
 
 
 def _create_cluster(
