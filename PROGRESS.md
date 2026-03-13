@@ -689,3 +689,26 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 - Deploy the API + worker changes and run migration `007_topic_clusters.sql`
 - Trigger `POST /topics/recluster` for the current user so existing meetings are regrouped under stored clusters
 - Re-run production QA on Search, Topics, Dashboard, Commitments, and meeting detail to verify the live topic layer is materially cleaner
+
+---
+
+## 2026-03-13 — Bounded recluster semantic backfill
+
+**Goal:** Make `POST /topics/recluster` finish reliably on real production history instead of timing out during a full semantic pass.
+
+- Changed recluster into a two-stage rebuild: lexical clustering for all historical topics first, then a bounded semantic merge pass only over recent singleton leftovers.
+- Kept LLM merge off all read routes and limited the semantic backfill to a recent window so current pilot data can still benefit from semantic cleanup without another 20-minute worker kill.
+- Added a semantic budget and recent-conversation window to the recluster path, preserving deterministic full-history cleanup while letting the worker spend a capped amount of model work where it matters most.
+- Fixed recluster arc rebuilding so arcs are rebuilt for the full final cluster set even when the recent semantic pass makes no merges.
+
+### Validation
+
+- `pytest -q tests/test_extract.py tests/test_topic_cluster_store.py tests/test_topic_utils.py tests/test_llm_client.py tests/test_topics.py` ✅ (**31 passed**)
+- `mypy src/ --ignore-missing-imports` ✅
+- `ruff check ... && ruff format --check ...` ✅
+
+### What comes next
+
+- Deploy the bounded recluster fix to API + worker
+- Re-run `POST /topics/recluster` for the current user
+- Verify that recluster completes within the worker time limit and that false topic merges are reduced on live topic pages

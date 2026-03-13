@@ -491,8 +491,12 @@ class TestReclusterTopics:
             patch(
                 "src.workers.extract.assign_clusters_to_existing_topics",
                 return_value={"cluster-1"},
-            ),
+            ) as mock_assign,
             patch("src.workers.extract.refresh_clusters_metadata", return_value=[fake_cluster]),
+            patch(
+                "src.workers.extract.merge_recent_topic_rows_semantically",
+                return_value=(set(), 0),
+            ),
             patch("src.workers.extract.upsert_topic_arcs_for_clusters") as mock_upsert_arcs,
             patch("src.workers.extract.bump_user_cache_version"),
         ):
@@ -503,5 +507,60 @@ class TestReclusterTopics:
             "cluster_count": 1,
             "topic_count": 1,
             "purged_topic_count": 2,
+            "semantic_check_count": 0,
         }
+        mock_assign.assert_called_once_with(
+            ANY,
+            "user-1",
+            [{"id": "topic-1", "label": "Crawl strategy"}],
+            enable_semantic=False,
+        )
         mock_upsert_arcs.assert_called_once_with(ANY, "user-1", {"cluster-1"})
+
+    def test_reclusters_existing_topics_refreshes_full_cluster_set_after_semantic_merges(
+        self,
+        eager_extract: Any,
+    ) -> None:
+        lexical_cluster = SimpleNamespace(id="cluster-lexical")
+        final_clusters = [
+            {"id": "cluster-merged"},
+            {"id": "cluster-lexical"},
+        ]
+        with (
+            patch("src.workers.extract.get_client", return_value=MagicMock()),
+            patch("src.workers.extract.purge_placeholder_topics", return_value=0),
+            patch(
+                "src.workers.extract.load_recluster_source_rows",
+                return_value=[{"id": "topic-1", "label": "Crawl strategy"}],
+            ),
+            patch("src.workers.extract.clear_user_topic_clusters"),
+            patch(
+                "src.workers.extract.assign_clusters_to_existing_topics",
+                return_value={"cluster-lexical"},
+            ),
+            patch(
+                "src.workers.extract.refresh_clusters_metadata",
+                side_effect=[[lexical_cluster], []],
+            ),
+            patch(
+                "src.workers.extract.merge_recent_topic_rows_semantically",
+                return_value=({"cluster-merged"}, 3),
+            ),
+            patch("src.workers.extract.load_cluster_registry", return_value=final_clusters),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters") as mock_upsert_arcs,
+            patch("src.workers.extract.bump_user_cache_version"),
+        ):
+            result = recluster_topics_for_user.delay(user_id="user-1", user_jwt="jwt").get()
+
+        assert result == {
+            "user_id": "user-1",
+            "cluster_count": 2,
+            "topic_count": 1,
+            "purged_topic_count": 0,
+            "semantic_check_count": 3,
+        }
+        mock_upsert_arcs.assert_called_once_with(
+            ANY,
+            "user-1",
+            {"cluster-lexical", "cluster-merged"},
+        )

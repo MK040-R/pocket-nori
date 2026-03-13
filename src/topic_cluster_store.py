@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src import llm_client
@@ -369,19 +369,10 @@ def load_cluster_registry(db: Any, user_id: str) -> list[dict[str, Any]]:
     return _load_cluster_rows(db, user_id)
 
 
-def assign_cluster_for_topic(
-    db: Any,
-    user_id: str,
-    *,
-    topic_row: dict[str, Any],
+def _find_lexical_cluster_id(
+    label: str,
     clusters: list[dict[str, Any]],
-    max_semantic_candidates: int = 8,
-) -> str:
-    label = clean_topic_label(str(topic_row.get("label") or ""))
-    summary = str(topic_row.get("summary") or "").strip()
-    status = str(topic_row.get("status") or "open")
-    mentioned_at = str(topic_row.get("meeting_date") or topic_row.get("created_at") or "")
-
+) -> str | None:
     lexical_candidates = sorted(
         (
             cluster
@@ -395,9 +386,19 @@ def assign_cluster_for_topic(
         ),
         reverse=True,
     )
-    if lexical_candidates:
-        return str(lexical_candidates[0]["id"])
+    if not lexical_candidates:
+        return None
+    return str(lexical_candidates[0]["id"])
 
+
+def _find_semantic_cluster_id(
+    label: str,
+    summary: str,
+    clusters: list[dict[str, Any]],
+    *,
+    max_semantic_candidates: int = 8,
+    semantic_budget: dict[str, int] | None = None,
+) -> str | None:
     semantic_candidates = sorted(
         (
             cluster
@@ -418,6 +419,12 @@ def assign_cluster_for_topic(
     )[:max_semantic_candidates]
 
     for candidate in semantic_candidates:
+        if semantic_budget is not None:
+            limit = semantic_budget.get("limit", 0)
+            used = semantic_budget.get("used", 0)
+            if used >= limit:
+                return None
+            semantic_budget["used"] = used + 1
         if llm_client.check_topic_merge(
             label,
             summary,
@@ -425,6 +432,38 @@ def assign_cluster_for_topic(
             str(candidate.get("canonical_summary") or ""),
         ):
             return str(candidate.get("id") or "")
+    return None
+
+
+def assign_cluster_for_topic(
+    db: Any,
+    user_id: str,
+    *,
+    topic_row: dict[str, Any],
+    clusters: list[dict[str, Any]],
+    enable_semantic: bool = True,
+    max_semantic_candidates: int = 8,
+    semantic_budget: dict[str, int] | None = None,
+) -> str:
+    label = clean_topic_label(str(topic_row.get("label") or ""))
+    summary = str(topic_row.get("summary") or "").strip()
+    status = str(topic_row.get("status") or "open")
+    mentioned_at = str(topic_row.get("meeting_date") or topic_row.get("created_at") or "")
+
+    lexical_cluster_id = _find_lexical_cluster_id(label, clusters)
+    if lexical_cluster_id:
+        return lexical_cluster_id
+
+    if enable_semantic:
+        semantic_cluster_id = _find_semantic_cluster_id(
+            label,
+            summary,
+            clusters,
+            max_semantic_candidates=max_semantic_candidates,
+            semantic_budget=semantic_budget,
+        )
+        if semantic_cluster_id:
+            return semantic_cluster_id
 
     created = _create_cluster(
         db,
@@ -549,6 +588,9 @@ def assign_clusters_to_existing_topics(
     db: Any,
     user_id: str,
     topic_rows: list[dict[str, Any]],
+    *,
+    enable_semantic: bool = True,
+    semantic_budget: dict[str, int] | None = None,
 ) -> set[str]:
     clusters = load_cluster_registry(db, user_id)
     affected_cluster_ids: set[str] = set()
@@ -558,8 +600,11 @@ def assign_clusters_to_existing_topics(
             user_id,
             topic_row=row,
             clusters=clusters,
+            enable_semantic=enable_semantic,
+            semantic_budget=semantic_budget,
         )
         affected_cluster_ids.add(cluster_id)
+        row["cluster_id"] = cluster_id
         (
             db.table("topics")
             .update({"cluster_id": cluster_id})
@@ -568,6 +613,124 @@ def assign_clusters_to_existing_topics(
             .execute()
         )
     return affected_cluster_ids
+
+
+def _select_recent_topic_rows(
+    topic_rows: list[dict[str, Any]],
+    *,
+    max_recent_conversations: int,
+    lookback_days: int,
+) -> list[dict[str, Any]]:
+    if not topic_rows:
+        return []
+
+    cutoff = datetime.now(tz=UTC) - timedelta(days=lookback_days)
+    recent_rows: list[dict[str, Any]] = []
+    selected_conversations: set[str] = set()
+
+    for row in sorted(topic_rows, key=_sort_key_for_row, reverse=True):
+        occurred_at = _parse_datetime(row.get("meeting_date") or row.get("created_at"))
+        if occurred_at is None or occurred_at < cutoff:
+            continue
+        conversation_id = str(row.get("conversation_id") or "")
+        if (
+            conversation_id
+            and conversation_id not in selected_conversations
+            and len(selected_conversations) >= max_recent_conversations
+        ):
+            continue
+        if conversation_id:
+            selected_conversations.add(conversation_id)
+        recent_rows.append(row)
+    return recent_rows
+
+
+def merge_recent_topic_rows_semantically(
+    db: Any,
+    user_id: str,
+    topic_rows: list[dict[str, Any]],
+    *,
+    max_recent_conversations: int = 25,
+    lookback_days: int = 90,
+    max_total_semantic_checks: int = 100,
+    max_semantic_candidates: int = 5,
+) -> tuple[set[str], int]:
+    recent_rows = _select_recent_topic_rows(
+        topic_rows,
+        max_recent_conversations=max_recent_conversations,
+        lookback_days=lookback_days,
+    )
+    if not recent_rows:
+        return set(), 0
+
+    semantic_budget = {"used": 0, "limit": max_total_semantic_checks}
+    affected_cluster_ids: set[str] = set()
+
+    clusters = load_topic_clusters(db, user_id, min_conversations=1)
+    cluster_map = {cluster.id: cluster for cluster in clusters}
+    cluster_candidates = [
+        {
+            "id": cluster.id,
+            "canonical_label": cluster.label,
+            "canonical_summary": cluster.summary,
+            "last_mentioned_at": cluster.last_mentioned_at,
+        }
+        for cluster in clusters
+    ]
+
+    for row in recent_rows:
+        current_cluster_id = str(row.get("cluster_id") or "")
+        if not current_cluster_id:
+            continue
+        current_cluster = cluster_map.get(current_cluster_id)
+        if current_cluster is None:
+            continue
+        # Only spend semantic budget on singleton leftovers from the lexical pass.
+        if len(current_cluster.conversation_ids) > 1 or len(current_cluster.topic_ids) > 1:
+            continue
+
+        label = clean_topic_label(str(row.get("label") or ""))
+        summary = str(row.get("summary") or "").strip()
+        candidate_clusters = [
+            candidate
+            for candidate in cluster_candidates
+            if str(candidate.get("id") or "") != current_cluster_id
+        ]
+        target_cluster_id = _find_semantic_cluster_id(
+            label,
+            summary,
+            candidate_clusters,
+            max_semantic_candidates=max_semantic_candidates,
+            semantic_budget=semantic_budget,
+        )
+        if not target_cluster_id or target_cluster_id == current_cluster_id:
+            continue
+
+        (
+            db.table("topics")
+            .update({"cluster_id": target_cluster_id})
+            .eq("user_id", user_id)
+            .eq("id", str(row.get("id") or ""))
+            .execute()
+        )
+        row["cluster_id"] = target_cluster_id
+        affected_cluster_ids.add(current_cluster_id)
+        affected_cluster_ids.add(target_cluster_id)
+
+        # Refresh in-memory cluster view so later rows see the updated membership.
+        clusters = load_topic_clusters(db, user_id, min_conversations=1)
+        cluster_map = {cluster.id: cluster for cluster in clusters}
+        cluster_candidates = [
+            {
+                "id": cluster.id,
+                "canonical_label": cluster.label,
+                "canonical_summary": cluster.summary,
+                "last_mentioned_at": cluster.last_mentioned_at,
+            }
+            for cluster in clusters
+        ]
+
+    return affected_cluster_ids, semantic_budget["used"]
 
 
 def upsert_topic_arc_for_cluster(
