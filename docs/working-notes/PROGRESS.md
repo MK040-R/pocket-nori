@@ -518,3 +518,25 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 - Deploy the bounded recluster fix to API + worker
 - Re-run `POST /topics/recluster`
 - Confirm the worker completes within the 20-minute limit and review live topic pages for reduced false merges
+
+---
+
+## ✅ 2026-03-13 — Topic cluster IDs stabilized across recluster
+
+### What changed
+
+- Added a post-rebuild reconciliation step so recluster reuses old cluster IDs when the rebuilt cluster shares the same underlying topic rows.
+- This keeps durable topic links stable across recluster runs instead of deleting every cluster row and replacing it with new IDs.
+- The reconciliation is overlap-first and one-to-one, so it only preserves IDs when the lineage is concrete.
+
+### Validation
+
+- `pytest -q tests/test_extract.py tests/test_topic_cluster_store.py tests/test_topic_utils.py tests/test_llm_client.py tests/test_topics.py` → **32 passed**
+- `mypy src/ --ignore-missing-imports` → **pass**
+- `ruff check ... && ruff format --check ...` → **pass**
+
+### Next focus
+
+- Deploy the stable-identity fix to API + worker
+- Re-run `POST /topics/recluster`
+- Verify that old topic links still resolve after rebuild and then resume entity normalization

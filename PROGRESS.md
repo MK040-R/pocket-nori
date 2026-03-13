@@ -712,3 +712,25 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 - Deploy the bounded recluster fix to API + worker
 - Re-run `POST /topics/recluster` for the current user
 - Verify that recluster completes within the worker time limit and that false topic merges are reduced on live topic pages
+
+---
+
+## 2026-03-13 — Stable topic identity across recluster
+
+**Goal:** Preserve durable topic URLs across recluster runs so previously shared topic links do not break after topic-cluster cleanup.
+
+- Added cluster-id reconciliation after recluster: rebuilt clusters now reuse prior cluster IDs when they clearly descend from the same underlying topic rows.
+- Kept the reconciliation overlap-first and one-to-one, so a rebuilt cluster only inherits an old ID when the membership evidence is concrete rather than guessed from label similarity alone.
+- Updated recluster to snapshot previous clusters before clearing them, then stabilize rebuilt IDs before refreshing metadata and rebuilding arcs.
+
+### Validation
+
+- `pytest -q tests/test_extract.py tests/test_topic_cluster_store.py tests/test_topic_utils.py tests/test_llm_client.py tests/test_topics.py` ✅ (**32 passed**)
+- `mypy src/ --ignore-missing-imports` ✅
+- `ruff check ... && ruff format --check ...` ✅
+
+### What comes next
+
+- Deploy the stable-identity fix to API + worker
+- Re-run `POST /topics/recluster`
+- Verify that previously shared topic URLs still resolve when the rebuilt cluster clearly maps to the same thread

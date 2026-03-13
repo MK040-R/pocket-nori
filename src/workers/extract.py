@@ -31,9 +31,11 @@ from src.topic_cluster_store import (
     clear_user_topic_clusters,
     load_cluster_registry,
     load_recluster_source_rows,
+    load_topic_clusters,
     merge_recent_topic_rows_semantically,
     purge_placeholder_topics,
     refresh_clusters_metadata,
+    stabilize_reclustered_cluster_ids,
     upsert_topic_arcs_for_clusters,
 )
 from src.topic_utils import sanitize_topic_rows
@@ -324,6 +326,8 @@ def recluster_topics_for_user(
     logger.info("Topic recluster started — user=%s", user_id)
     db = get_client(user_jwt)
 
+    previous_clusters = load_topic_clusters(db, user_id, min_conversations=1)
+
     self.update_state(state="PROGRESS", meta={"status": "purging_placeholders"})
     purged_count = purge_placeholder_topics(db, user_id)
 
@@ -350,11 +354,10 @@ def recluster_topics_for_user(
     if recent_semantic_cluster_ids:
         affected_cluster_ids.update(recent_semantic_cluster_ids)
         refresh_clusters_metadata(db, user_id, affected_cluster_ids)
-        final_cluster_ids = {
-            str(cluster.get("id") or "")
-            for cluster in load_cluster_registry(db, user_id)
-            if cluster.get("id")
-        }
+
+    final_cluster_ids = stabilize_reclustered_cluster_ids(db, user_id, previous_clusters)
+    refreshed_clusters = refresh_clusters_metadata(db, user_id, final_cluster_ids)
+    final_cluster_ids = {cluster.id for cluster in refreshed_clusters}
 
     self.update_state(state="PROGRESS", meta={"status": "rebuilding_arcs"})
     upsert_topic_arcs_for_clusters(
