@@ -80,6 +80,90 @@ class TestEntitiesList:
         }
         assert payload[1]["name"] == "Murali Krishna Yamsani"
 
+    def test_merges_brand_aliases_and_company_product_variants(self) -> None:
+        db = _make_db(
+            [
+                {
+                    "name": "Opus",
+                    "type": "product",
+                    "mentions": 4,
+                    "conversation_id": "conv-1",
+                },
+                {
+                    "name": "Opus",
+                    "type": "company",
+                    "mentions": 3,
+                    "conversation_id": "conv-2",
+                },
+                {
+                    "name": "N8",
+                    "type": "product",
+                    "mentions": 2,
+                    "conversation_id": "conv-1",
+                },
+                {
+                    "name": "N8N",
+                    "type": "product",
+                    "mentions": 1,
+                    "conversation_id": "conv-3",
+                },
+            ]
+        )
+
+        with patch("src.api.routes.entities.get_client", return_value=db):
+            response = client.get("/entities")
+
+        assert response.status_code == 200
+        assert response.json() == [
+            {
+                "name": "Opus",
+                "type": "company/product",
+                "mentions": 7,
+                "conversation_count": 2,
+            },
+            {
+                "name": "N8N",
+                "type": "product",
+                "mentions": 3,
+                "conversation_count": 2,
+            },
+        ]
+
+    def test_merges_unambiguous_short_form_people(self) -> None:
+        db = _make_db(
+            [
+                {
+                    "name": "Nabil Mansouri",
+                    "type": "person",
+                    "mentions": 4,
+                    "conversation_id": "conv-1",
+                },
+                {
+                    "name": "Nabil",
+                    "type": "person",
+                    "mentions": 1,
+                    "conversation_id": "conv-2",
+                },
+                {
+                    "name": "Murali Krishna Yamsani",
+                    "type": "person",
+                    "mentions": 2,
+                    "conversation_id": "conv-3",
+                },
+            ]
+        )
+
+        with patch("src.api.routes.entities.get_client", return_value=db):
+            response = client.get("/entities")
+
+        assert response.status_code == 200
+        assert response.json()[0] == {
+            "name": "Nabil Mansouri",
+            "type": "person",
+            "mentions": 5,
+            "conversation_count": 2,
+        }
+
     def test_applies_limit_and_offset(self) -> None:
         db = _make_db(
             [

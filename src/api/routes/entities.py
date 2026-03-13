@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -11,6 +10,7 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
+from src.entity_utils import group_entity_rows
 
 router = APIRouter()
 _ENTITIES_CACHE_TTL_SECONDS = 120
@@ -49,32 +49,15 @@ def list_entities(
         .execute()
     ).data or []
 
-    grouped: dict[tuple[str, str], dict[str, Any]] = defaultdict(
-        lambda: {"mentions": 0, "conversation_ids": set()}
-    )
-    canonical_names: dict[tuple[str, str], str] = {}
-    for row in rows:
-        name = str(row.get("name") or "").strip()
-        entity_type = str(row.get("type") or "").strip()
-        conversation_id = str(row.get("conversation_id") or "").strip()
-        if not name or not entity_type:
-            continue
-        key = (name.lower(), entity_type)
-        canonical_names.setdefault(key, name)
-        grouped[key]["mentions"] += int(row.get("mentions") or 0)
-        if conversation_id:
-            grouped[key]["conversation_ids"].add(conversation_id)
-
     summaries = [
         EntitySummary(
-            name=canonical_names[key],
-            type=key[1],
-            mentions=value["mentions"],
-            conversation_count=len(value["conversation_ids"]),
+            name=summary.name,
+            type=summary.type,
+            mentions=summary.mentions,
+            conversation_count=summary.conversation_count,
         )
-        for key, value in grouped.items()
+        for summary in group_entity_rows(rows)
     ]
-    summaries.sort(key=lambda item: (-item.mentions, -item.conversation_count, item.name.lower()))
     visible = summaries[offset : offset + limit]
     set_cached_json(
         cache_key,

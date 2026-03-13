@@ -540,3 +540,26 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 - Deploy the stable-identity fix to API + worker
 - Re-run `POST /topics/recluster`
 - Verify that old topic links still resolve after rebuild and then resume entity normalization
+
+---
+
+## ✅ 2026-03-13 — Entity directory normalization aligned with dashboard stats
+
+### What changed
+
+- Added a shared entity-grouping helper that safely normalizes obvious brand aliases and `company`/`product` variants without adding risky semantic entity merge logic.
+- Updated `/entities` to use that shared grouping layer, including conservative short-form person collapsing only when there is a single unambiguous full-name match.
+- Updated dashboard `entity_count` to use the same grouped-entity logic as the directory so both surfaces report the same reality.
+
+### Validation
+
+- `pytest -q tests/test_entities.py tests/test_index_stats.py` → **6 passed**
+- `pytest -q` → **112 passed, 7 skipped**
+- `mypy src/ --ignore-missing-imports` → **pass**
+- `ruff check ... && ruff format --check ...` → **pass**
+
+### Next focus
+
+- Deploy the entity-normalization batch
+- Verify `/entities` and dashboard counts match on production
+- Decide whether already-broken historical topic URLs need a redirect/alias layer

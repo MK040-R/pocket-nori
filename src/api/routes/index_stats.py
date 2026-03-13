@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
+from src.entity_utils import group_entity_rows
 from src.topic_cluster_store import load_topic_clusters
 
 logger = logging.getLogger(__name__)
@@ -68,12 +69,16 @@ def get_index_stats(
     commitment_result = (
         db.table("commitments").select("id", count="exact").eq("user_id", user_id).execute()
     )
-    entity_result = (
-        db.table("entities").select("id", count="exact").eq("user_id", user_id).execute()
+    entity_rows = (
+        db.table("entities")
+        .select("name, type, mentions, conversation_id")
+        .eq("user_id", user_id)
+        .execute()
+        .data
+        or []
     )
     topic_count = len(load_topic_clusters(db, user_id, min_conversations=1))
-
-    entity_count = entity_result.count or 0
+    entity_count = len(group_entity_rows(entity_rows))
 
     payload = IndexStats(
         conversation_count=conversation_result.count or 0,

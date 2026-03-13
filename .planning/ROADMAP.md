@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, and topic-intelligence quality before broader pilot rollout. The durable topic-cluster implementation is now complete locally and awaiting deploy + backfill verification.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, topic-intelligence quality, and final entity cleanup before broader pilot rollout. The durable topic-cluster implementation is now deployed and production-verified; the current local follow-up is conservative entity normalization for `/entities` and dashboard counts.
 
 ## Phases
 
@@ -120,17 +120,17 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 - [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
 - [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
 - [ ] Topic intelligence cleanup — current active workstream
-  - Implemented locally:
+  - Deployed and verified live:
     - stored `topic_clusters` canonical layer with `topics.cluster_id` and `topic_arcs.cluster_id`
     - background-topic filtering during extraction
     - ingestion-time lexical-first + bounded LLM semantic merge through `src/llm_client.py`
     - per-user `POST /topics/recluster` worker path for historical backfill
     - cluster-backed `/topics`, topic detail, topic arc, dashboard counts, and search/topic linking
-  - Deployment gate still pending:
-    - run migration `007_topic_clusters.sql`
-    - deploy API + worker changes
-    - trigger per-user recluster
-    - verify production Search/Topics quality against stored clusters
+    - bounded `lexical-all + semantic-recent` recluster mode to stay within worker limits
+    - stable topic-cluster IDs across future recluster runs where lineage is concrete
+  - Remaining follow-up:
+    - decide whether already-broken historical topic URLs need alias/redirect support
+    - deploy and verify conservative entity normalization (`/entities`, dashboard `entity_count`)
 
 ## Quality Gate
 
@@ -186,3 +186,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `mypy src/ --ignore-missing-imports` ✅
   - `ruff check . && ruff format --check .` ✅
   - `frontend: npm run lint && npm run build` ✅
+- 2026-03-13 entity normalization validation (local):
+  - `pytest -q tests/test_entities.py tests/test_index_stats.py` ✅ (6 passed)
+  - `pytest -q` ✅ (112 passed, 7 skipped)
+  - `mypy src/ --ignore-missing-imports` ✅
+  - `ruff check . && ruff format --check .` ✅
