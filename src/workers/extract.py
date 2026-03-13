@@ -31,6 +31,7 @@ from src.topic_cluster_store import (
     clear_user_topic_clusters,
     load_cluster_registry,
     load_recluster_source_rows,
+    merge_recent_topic_rows_semantically,
     purge_placeholder_topics,
     refresh_clusters_metadata,
     upsert_topic_arcs_for_clusters,
@@ -329,29 +330,52 @@ def recluster_topics_for_user(
     self.update_state(state="PROGRESS", meta={"status": "loading_topics"})
     topic_rows = load_recluster_source_rows(db, user_id)
 
-    self.update_state(state="PROGRESS", meta={"status": "rebuilding_clusters"})
+    self.update_state(state="PROGRESS", meta={"status": "rebuilding_clusters_lexical"})
     clear_user_topic_clusters(db, user_id)
-    affected_cluster_ids = assign_clusters_to_existing_topics(db, user_id, topic_rows)
+    affected_cluster_ids = assign_clusters_to_existing_topics(
+        db,
+        user_id,
+        topic_rows,
+        enable_semantic=False,
+    )
     refreshed_clusters = refresh_clusters_metadata(db, user_id, affected_cluster_ids)
+    final_cluster_ids = {cluster.id for cluster in refreshed_clusters}
+
+    self.update_state(state="PROGRESS", meta={"status": "rebuilding_clusters_semantic_recent"})
+    recent_semantic_cluster_ids, semantic_check_count = merge_recent_topic_rows_semantically(
+        db,
+        user_id,
+        topic_rows,
+    )
+    if recent_semantic_cluster_ids:
+        affected_cluster_ids.update(recent_semantic_cluster_ids)
+        refresh_clusters_metadata(db, user_id, affected_cluster_ids)
+        final_cluster_ids = {
+            str(cluster.get("id") or "")
+            for cluster in load_cluster_registry(db, user_id)
+            if cluster.get("id")
+        }
 
     self.update_state(state="PROGRESS", meta={"status": "rebuilding_arcs"})
     upsert_topic_arcs_for_clusters(
         db,
         user_id,
-        {cluster.id for cluster in refreshed_clusters},
+        final_cluster_ids,
     )
 
     bump_user_cache_version(user_id)
     logger.info(
-        "Topic recluster complete — user=%s clusters=%d topics=%d purged=%d",
+        "Topic recluster complete — user=%s clusters=%d topics=%d purged=%d semantic_checks=%d",
         user_id,
-        len(refreshed_clusters),
+        len(final_cluster_ids),
         len(topic_rows),
         purged_count,
+        semantic_check_count,
     )
     return {
         "user_id": user_id,
-        "cluster_count": len(refreshed_clusters),
+        "cluster_count": len(final_cluster_ids),
         "topic_count": len(topic_rows),
         "purged_topic_count": purged_count,
+        "semantic_check_count": semantic_check_count,
     }

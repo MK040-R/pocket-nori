@@ -66,13 +66,14 @@ Recent decisions affecting current work:
 - [Perf]: Read-heavy endpoints now use short user-scoped caching and dashboard no longer overfetches commitments; topic detail loads arc separately from core detail.
 - [Arch]: Topic intelligence now uses a durable write-time model: `topic_clusters` are canonical, `topics.cluster_id` / `topic_arcs.cluster_id` persist membership, and semantic merge is allowed only during ingestion/backfill through `src/llm_client.py`.
 - [API]: `POST /topics/recluster` now exists as a per-user trigger for rebuilding stored topic clusters and arcs for already indexed meetings.
+- [Ops]: Historical recluster now runs as `lexical-all + semantic-recent` rather than a full semantic pass across the entire archive, to stay within worker time limits while still testing semantic merge quality on current data.
 - [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
 - [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 
 ### Pending Todos
 
 - Deploy migration `007_topic_clusters.sql` and the stored-cluster API/worker changes
-- Trigger and validate per-user topic recluster/backfill in production
+- Trigger and validate per-user topic recluster/backfill in production using the bounded semantic-recent pass
 - Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters
 - Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
@@ -83,6 +84,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Durable topic-intelligence batch implemented locally; next step is deploy + per-user recluster + production QA.
+Last session: 2026-03-13
+Stopped at: Bounded recluster patch implemented locally after the full semantic backfill hit the 20-minute worker limit; next step is deploy + rerun per-user recluster + production QA.
 Resume file: None

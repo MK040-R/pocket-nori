@@ -496,3 +496,25 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 - Deploy migration `007_topic_clusters.sql` and the API/worker changes
 - Trigger per-user recluster for existing meetings
 - Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters
+
+---
+
+## ✅ 2026-03-13 — Reclustering bounded to lexical-all + semantic-recent
+
+### What changed
+
+- Split recluster into two passes: a full lexical rebuild across all historical topics, followed by a bounded semantic merge pass only for recent singleton leftovers.
+- Added semantic-budget limits so historical backfill no longer tries to semantically re-understand the full archive in one worker task.
+- Fixed recluster arc rebuilding so the final arc set is rebuilt from the full final cluster registry, even when the semantic recent pass makes no merges.
+
+### Validation
+
+- `pytest -q tests/test_extract.py tests/test_topic_cluster_store.py tests/test_topic_utils.py tests/test_llm_client.py tests/test_topics.py` → **31 passed**
+- `mypy src/ --ignore-missing-imports` → **pass**
+- `ruff check ... && ruff format --check ...` → **pass**
+
+### Next focus
+
+- Deploy the bounded recluster fix to API + worker
+- Re-run `POST /topics/recluster`
+- Confirm the worker completes within the 20-minute limit and review live topic pages for reduced false merges
