@@ -81,6 +81,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106", "S107", "E501"]  # Allow assert + hardcoded test credentials; mock chains exceed line limit
 "src/llm_client.py" = ["E501"]  # Prompt strings cannot be wrapped without affecting the LLM
+"src/api/routes/search.py" = ["S608"]  # pgvector SQL uses f-strings for safe internal constants only (score threshold, date clauses)
 
 [tool.ruff.format]
 quote-style = "double"

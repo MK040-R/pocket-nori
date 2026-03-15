@@ -9,7 +9,7 @@ Rules enforced here:
 
 import logging
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 import anthropic
 import instructor
@@ -130,6 +130,11 @@ Guidelines:
 - If referred to by multiple names, count them together under the canonical name
 - Accuracy over quantity"""
 
+_DIGEST_SYSTEM_PROMPT = """You are a personal meeting intelligence assistant.
+Given the structured data extracted from a completed meeting — topics, commitments, and entities — write a concise 3-5 sentence digest.
+Capture: the main themes discussed, any key decisions made, action items assigned, and notable people or projects mentioned.
+Be specific and factual. Ground every sentence in the provided data. Do not speculate or pad."""
+
 _BRIEF_SYSTEM_PROMPT = """You are an expert meeting strategist. Given context about a person's past meetings and an upcoming calendar event, write a concise pre-meeting brief.
 
 Include:
@@ -156,6 +161,7 @@ class _Model(StrEnum):
     EXTRACTION = "claude-sonnet-4-6"
     BRIEF = "claude-opus-4-6"
     MERGE = "claude-sonnet-4-6"
+    DIGEST = "claude-sonnet-4-6"
 
 
 def _instructor_client() -> instructor.Instructor:
@@ -273,6 +279,148 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     # API guarantees order matches input — sort by index to be safe
     ordered = sorted(response.data, key=lambda d: d.index)
     return [item.embedding for item in ordered]
+
+
+def generate_meeting_digest(
+    topics: list[dict[str, str]],
+    commitments: list[dict[str, str | None]],
+    entities: list[dict[str, str]],
+) -> str:
+    """Generate a plain-text digest of a meeting from its extracted intelligence.
+
+    Called once at ingest time after extraction is complete. The digest is stored
+    on conversations.digest and embedded for semantic search. It is never regenerated.
+
+    Args:
+        topics: List of dicts with 'label' and 'summary' keys.
+        commitments: List of dicts with 'text', 'owner', and optional 'due_date' keys.
+        entities: List of dicts with 'name' and 'type' keys.
+
+    Returns:
+        Plain-text 3-5 sentence digest string.
+
+    Note:
+        Input data is single-user scoped and must never be logged.
+    """
+    if not topics and not commitments and not entities:
+        return ""
+
+    # Build a structured context string — never log this
+    parts: list[str] = []
+    if topics:
+        topic_lines = "\n".join(f"- {t['label']}: {t.get('summary', '')}" for t in topics)
+        parts.append(f"Topics discussed:\n{topic_lines}")
+    if commitments:
+        commitment_lines = "\n".join(
+            f"- {c['owner']} committed to: {c['text']}"
+            + (f" (by {c['due_date']})" if c.get("due_date") else "")
+            for c in commitments
+        )
+        parts.append(f"Commitments made:\n{commitment_lines}")
+    if entities:
+        entity_lines = ", ".join(f"{e['name']} ({e['type']})" for e in entities)
+        parts.append(f"People and projects mentioned: {entity_lines}")
+
+    context = "\n\n".join(parts)
+
+    logger.debug("LLM call — generating meeting digest model=%s", _Model.DIGEST)
+    response = _raw_client().messages.create(
+        model=str(_Model.DIGEST),
+        max_tokens=256,
+        system=_DIGEST_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": context}],
+    )
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        raise ValueError(f"Expected TextBlock from digest generation, got {type(block).__name__}")
+    return block.text.strip()
+
+
+class CitationRef(BaseModel):
+    result_id: str
+    result_type: str
+    conversation_id: str
+    conversation_title: str
+    meeting_date: str
+    snippet: str
+
+
+class AnswerResult(BaseModel):
+    answer: str
+    citations: list[CitationRef]
+
+
+_ANSWER_SYSTEM_PROMPT = """You are a personal meeting intelligence assistant.
+The user has asked a question about their past meetings.
+You have been given a set of relevant excerpts retrieved from their meeting history.
+Answer concisely and directly based only on the provided excerpts.
+Do not speculate beyond what the excerpts contain.
+For each claim you make, cite the source excerpt by its index number [1], [2], etc.
+If the excerpts do not contain enough information to answer the question, say so clearly."""
+
+
+def answer_question(
+    question: str,
+    context_results: list[dict[str, Any]],
+) -> AnswerResult:
+    """Synthesise an answer to a user question from retrieved meeting context.
+
+    Args:
+        question: The user's natural language question. Never logged.
+        context_results: Top-K search results as dicts (result_id, result_type, title,
+            text, conversation_id, conversation_title, meeting_date, score).
+
+    Returns:
+        AnswerResult with answer text and citation references.
+
+    Note:
+        Input context contains meeting content and must never be logged.
+    """
+    if not context_results:
+        return AnswerResult(
+            answer="I don't have enough context from your meetings to answer that question.",
+            citations=[],
+        )
+
+    # Build numbered context block — never log this
+    context_lines: list[str] = []
+    for i, result in enumerate(context_results, 1):
+        title = result.get("title", "")
+        text = result.get("text", "")
+        conv_title = result.get("conversation_title", "")
+        meeting_date = result.get("meeting_date", "")
+        context_lines.append(
+            f"[{i}] Source: {conv_title} ({meeting_date})\n"
+            f"    Topic/Entity: {title}\n"
+            f"    Content: {text}"
+        )
+    context_block = "\n\n".join(context_lines)
+
+    logger.debug(
+        "LLM call — answer_question model=%s context_items=%d", _Model.DIGEST, len(context_results)
+    )
+    result: AnswerResult = _instructor_client().messages.create(  # type: ignore[type-var]
+        model=str(_Model.DIGEST),
+        max_tokens=1024,
+        system=_ANSWER_SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": f"Question: {question}\n\nContext:\n{context_block}",
+            }
+        ],
+        response_model=AnswerResult,
+    )
+
+    # Backfill citation snippets from context_results
+    id_to_result = {str(r.get("result_id", "")): r for r in context_results}
+    for citation in result.citations:
+        if not citation.snippet:
+            source = id_to_result.get(citation.result_id)
+            if source:
+                citation.snippet = str(source.get("text", ""))[:200]
+
+    return result
 
 
 def generate_brief(context: str) -> str:

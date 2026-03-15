@@ -4,6 +4,7 @@ Route registry — collect all sub-routers here so main.py has a single import p
 
 from fastapi import APIRouter
 
+from src.api.routes.admin import router as admin_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.briefs import router as briefs_router
 from src.api.routes.calendar import router as calendar_router
@@ -28,3 +29,4 @@ router.include_router(commitments_router, prefix="/commitments", tags=["commitme
 router.include_router(entities_router, prefix="/entities", tags=["entities"])
 router.include_router(index_stats_router, prefix="/index", tags=["index"])
 router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])
+router.include_router(admin_router, prefix="/admin", tags=["admin"])

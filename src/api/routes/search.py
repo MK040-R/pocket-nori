@@ -1,26 +1,39 @@
 """
-Search route — semantic search across transcript segments using pgvector.
+Search route — intelligent multi-table semantic search using pre-stored embeddings.
 
 POST /search
-    body: { q: str, limit?: int }
-    → [{ segment_id, text, conversation_id, conversation_title, meeting_date, score }]
+    body: { q: str, limit?: int, date_from?: str, date_to?: str }
+    → [{ result_id, result_type, title, text, conversation_id, conversation_title,
+         meeting_date, score }]
 
 How it works:
-  1. Embed the query string via OpenAI text-embedding-3-small
-  2. Run cosine similarity search in pgvector against transcript_segments.embedding
-  3. Filter strictly by user_id (enforced even though psycopg2 bypasses RLS)
-  4. Join conversations to return meeting metadata alongside each result
+  1. Embed the query string via OpenAI text-embedding-3-small (the only LLM cost per query)
+  2. Run cosine similarity search against THREE pre-stored embedding tables:
+       a. topic_clusters.embedding  — semantic understanding of recurring topics
+       b. entities.embedding        — people, projects, companies, products
+       c. conversations.digest_embedding — LLM-generated meeting digest
+  3. Also run segment-level vector search as supporting evidence
+  4. Merge all results, rank by similarity score, return top limit
 
-The query text is never logged. Only result counts and user_id are logged.
+All embeddings are generated once at ingest time (zero LLM tokens per search query).
+The query text is never logged.
+
+POST /search/ask
+    body: { q: str, date_from?: str, date_to?: str }
+    → { answer: str, citations: [...] }
+
+Retrieves top-K context via multi-table search, then calls Claude to synthesise
+a direct answer with inline citations. One LLM call per user-initiated question.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from datetime import date
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src import llm_client
 from src.api.deps import get_current_user
@@ -32,17 +45,280 @@ router = APIRouter()
 
 _DEFAULT_LIMIT = 10
 _MAX_LIMIT = 50
+_SCORE_THRESHOLD = 0.30  # Minimum cosine similarity to include a result
+_ASK_CONTEXT_LIMIT = 8  # Number of results to feed into Q&A context
 
 
-def _semantic_search(
+# ---------------------------------------------------------------------------
+# Request / response models
+# ---------------------------------------------------------------------------
+
+
+class SearchRequest(BaseModel):
+    q: str = Field(min_length=1, max_length=500)
+    limit: int = Field(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT)
+    date_from: str | None = Field(default=None, description="ISO date YYYY-MM-DD, inclusive")
+    date_to: str | None = Field(default=None, description="ISO date YYYY-MM-DD, inclusive")
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> SearchRequest:
+        for field_name in ("date_from", "date_to"):
+            value = getattr(self, field_name)
+            if value is not None:
+                try:
+                    date.fromisoformat(value)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{field_name} must be a valid ISO date (YYYY-MM-DD), got: {value!r}"
+                    ) from exc
+        return self
+
+
+class SearchResult(BaseModel):
+    result_id: str
+    result_type: Literal["topic", "entity", "meeting", "segment"]
+    title: str
+    text: str
+    conversation_id: str
+    conversation_title: str
+    meeting_date: str
+    score: float
+
+
+class AskRequest(BaseModel):
+    q: str = Field(min_length=1, max_length=500)
+    date_from: str | None = Field(default=None)
+    date_to: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> AskRequest:
+        for field_name in ("date_from", "date_to"):
+            value = getattr(self, field_name)
+            if value is not None:
+                try:
+                    date.fromisoformat(value)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{field_name} must be a valid ISO date (YYYY-MM-DD), got: {value!r}"
+                    ) from exc
+        return self
+
+
+class AskResponse(BaseModel):
+    answer: str
+    citations: list[llm_client.CitationRef]
+
+
+# ---------------------------------------------------------------------------
+# Private search helpers — each returns SearchResult list
+# ---------------------------------------------------------------------------
+
+
+def _build_vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(str(v) for v in vector) + "]"
+
+
+def _date_clauses(date_from: str | None, date_to: str | None) -> tuple[str, list[Any]]:
+    """Return extra SQL clauses and params for optional date range filtering."""
+    clauses: list[str] = []
+    params: list[Any] = []
+    if date_from:
+        clauses.append("AND c.meeting_date >= %s")
+        params.append(date_from)
+    if date_to:
+        clauses.append("AND c.meeting_date <= %s")
+        params.append(date_to)
+    return (" ".join(clauses), params)
+
+
+def _search_topic_clusters(
     user_id: str,
     query_vector: list[float],
     limit: int,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> list[SearchResult]:
-    vector_literal = "[" + ",".join(str(v) for v in query_vector) + "]"
-    sql = """
+    """Vector search against topic_clusters.embedding."""
+    vector_literal = _build_vector_literal(query_vector)
+    date_sql, date_params = _date_clauses(date_from, date_to)
+
+    sql = f"""
+        SELECT DISTINCT ON (tc.id)
+            tc.id                   AS result_id,
+            tc.canonical_label      AS title,
+            coalesce(tc.canonical_summary, '') AS text,
+            c.id                    AS conversation_id,
+            c.title                 AS conversation_title,
+            c.meeting_date          AS meeting_date,
+            1 - (tc.embedding <=> %s::vector) AS score
+        FROM topic_clusters tc
+        JOIN topics t
+          ON t.cluster_id = tc.id
+         AND t.user_id = %s
+        JOIN conversations c
+          ON c.id = t.conversation_id
+         AND c.user_id = %s
+        WHERE tc.user_id = %s
+          AND tc.embedding IS NOT NULL
+          AND 1 - (tc.embedding <=> %s::vector) >= {_SCORE_THRESHOLD}
+          {date_sql}
+        ORDER BY tc.id, c.meeting_date DESC, score DESC
+        LIMIT %s
+    """
+    params: list[Any] = [vector_literal, user_id, user_id, user_id, vector_literal]
+    params.extend(date_params)
+    params.append(limit)
+
+    conn = get_direct_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        SearchResult(
+            result_id=str(row["result_id"]),
+            result_type="topic",
+            title=row["title"],
+            text=row["text"],
+            conversation_id=str(row["conversation_id"]),
+            conversation_title=row["conversation_title"],
+            meeting_date=str(row["meeting_date"]),
+            score=float(row["score"]),
+        )
+        for row in rows
+    ]
+
+
+def _search_entities(
+    user_id: str,
+    query_vector: list[float],
+    limit: int,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[SearchResult]:
+    """Vector search against entities.embedding."""
+    vector_literal = _build_vector_literal(query_vector)
+    date_sql, date_params = _date_clauses(date_from, date_to)
+
+    sql = f"""
         SELECT
-            ts.id            AS segment_id,
+            e.id                    AS result_id,
+            e.name                  AS title,
+            e.type                  AS text,
+            e.conversation_id,
+            c.title                 AS conversation_title,
+            c.meeting_date          AS meeting_date,
+            1 - (e.embedding <=> %s::vector) AS score
+        FROM entities e
+        JOIN conversations c
+          ON c.id = e.conversation_id
+         AND c.user_id = %s
+        WHERE e.user_id = %s
+          AND e.embedding IS NOT NULL
+          AND 1 - (e.embedding <=> %s::vector) >= {_SCORE_THRESHOLD}
+          {date_sql}
+        ORDER BY score DESC, c.meeting_date DESC
+        LIMIT %s
+    """
+    params: list[Any] = [vector_literal, user_id, user_id, vector_literal]
+    params.extend(date_params)
+    params.append(limit)
+
+    conn = get_direct_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        SearchResult(
+            result_id=str(row["result_id"]),
+            result_type="entity",
+            title=row["title"],
+            text=f"{row['title']} ({row['text']})",
+            conversation_id=str(row["conversation_id"]),
+            conversation_title=row["conversation_title"],
+            meeting_date=str(row["meeting_date"]),
+            score=float(row["score"]),
+        )
+        for row in rows
+    ]
+
+
+def _search_meeting_digests(
+    user_id: str,
+    query_vector: list[float],
+    limit: int,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[SearchResult]:
+    """Vector search against conversations.digest_embedding."""
+    vector_literal = _build_vector_literal(query_vector)
+    date_sql, date_params = _date_clauses(date_from, date_to)
+
+    sql = f"""
+        SELECT
+            c.id                    AS result_id,
+            c.title                 AS title,
+            coalesce(c.digest, '') AS text,
+            c.id                    AS conversation_id,
+            c.title                 AS conversation_title,
+            c.meeting_date          AS meeting_date,
+            1 - (c.digest_embedding <=> %s::vector) AS score
+        FROM conversations c
+        WHERE c.user_id = %s
+          AND c.digest_embedding IS NOT NULL
+          AND 1 - (c.digest_embedding <=> %s::vector) >= {_SCORE_THRESHOLD}
+          {date_sql}
+        ORDER BY score DESC, c.meeting_date DESC
+        LIMIT %s
+    """
+    params: list[Any] = [vector_literal, user_id, vector_literal]
+    params.extend(date_params)
+    params.append(limit)
+
+    conn = get_direct_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        SearchResult(
+            result_id=str(row["result_id"]),
+            result_type="meeting",
+            title=row["title"],
+            text=row["text"],
+            conversation_id=str(row["conversation_id"]),
+            conversation_title=row["conversation_title"],
+            meeting_date=str(row["meeting_date"]),
+            score=float(row["score"]),
+        )
+        for row in rows
+    ]
+
+
+def _search_segments(
+    user_id: str,
+    query_vector: list[float],
+    limit: int,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[SearchResult]:
+    """Vector search against transcript_segments.embedding (supporting evidence layer)."""
+    vector_literal = _build_vector_literal(query_vector)
+    date_sql, date_params = _date_clauses(date_from, date_to)
+
+    sql = f"""
+        SELECT
+            ts.id            AS result_id,
             ts.text          AS text,
             ts.conversation_id,
             c.title          AS conversation_title,
@@ -54,20 +330,28 @@ def _semantic_search(
          AND c.user_id = %s
         WHERE ts.user_id = %s
           AND ts.embedding IS NOT NULL
+          AND 1 - (ts.embedding <=> %s::vector) >= {_SCORE_THRESHOLD}
+          {date_sql}
         ORDER BY ts.embedding <=> %s::vector
         LIMIT %s
     """
+    params: list[Any] = [vector_literal, user_id, user_id, vector_literal]
+    params.extend(date_params)
+    params.extend([vector_literal, limit])
+
     conn = get_direct_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(sql, (vector_literal, user_id, user_id, vector_literal, limit))
+            cur.execute(sql, params)
             rows = cur.fetchall()
     finally:
         conn.close()
 
     return [
         SearchResult(
-            segment_id=str(row["segment_id"]),
+            result_id=str(row["result_id"]),
+            result_type="segment",
+            title=row["conversation_title"],
             text=row["text"],
             conversation_id=str(row["conversation_id"]),
             conversation_title=row["conversation_title"],
@@ -78,70 +362,89 @@ def _semantic_search(
     ]
 
 
-def _lexical_search(user_id: str, query: str, limit: int) -> list[SearchResult]:
-    sql = """
-        WITH search_query AS (
-            SELECT websearch_to_tsquery('simple', %s) AS query
-        )
-        SELECT
-            ts.id            AS segment_id,
-            ts.text          AS text,
-            ts.conversation_id,
-            c.title          AS conversation_title,
-            c.meeting_date   AS meeting_date,
-            ts_rank_cd(
-                to_tsvector('simple', coalesce(c.title, '') || ' ' || coalesce(ts.text, '')),
-                search_query.query
-            ) AS score
-        FROM transcript_segments ts
-        JOIN conversations c
-          ON c.id = ts.conversation_id
-         AND c.user_id = %s
-        CROSS JOIN search_query
-        WHERE ts.user_id = %s
-          AND to_tsvector('simple', coalesce(c.title, '') || ' ' || coalesce(ts.text, ''))
-              @@ search_query.query
-        ORDER BY score DESC, c.meeting_date DESC
-        LIMIT %s
+def _merge_and_rank(
+    *result_lists: list[SearchResult],
+    limit: int,
+) -> list[SearchResult]:
+    """Merge multiple result lists, deduplicate by (result_type, result_id), sort by score."""
+    seen: set[tuple[str, str]] = set()
+    merged: list[SearchResult] = []
+    for results in result_lists:
+        for result in results:
+            key = (result.result_type, result.result_id)
+            if key not in seen:
+                seen.add(key)
+                merged.append(result)
+    merged.sort(key=lambda r: r.score, reverse=True)
+    return merged[:limit]
+
+
+# ---------------------------------------------------------------------------
+# POST /search/ask  (must be registered before POST "" to avoid path conflicts)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/ask",
+    response_model=AskResponse,
+    summary="Ask a natural language question answered from your meeting history",
+)
+def ask(
+    body: AskRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> AskResponse:
+    """Retrieve relevant context via multi-table search, then synthesise a direct answer.
+
+    The question is used to embed and retrieve context — one embedding API call and
+    one Claude call are made per request. The question text is never logged.
     """
-    conn = get_direct_connection()
+    user_id: str = current_user["sub"]
+
+    # --- Retrieve context via multi-table vector search ---
+    context_results: list[SearchResult] = []
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, (query, user_id, user_id, limit))
-            rows = cur.fetchall()
-    finally:
-        conn.close()
+        vectors = llm_client.embed_texts([body.q])
+        query_vector = vectors[0]
 
-    return [
-        SearchResult(
-            segment_id=str(row["segment_id"]),
-            text=row["text"],
-            conversation_id=str(row["conversation_id"]),
-            conversation_title=row["conversation_title"],
-            meeting_date=str(row["meeting_date"]),
-            score=float(row["score"]),
+        topics = _search_topic_clusters(
+            user_id, query_vector, _ASK_CONTEXT_LIMIT, body.date_from, body.date_to
         )
-        for row in rows
-    ]
+        entities = _search_entities(
+            user_id, query_vector, _ASK_CONTEXT_LIMIT, body.date_from, body.date_to
+        )
+        meetings = _search_meeting_digests(
+            user_id, query_vector, _ASK_CONTEXT_LIMIT, body.date_from, body.date_to
+        )
+        segments = _search_segments(
+            user_id, query_vector, _ASK_CONTEXT_LIMIT, body.date_from, body.date_to
+        )
+        context_results = _merge_and_rank(
+            topics, entities, meetings, segments, limit=_ASK_CONTEXT_LIMIT
+        )
+    except Exception as exc:
+        logger.warning(
+            "Context retrieval failed for /ask — user=%s error=%s", user_id, type(exc).__name__
+        )
 
+    if not context_results:
+        return AskResponse(
+            answer="I don't have enough context from your meetings to answer that question.",
+            citations=[],
+        )
 
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
+    # --- Synthesise answer via Claude ---
+    context_dicts = [r.model_dump() for r in context_results]
+    try:
+        result = llm_client.answer_question(body.q, context_dicts)
+    except Exception as exc:
+        logger.error("Answer generation failed — user=%s error=%s", user_id, type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Answer generation temporarily unavailable.",
+        ) from exc
 
-
-class SearchRequest(BaseModel):
-    q: str = Field(min_length=1, max_length=500)
-    limit: int = Field(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT)
-
-
-class SearchResult(BaseModel):
-    segment_id: str
-    text: str
-    conversation_id: str
-    conversation_title: str
-    meeting_date: str
-    score: float  # 0.0 (least similar) → 1.0 (most similar)
+    logger.info("Ask complete — user=%s context_results=%d", user_id, len(context_results))
+    return AskResponse(answer=result.answer, citations=result.citations)
 
 
 # ---------------------------------------------------------------------------
@@ -152,63 +455,79 @@ class SearchResult(BaseModel):
 @router.post(
     "",
     response_model=list[SearchResult],
-    summary="Semantic search across all your meeting transcript segments",
+    summary="Semantic search across topics, entities, meetings, and transcripts",
 )
 def search(
     body: SearchRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[SearchResult]:
-    """Embed the query and run cosine similarity search against stored segment embeddings.
+    """Embed the query and run cosine similarity search against pre-stored intelligence.
 
-    Returns up to ``limit`` segments ranked by relevance, each with its source
-    conversation metadata.
+    Searches across topic clusters, entities, meeting digests, and transcript segments.
+    All embeddings were computed at ingest time — zero LLM tokens consumed per query.
 
-    If no segments have been embedded yet (nothing imported), returns an empty list.
-    The query text is never logged.
+    Returns up to ``limit`` results ranked by relevance. Results below the similarity
+    threshold (0.30) are excluded. The query text is never logged.
     """
     user_id: str = current_user["sub"]
 
-    semantic_results: list[SearchResult] = []
-
-    # --- Embed the search query ---
+    # --- Embed the query (only LLM-adjacent cost at query time) ---
     try:
         vectors = llm_client.embed_texts([body.q])
     except Exception as exc:
-        logger.warning(
-            "Embedding failed for search query — user=%s fallback=lexical error=%s",
+        logger.error(
+            "Embedding failed for search query — user=%s error=%s",
             user_id,
             type(exc).__name__,
         )
-    else:
-        try:
-            semantic_results = _semantic_search(user_id, vectors[0], body.limit)
-        except Exception as exc:
-            logger.warning(
-                "Semantic search query failed — user=%s fallback=lexical error=%s",
-                user_id,
-                type(exc).__name__,
-            )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Search service temporarily unavailable.",
+        ) from exc
 
-    if semantic_results:
-        results = semantic_results
-    else:
-        try:
-            results = _lexical_search(user_id, body.q, body.limit)
-        except Exception as exc:
-            logger.error(
-                "Lexical fallback failed for search query — user=%s: %s",
-                user_id,
-                type(exc).__name__,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Search service temporarily unavailable.",
-            ) from exc
+    query_vector = vectors[0]
+    date_from = body.date_from
+    date_to = body.date_to
+
+    # --- Run all four search helpers ---
+    topics: list[SearchResult] = []
+    entities: list[SearchResult] = []
+    meetings: list[SearchResult] = []
+    segments: list[SearchResult] = []
+
+    try:
+        topics = _search_topic_clusters(user_id, query_vector, body.limit, date_from, date_to)
+    except Exception as exc:
+        logger.warning(
+            "Topic cluster search failed — user=%s error=%s", user_id, type(exc).__name__
+        )
+
+    try:
+        entities = _search_entities(user_id, query_vector, body.limit, date_from, date_to)
+    except Exception as exc:
+        logger.warning("Entity search failed — user=%s error=%s", user_id, type(exc).__name__)
+
+    try:
+        meetings = _search_meeting_digests(user_id, query_vector, body.limit, date_from, date_to)
+    except Exception as exc:
+        logger.warning(
+            "Meeting digest search failed — user=%s error=%s", user_id, type(exc).__name__
+        )
+
+    try:
+        segments = _search_segments(user_id, query_vector, body.limit, date_from, date_to)
+    except Exception as exc:
+        logger.warning("Segment search failed — user=%s error=%s", user_id, type(exc).__name__)
+
+    results = _merge_and_rank(topics, entities, meetings, segments, limit=body.limit)
 
     logger.info(
-        "Search complete — user=%s results=%d mode=%s",
+        "Search complete — user=%s results=%d (topics=%d entities=%d meetings=%d segments=%d)",
         user_id,
         len(results),
-        "semantic" if semantic_results else "lexical",
+        len(topics),
+        len(entities),
+        len(meetings),
+        len(segments),
     )
     return results

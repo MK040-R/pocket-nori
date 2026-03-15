@@ -269,6 +269,37 @@ def extract_from_conversation(
                 ]
             ).execute()
 
+    # --- Generate meeting digest (one LLM call, stored for semantic search) ---
+    self.update_state(state="PROGRESS", meta={"status": "generating_digest"})
+    try:
+        digest = llm_client.generate_meeting_digest(
+            topics=[
+                {"label": row["label"], "summary": row.get("summary", "")}
+                for row in sanitized_topic_rows
+            ],
+            commitments=[
+                {
+                    "text": c["text"],
+                    "owner": c["owner"],
+                    "due_date": c.get("due_date"),
+                }
+                for c in sanitized_commitment_rows
+            ],
+            entities=[{"name": e.name, "type": e.type} for e in entity_list.entities],
+        )
+        if digest:
+            db.table("conversations").update({"digest": digest}).eq("id", conversation_id).eq(
+                "user_id", user_id
+            ).execute()
+            logger.info("Digest stored — conversation=%s", conversation_id)
+    except Exception as exc:
+        # Digest failure is non-fatal — search degrades gracefully without it
+        logger.warning(
+            "Digest generation failed — conversation=%s error=%s",
+            conversation_id,
+            type(exc).__name__,
+        )
+
     # --- Mark conversation as indexed ---
     db.table("conversations").update({"status": "indexed"}).eq("id", conversation_id).execute()
 

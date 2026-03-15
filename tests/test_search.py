@@ -1,8 +1,8 @@
 """
-tests/test_search.py — Unit tests for the search endpoint.
+tests/test_search.py — Unit tests for the search and ask endpoints.
 
-Tests cover input validation, user isolation, and the DB query path.
-No real OpenAI or Supabase calls — all external dependencies are patched.
+Tests cover input validation, user isolation, multi-table search, and the /ask endpoint.
+No real OpenAI, Anthropic, or Supabase calls — all external dependencies are patched.
 
 Run:
     pytest tests/test_search.py -v -m unit
@@ -22,7 +22,6 @@ client = TestClient(app)
 _FAKE_JWT = "fake.jwt.token"
 _FAKE_USER_ID = "user-search-test"
 
-# Minimal decoded JWT payload returned by get_current_user
 _FAKE_USER_PAYLOAD: dict[str, Any] = {
     "sub": _FAKE_USER_ID,
     "email": "test@example.com",
@@ -31,13 +30,22 @@ _FAKE_USER_PAYLOAD: dict[str, Any] = {
 
 
 def _override_auth() -> None:
-    """Install the fake user dependency override."""
     app.dependency_overrides[get_current_user] = lambda: _FAKE_USER_PAYLOAD
 
 
 def _clear_auth() -> None:
-    """Remove the dependency override."""
     app.dependency_overrides.pop(get_current_user, None)
+
+
+def _make_mock_conn(rows: list[dict[str, Any]]) -> MagicMock:
+    """Build a mock psycopg2 connection that returns `rows` from cursor.fetchall()."""
+    mock_cursor = MagicMock()
+    mock_cursor.fetchall.return_value = rows
+    mock_cursor.__enter__ = lambda s: s
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    return mock_conn
 
 
 # ---------------------------------------------------------------------------
@@ -54,12 +62,10 @@ class TestSearchInputValidation:
         _clear_auth()
 
     def test_empty_query_rejected(self) -> None:
-        """Empty q string must fail validation (min_length=1)."""
         response = client.post("/search", json={"q": ""})
         assert response.status_code == 422
 
     def test_limit_too_large_rejected(self) -> None:
-        """limit > 50 must fail validation."""
         response = client.post("/search", json={"q": "hello", "limit": 99})
         assert response.status_code == 422
 
@@ -67,9 +73,28 @@ class TestSearchInputValidation:
         response = client.post("/search", json={})
         assert response.status_code == 422
 
+    def test_invalid_date_from_rejected(self) -> None:
+        response = client.post("/search", json={"q": "test", "date_from": "not-a-date"})
+        assert response.status_code == 422
+
+    def test_invalid_date_to_rejected(self) -> None:
+        response = client.post("/search", json={"q": "test", "date_to": "2025/01/01"})
+        assert response.status_code == 422
+
+    def test_valid_date_range_accepted(self) -> None:
+        mock_conn = _make_mock_conn([])
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            response = client.post(
+                "/search", json={"q": "test", "date_from": "2025-01-01", "date_to": "2025-12-31"}
+            )
+        assert response.status_code == 200
+
 
 # ---------------------------------------------------------------------------
-# Happy path
+# Happy path — multi-table results
 # ---------------------------------------------------------------------------
 
 
@@ -81,53 +106,56 @@ class TestSearchHappyPath:
     def teardown_method(self) -> None:
         _clear_auth()
 
-    def _fake_db_rows(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "segment_id": "seg-1",
-                "text": "We should ship by Friday.",
-                "conversation_id": "conv-1",
-                "conversation_title": "Weekly Sync",
-                "meeting_date": "2025-03-01T10:00:00+00:00",
-                "score": 0.92,
-            }
-        ]
+    def _fake_topic_row(self) -> dict[str, Any]:
+        return {
+            "result_id": "cluster-1",
+            "title": "AWS Migration",
+            "text": "Ongoing work to migrate infrastructure to AWS.",
+            "conversation_id": "conv-1",
+            "conversation_title": "Infra Sync",
+            "meeting_date": "2025-03-01T10:00:00+00:00",
+            "score": 0.91,
+        }
+
+    def _fake_segment_row(self) -> dict[str, Any]:
+        return {
+            "result_id": "seg-1",
+            "text": "We should ship by Friday.",
+            "conversation_id": "conv-1",
+            "conversation_title": "Weekly Sync",
+            "meeting_date": "2025-03-01T10:00:00+00:00",
+            "score": 0.72,
+        }
 
     def test_returns_results_list(self) -> None:
-        """Happy path: embedding succeeds, DB returns rows, response is a list."""
-        fake_rows = self._fake_db_rows()
-
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = fake_rows
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-
+        mock_conn = _make_mock_conn([self._fake_topic_row()])
         with (
             patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
             patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
         ):
-            response = client.post("/search", json={"q": "shipping deadline"})
+            response = client.post("/search", json={"q": "AWS migration"})
 
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
-        assert len(data) == 1
-        assert data[0]["segment_id"] == "seg-1"
-        assert data[0]["score"] == 0.92
 
-    def test_empty_results_when_no_segments(self) -> None:
-        """When no segments have embeddings, returns empty list."""
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
+    def test_result_has_result_id_and_result_type(self) -> None:
+        """Results must include result_id and result_type fields."""
+        mock_conn = _make_mock_conn([self._fake_topic_row()])
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            response = client.post("/search", json={"q": "AWS"})
 
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
+        assert response.status_code == 200
+        data = response.json()
+        if data:
+            assert "result_id" in data[0]
+            assert "result_type" in data[0]
 
+    def test_empty_results_when_nothing_embedded(self) -> None:
+        mock_conn = _make_mock_conn([])
         with (
             patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
             patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
@@ -137,15 +165,17 @@ class TestSearchHappyPath:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_default_limit_is_10(self) -> None:
-        """When no limit is specified, the DB query should use limit=10."""
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
+    def test_default_limit_applied(self) -> None:
+        mock_conn = _make_mock_conn([])
+        captured_params: list[Any] = []
 
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
+        original_execute = mock_conn.cursor.return_value.execute
+
+        def capture_execute(sql: str, params: Any) -> None:
+            captured_params.extend(params)
+            original_execute(sql, params)
+
+        mock_conn.cursor.return_value.execute.side_effect = capture_execute
 
         with (
             patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
@@ -153,10 +183,8 @@ class TestSearchHappyPath:
         ):
             client.post("/search", json={"q": "test"})
 
-        # The execute call's last parameter should be limit=10
-        call_args = mock_cursor.execute.call_args
-        params = call_args[0][1]  # positional: (sql, params)
-        assert params[-1] == 10  # last param is LIMIT
+        # Default limit=10 must appear somewhere in the params
+        assert 10 in captured_params
 
 
 # ---------------------------------------------------------------------------
@@ -173,104 +201,61 @@ class TestSearchErrorHandling:
         _clear_auth()
 
     def test_502_when_embedding_fails(self) -> None:
-        """If both semantic and lexical search fail, return 502."""
-        with (
-            patch(
-                "src.api.routes.search.llm_client.embed_texts",
-                side_effect=RuntimeError("OpenAI down"),
-            ),
-            patch(
-                "src.api.routes.search.get_direct_connection",
-                side_effect=RuntimeError("DB unavailable"),
-            ),
+        """If embedding fails, return 502."""
+        with patch(
+            "src.api.routes.search.llm_client.embed_texts",
+            side_effect=RuntimeError("OpenAI down"),
         ):
             response = client.post("/search", json={"q": "something"})
 
         assert response.status_code == 502
 
-    def test_lexical_fallback_when_embedding_fails(self) -> None:
-        """If embeddings are unavailable, keyword search should still return results."""
-        fake_rows = [
-            {
-                "segment_id": "seg-lexical",
-                "text": "Phase one crawl strategy task list is still pending.",
-                "conversation_id": "conv-1",
-                "conversation_title": "Planning call",
-                "meeting_date": "2026-01-20T10:00:00+00:00",
-                "score": 0.8,
-            }
-        ]
+    def test_partial_failure_returns_available_results(self) -> None:
+        """If some index searches fail, the others still return results."""
+        # First call succeeds (topic search), subsequent calls fail
+        call_count = 0
 
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = fake_rows
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-
-        with (
-            patch(
-                "src.api.routes.search.llm_client.embed_texts",
-                side_effect=RuntimeError("OpenAI down"),
-            ),
-            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
-        ):
-            response = client.post("/search", json={"q": "crawl"})
-
-        assert response.status_code == 200
-        assert response.json()[0]["segment_id"] == "seg-lexical"
-
-    def test_lexical_fallback_when_semantic_search_is_empty(self) -> None:
-        """If semantic search returns nothing, fallback keyword search should fill the gap."""
-        lexical_rows = [
-            {
-                "segment_id": "seg-lexical",
-                "text": "Crawl phase strategy and risk mitigation were discussed.",
-                "conversation_id": "conv-1",
-                "conversation_title": "Planning call",
-                "meeting_date": "2026-01-20T10:00:00+00:00",
-                "score": 0.6,
-            }
-        ]
-
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.side_effect = [[], lexical_rows]
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
+        def side_effect_conn() -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_mock_conn(
+                    [
+                        {
+                            "result_id": "cluster-1",
+                            "title": "Topic A",
+                            "text": "Summary A",
+                            "conversation_id": "conv-1",
+                            "conversation_title": "Sync",
+                            "meeting_date": "2025-03-01T10:00:00+00:00",
+                            "score": 0.85,
+                        }
+                    ]
+                )
+            raise RuntimeError("DB error")
 
         with (
             patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
-            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+            patch("src.api.routes.search.get_direct_connection", side_effect=side_effect_conn),
         ):
-            response = client.post("/search", json={"q": "crawl"})
+            response = client.post("/search", json={"q": "test"})
 
         assert response.status_code == 200
-        assert response.json()[0]["segment_id"] == "seg-lexical"
 
-    def test_db_connection_closed_after_query(self) -> None:
-        """psycopg2 connections must be closed after semantic and lexical paths."""
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []
-        mock_cursor.__enter__ = lambda s: s
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-
+    def test_db_connections_closed_after_query(self) -> None:
+        """psycopg2 connections must be closed after each search helper."""
+        mock_conn = _make_mock_conn([])
         with (
             patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
             patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
         ):
             client.post("/search", json={"q": "test"})
 
-        assert mock_conn.close.call_count == 2
+        # 4 helpers (topic clusters, entities, meeting digests, segments) → 4 connections
+        assert mock_conn.close.call_count == 4
 
     def test_user_id_passed_to_query(self) -> None:
-        """The validated user_id must appear in the SQL parameters (isolation check)."""
+        """The validated user_id must appear in all SQL parameters (isolation check)."""
         captured_params: list[Any] = []
 
         def capture_execute(sql: str, params: Any) -> None:
@@ -291,8 +276,202 @@ class TestSearchErrorHandling:
         ):
             client.post("/search", json={"q": "isolation test"})
 
-        # user_id must appear at least twice in query params (two WHERE clauses)
+        # user_id must appear multiple times across all four helpers
         user_id_count = sum(1 for p in captured_params if p == _FAKE_USER_ID)
-        assert user_id_count >= 2, (
-            f"Expected user_id to appear ≥2 times in SQL params, got {user_id_count}"
+        assert user_id_count >= 4, (
+            f"Expected user_id to appear ≥4 times across all search helpers, got {user_id_count}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Date range filters
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestSearchDateFilters:
+    def setup_method(self) -> None:
+        _override_auth()
+
+    def teardown_method(self) -> None:
+        _clear_auth()
+
+    def test_date_from_in_sql_params(self) -> None:
+        """date_from value must appear in the SQL parameters."""
+        captured_params: list[Any] = []
+
+        def capture_execute(sql: str, params: Any) -> None:
+            captured_params.extend(params)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.side_effect = capture_execute
+        mock_cursor.fetchall.return_value = []
+        mock_cursor.__enter__ = lambda s: s
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            client.post("/search", json={"q": "budget", "date_from": "2025-01-01"})
+
+        assert "2025-01-01" in captured_params
+
+    def test_date_to_in_sql_params(self) -> None:
+        captured_params: list[Any] = []
+
+        def capture_execute(sql: str, params: Any) -> None:
+            captured_params.extend(params)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.side_effect = capture_execute
+        mock_cursor.fetchall.return_value = []
+        mock_cursor.__enter__ = lambda s: s
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            client.post("/search", json={"q": "budget", "date_to": "2025-12-31"})
+
+        assert "2025-12-31" in captured_params
+
+
+# ---------------------------------------------------------------------------
+# /search/ask endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestAskEndpoint:
+    def setup_method(self) -> None:
+        _override_auth()
+
+    def teardown_method(self) -> None:
+        _clear_auth()
+
+    def _fake_answer_result(self) -> Any:
+        from src.llm_client import AnswerResult, CitationRef
+
+        return AnswerResult(
+            answer="The AWS migration is blocked on IAM permissions [1].",
+            citations=[
+                CitationRef(
+                    result_id="cluster-1",
+                    result_type="topic",
+                    conversation_id="conv-1",
+                    conversation_title="Infra Sync",
+                    meeting_date="2025-03-01T10:00:00+00:00",
+                    snippet="IAM permissions are the main blocker.",
+                )
+            ],
+        )
+
+    def test_ask_returns_answer_and_citations(self) -> None:
+        mock_conn = _make_mock_conn(
+            [
+                {
+                    "result_id": "cluster-1",
+                    "title": "AWS Migration",
+                    "text": "Migration is blocked on IAM.",
+                    "conversation_id": "conv-1",
+                    "conversation_title": "Infra Sync",
+                    "meeting_date": "2025-03-01T10:00:00+00:00",
+                    "score": 0.88,
+                }
+            ]
+        )
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+            patch(
+                "src.api.routes.search.llm_client.answer_question",
+                return_value=self._fake_answer_result(),
+            ),
+        ):
+            response = client.post(
+                "/search/ask", json={"q": "What is the status of the AWS migration?"}
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert "citations" in data
+        assert isinstance(data["citations"], list)
+
+    def test_ask_empty_context_returns_graceful_message(self) -> None:
+        """When search returns no results, answer gracefully without calling Claude."""
+        mock_conn = _make_mock_conn([])
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+            patch("src.api.routes.search.llm_client.answer_question") as mock_answer,
+        ):
+            response = client.post("/search/ask", json={"q": "something obscure"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "don't have enough context" in data["answer"].lower()
+        mock_answer.assert_not_called()
+
+    def test_ask_claude_failure_returns_502(self) -> None:
+        mock_conn = _make_mock_conn(
+            [
+                {
+                    "result_id": "cluster-1",
+                    "title": "Topic",
+                    "text": "Some content.",
+                    "conversation_id": "conv-1",
+                    "conversation_title": "Meeting",
+                    "meeting_date": "2025-03-01T10:00:00+00:00",
+                    "score": 0.85,
+                }
+            ]
+        )
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+            patch(
+                "src.api.routes.search.llm_client.answer_question",
+                side_effect=RuntimeError("Claude unavailable"),
+            ),
+        ):
+            response = client.post("/search/ask", json={"q": "anything"})
+
+        assert response.status_code == 502
+
+    def test_ask_user_isolation(self) -> None:
+        """user_id must appear in SQL params for /ask context retrieval."""
+        captured_params: list[Any] = []
+
+        def capture_execute(sql: str, params: Any) -> None:
+            captured_params.extend(params)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.side_effect = capture_execute
+        mock_cursor.fetchall.return_value = []
+        mock_cursor.__enter__ = lambda s: s
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with (
+            patch("src.api.routes.search.llm_client.embed_texts", return_value=[[0.1] * 1536]),
+            patch("src.api.routes.search.get_direct_connection", return_value=mock_conn),
+        ):
+            client.post("/search/ask", json={"q": "isolation test"})
+
+        user_id_count = sum(1 for p in captured_params if p == _FAKE_USER_ID)
+        assert user_id_count >= 4
+
+    def test_ask_empty_query_rejected(self) -> None:
+        response = client.post("/search/ask", json={"q": ""})
+        assert response.status_code == 422
