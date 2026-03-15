@@ -758,3 +758,41 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 - Deploy the entity-normalization batch
 - Recheck `/entities` and dashboard entity count on production
 - Decide whether to add backward topic-ID aliases for links that broke before stable recluster IDs shipped
+
+---
+
+## 2026-03-15 — Intelligent search: embed-at-ingest, match-at-query
+
+**Goal:** Make search genuinely intelligent — the LLM understands each meeting once at ingest time, stores that understanding as vectors, and search queries the stored understanding at near-zero LLM cost per query.
+
+- Added migration `009_rich_embeddings.sql`: `digest TEXT` and `digest_embedding vector(1536)` on `conversations`; `embedding vector(1536)` on `topic_clusters` and `entities`; IVFFlat ANN indexes on all three.
+- Added `generate_meeting_digest()` to `src/llm_client.py`: one Claude Sonnet call per meeting on the already-extracted structured data (topics/commitments/entities), never on raw transcripts. ~500 input + ~120 output tokens (~$0.003/meeting).
+- Added `answer_question()` with `AnswerResult`/`CitationRef` models for conversational Q&A. Uses index-based citation mapping (_InstructorAnswer intermediate model) so Claude never needs to produce database UUIDs.
+- Extended `src/workers/extract.py` to generate and store the meeting digest after extraction completes.
+- Extended `src/workers/embed.py` to embed topic clusters (`canonical_label + canonical_summary`), entities (`name (type)`), and the conversation digest — all batched into single `embed_texts()` calls.
+- Rewrote `src/api/routes/search.py`: multi-table vector search across topic_clusters, entities, conversation digests, and transcript segments. Score threshold 0.30. Optional date_from/date_to filters. Returns grouped `SearchResult` with `result_type` field.
+- Added `POST /search/ask` for conversational Q&A: embeds the question, retrieves top-8 context results, synthesises a cited answer via Claude.
+- Added `POST /admin/backfill-embeddings` (new `src/api/routes/admin.py`): one-time idempotent endpoint to generate digests and embeddings for all existing meetings.
+- Updated frontend: `SearchResult` type with `result_id`/`result_type`, date filter inputs, grouped result sections (Topics / Meetings / Entities / Transcript excerpts), Ask/Find mode toggle with `AskAnswerCard`.
+- Fixed post-deploy: `answer_question()` citation resolution bug (Claude was being asked to populate database UUIDs it cannot know — switched to index-based `_InstructorAnswer` intermediate model); removed spurious `type: ignore` comments caught by CI mypy.
+- Migration 009 applied to Supabase ✅. PR #14 open on `feat/durable-topic-clusters`.
+
+### Token cost after this change
+
+| Operation | Cost |
+|---|---|
+| Per meeting at ingest | ~$0.004 |
+| Per search query | ~$0.00001 (one embedding call only, zero LLM tokens) |
+
+### Validation
+
+- `pytest -q tests/test_search.py tests/test_llm_client.py` ✅ (**30 passed**)
+- `ruff check src tests && ruff format --check src tests` ✅
+- Migration 009 applied to Supabase: `digest`, `digest_embedding`, `topic_clusters.embedding`, `entities.embedding` columns confirmed present ✅
+
+### What comes next
+
+- Upgrade Upstash Redis from free tier (500k req/month limit hit — worker crashes on startup)
+- Restart Farz worker on Render after Upstash upgrade
+- Merge PR #14 and trigger `POST /admin/backfill-embeddings` once after deploy to process existing meetings
+- Verify `/search/ask` returns cited answers (no 502) and grouped `/search` results include topic/meeting/entity types

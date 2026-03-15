@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Current work is no longer net-new phase delivery; it is MVP stabilization on top of the shipped product: visual polish, read-path performance, topic-intelligence quality, and final entity cleanup before broader pilot rollout. The durable topic-cluster implementation is now deployed and production-verified; the current local follow-up is conservative entity normalization for `/entities` and dashboard counts.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work also shipped: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, and intelligent search (embed-at-ingest multi-table vector search + conversational Q&A). Next: upgrade Upstash Redis (free tier exhausted), merge PR #14, run backfill, then post-MVP hardening.
 
 ## Phases
 

@@ -40,11 +40,15 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - ✓ Brief API + citation surface: `/briefs/latest` and `/briefs/{id}` plus frontend brief page and meeting deep-link to latest brief — Phase 4 (04-04)
 - ✓ Personal context dashboard completion: `/calendar/today` now serves upcoming meetings + open commitments + recent activity + recent connections; `/today` renders all dashboard sections with deep links — Phase 5 (05-01/05-02)
 - ✓ Full QA gate green: `ruff check src tests`, `mypy src tests`, `pytest -q` (97 passed, 7 skipped), and frontend `npm run lint` + `npm run build` — 2026-03-11 validation
+- ✓ Intelligent search: migration 009 applied (digest + embedding columns on conversations/topic_clusters/entities + IVFFlat ANN indexes); multi-table vector search; `generate_meeting_digest()` one LLM call/meeting at ingest; `answer_question()` with cited-index resolution; `POST /search/ask` Q&A endpoint; `POST /admin/backfill-embeddings` — 2026-03-15
+- ✓ Search cost: ~$0.004/meeting at ingest, ~$0.00001/query (zero LLM tokens at search time) — 2026-03-15
 
 ### Active
 
-- [ ] Deploy durable topic-cluster batch (migration `007_topic_clusters.sql`, API, worker)
-- [ ] Trigger historical topic recluster / backfill for already indexed meetings
+- [ ] **URGENT**: Upgrade Upstash Redis to Pay As You Go (free tier 500k req/month exhausted — worker crashes)
+- [ ] Merge PR #14 and restart worker on Render
+- [ ] Run `POST /admin/backfill-embeddings` once after deploy to embed all existing meetings
+- [ ] Verify `/search/ask` returns cited answers and grouped search results include topic/meeting/entity types
 - [ ] Production QA of Search/Topics/Dashboard against stored clusters
 - [ ] Post-MVP roadmap definition (v2 integrations, infra scaling, evaluation framework) after MVP topic quality is acceptable
 
@@ -62,9 +66,9 @@ A working professional can ask "What did we decide about X?" and get an accurate
 
 ## Context
 
-**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work has also been deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, and durable stored topic clusters with per-user recluster support. Production topic QA now shows materially better topic quality after recluster. The current local follow-up is conservative entity normalization so `/entities` and dashboard counts match user-visible grouped entities before broader pilot hardening.
+**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, and intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A). Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
 
-**Backend is complete through Phase 5.** 17 tables (9 core + 8 junction), all with FORCE RLS, plus the stored canonical topic layer (`topic_clusters`, `topics.cluster_id`, `topic_arcs.cluster_id`). Full Celery pipeline: ingest → extract → embed + recurring brief scheduling/generation, now extended with per-user topic reclustering. FastAPI includes topic arc, commitment tracker, live connection graph, live calendar sync, brief retrieval APIs, dashboard aggregation, the `POST /topics/recluster` backfill trigger, and a shared entity-grouping read layer for `/entities` plus dashboard `entity_count`. Current stabilization gate is green (`pytest -q` 112 passed / 7 skipped, `mypy`, `ruff`, frontend lint/build where touched). Deployed on Render.com with short read-cache optimization on the heaviest endpoints; the remaining local follow-up is entity normalization deploy + QA, then deciding whether old pre-fix topic URLs need redirect aliases.
+**Backend is complete through Phase 5 + intelligent search.** 17 tables (9 core + 8 junction), all with FORCE RLS. Migration 009 adds `digest`/`digest_embedding` to conversations, `embedding` to `topic_clusters` and `entities`. Full Celery pipeline: ingest → extract (now generates meeting digest) → embed (now embeds topic clusters, entities, digest) + recurring brief scheduling/generation + per-user reclustering. FastAPI includes all prior routes plus `POST /search/ask` and `POST /admin/backfill-embeddings`. Search is multi-table vector search (topic_clusters, entities, conversations, transcript_segments) with date filters, grouped result types, and score threshold 0.30. Current gate: `pytest -q` 30 passed (search + llm_client), `mypy`, `ruff` green on PR #14. Upstash Redis free tier exhausted — worker cannot start until plan upgraded.
 
 **Tech environment:** Python 3.13 + FastAPI + Pydantic v2, Supabase PostgreSQL 16 + pgvector, Upstash Redis (Celery broker + cache), Celery 5.4.0, Claude via instructor, OpenAI embeddings, Deepgram Nova-3.
 
