@@ -734,3 +734,27 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 - Deploy the stable-identity fix to API + worker
 - Re-run `POST /topics/recluster`
 - Verify that previously shared topic URLs still resolve when the rebuilt cluster clearly maps to the same thread
+
+---
+
+## 2026-03-13 — Conservative entity normalization for directory and dashboard
+
+**Goal:** Reduce obvious entity fragmentation in the MVP UI without introducing risky semantic over-merging.
+
+- Added a shared `src/entity_utils.py` normalization layer for safe alias cleanup on the read path.
+- `/entities` now groups obvious brand/type variants (`company` + `product`) and pilot-safe aliases such as `N8`/`N8N`, while preserving conservative behavior for anything ambiguous.
+- Dashboard `entity_count` now uses the same grouped-entity logic as the directory, so the KPI no longer drifts from what the user actually sees on `/entities`.
+- Added person short-form collapsing only when the full-name match is unambiguous, so names like `Nabil` can roll into `Nabil Mansouri` without broad guessy merging.
+
+### Validation
+
+- `pytest -q tests/test_entities.py tests/test_index_stats.py` ✅ (**6 passed**)
+- `pytest -q` ✅ (**112 passed, 7 skipped**)
+- `mypy src/ --ignore-missing-imports` ✅
+- `ruff check ... && ruff format --check ...` ✅
+
+### What comes next
+
+- Deploy the entity-normalization batch
+- Recheck `/entities` and dashboard entity count on production
+- Decide whether to add backward topic-ID aliases for links that broke before stable recluster IDs shipped

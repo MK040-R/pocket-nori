@@ -15,6 +15,8 @@ Rules:
 import logging
 from typing import Any
 
+from supabase import Client
+
 from src import llm_client
 from src.celery_app import celery_app
 from src.database import get_client
@@ -123,4 +125,113 @@ def embed_conversation(
         user_id,
     )
 
+    # --- Embed topic clusters linked to this conversation ---
+    self.update_state(state="PROGRESS", meta={"status": "embedding_topics"})
+    _embed_topic_clusters(db, conversation_id, user_id)
+
+    # --- Embed entities for this conversation ---
+    self.update_state(state="PROGRESS", meta={"status": "embedding_entities"})
+    _embed_entities(db, conversation_id, user_id)
+
+    # --- Embed conversation digest ---
+    self.update_state(state="PROGRESS", meta={"status": "embedding_digest"})
+    _embed_conversation_digest(db, conversation_id, user_id)
+
     return {"conversation_id": conversation_id, "segment_count": total_embedded}
+
+
+def _embed_topic_clusters(db: Client, conversation_id: str, user_id: str) -> None:
+    """Embed topic_clusters linked to this conversation that have no embedding yet.
+
+    Only embeds clusters with embedding IS NULL to avoid re-embedding clusters
+    already processed by a prior conversation in the same batch.
+    """
+    topics_result = (
+        db.table("topics")
+        .select("cluster_id")
+        .eq("conversation_id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    cluster_ids = list(
+        {row["cluster_id"] for row in (topics_result.data or []) if row.get("cluster_id")}
+    )
+    if not cluster_ids:
+        return
+
+    # Load clusters without embeddings
+    clusters_result = (
+        db.table("topic_clusters")
+        .select("id, canonical_label, canonical_summary")
+        .in_("id", cluster_ids)
+        .eq("user_id", user_id)
+        .is_("embedding", "null")
+        .execute()
+    )
+    clusters = clusters_result.data or []
+    if not clusters:
+        return
+
+    texts = [f"{c['canonical_label']}. {c.get('canonical_summary', '')}".strip() for c in clusters]
+    vectors = llm_client.embed_texts(texts)
+
+    for cluster, vector in zip(clusters, vectors, strict=True):
+        db.table("topic_clusters").update({"embedding": vector}).eq("id", cluster["id"]).eq(
+            "user_id", user_id
+        ).execute()
+
+    logger.info(
+        "Topic cluster embeddings stored — conversation=%s clusters=%d",
+        conversation_id,
+        len(clusters),
+    )
+
+
+def _embed_entities(db: Client, conversation_id: str, user_id: str) -> None:
+    """Embed entities for this conversation (all — entities are per-conversation rows)."""
+    entities_result = (
+        db.table("entities")
+        .select("id, name, type")
+        .eq("conversation_id", conversation_id)
+        .eq("user_id", user_id)
+        .is_("embedding", "null")
+        .execute()
+    )
+    entities = entities_result.data or []
+    if not entities:
+        return
+
+    texts = [f"{e['name']} ({e['type']})" for e in entities]
+    vectors = llm_client.embed_texts(texts)
+
+    for entity, vector in zip(entities, vectors, strict=True):
+        db.table("entities").update({"embedding": vector}).eq("id", entity["id"]).eq(
+            "user_id", user_id
+        ).execute()
+
+    logger.info(
+        "Entity embeddings stored — conversation=%s entities=%d",
+        conversation_id,
+        len(entities),
+    )
+
+
+def _embed_conversation_digest(db: Client, conversation_id: str, user_id: str) -> None:
+    """Embed the conversation digest if present and not yet embedded."""
+    conv_result = (
+        db.table("conversations")
+        .select("id, digest, digest_embedding")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    conv = (conv_result.data or [None])[0]
+    if not conv or not conv.get("digest") or conv.get("digest_embedding"):
+        return
+
+    vectors = llm_client.embed_texts([conv["digest"]])
+    db.table("conversations").update({"digest_embedding": vectors[0]}).eq("id", conversation_id).eq(
+        "user_id", user_id
+    ).execute()
+
+    logger.info("Digest embedding stored — conversation=%s", conversation_id)

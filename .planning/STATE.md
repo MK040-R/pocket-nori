@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** MVP stabilization, with stored topic-cluster deployment and recluster verification as the active workstream
+**Current focus:** MVP stabilization, with live topic-cluster verification completed and entity normalization queued for deploy/QA
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-12 — implemented the durable topic-intelligence batch locally: stored `topic_clusters`, write-time semantic merge, background-topic filtering, and a per-user recluster worker/route. Next step is deploy + run recluster + production QA.
+Last activity: 2026-03-13 — verified the durable topic-cluster rollout live (false merges materially reduced after recluster) and implemented conservative entity normalization for `/entities` and dashboard counts locally. Next step is deploy the entity batch and QA `/entities` against production data.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -67,16 +67,17 @@ Recent decisions affecting current work:
 - [Arch]: Topic intelligence now uses a durable write-time model: `topic_clusters` are canonical, `topics.cluster_id` / `topic_arcs.cluster_id` persist membership, and semantic merge is allowed only during ingestion/backfill through `src/llm_client.py`.
 - [API]: `POST /topics/recluster` now exists as a per-user trigger for rebuilding stored topic clusters and arcs for already indexed meetings.
 - [Ops]: Historical recluster now runs as `lexical-all + semantic-recent` rather than a full semantic pass across the entire archive, to stay within worker time limits while still testing semantic merge quality on current data.
-- [Arch]: Recluster now preserves topic-cluster IDs when rebuilt clusters overlap the same underlying topic rows, so durable topic URLs stay stable across rebuilds where lineage is clear.
+- [Arch]: Recluster now preserves topic-cluster IDs when rebuilt clusters overlap the same underlying topic rows, so durable topic URLs stay stable across rebuilds where lineage is clear going forward.
 - [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
+- [Product]: `/entities` and dashboard `entity_count` now share a conservative normalization layer for safe brand aliases (`N8`/`N8N`, `company`/`product` variants) and unambiguous short-form person names.
 - [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 
 ### Pending Todos
 
 - Deploy migration `007_topic_clusters.sql` and the stored-cluster API/worker changes
-- Trigger and validate per-user topic recluster/backfill in production using the bounded semantic-recent pass and stable cluster-id reconciliation
-- Run production QA on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters
-- Normalize entity aliases/types (`Opus`, `Upwork`, `N8N`/`N8`, short-form people names) after topic stability is confirmed
+- Run a compact production QA pass on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters after the latest entity batch deploys
+- Deploy and verify conservative entity normalization for `/entities` and dashboard stats
+- Decide whether historical pre-fix topic URLs need a redirect/alias layer beyond the new future-stable cluster IDs
 - Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
 ### Blockers/Concerns
@@ -87,5 +88,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Stable topic-identity reconciliation implemented locally after live QA showed old cluster URLs breaking across recluster; next step is deploy + rerun per-user recluster + recheck old topic links + entity normalization.
+Stopped at: Conservative entity normalization implemented locally after live QA confirmed stored topic clusters fixed the main false-merge issue; next step is deploy the entity batch and verify `/entities` plus dashboard counts on production.
 Resume file: None

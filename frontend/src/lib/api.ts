@@ -108,12 +108,28 @@ export type ConversationDetail = {
 };
 
 export type SearchResult = {
-  segment_id: string;
+  result_id: string;
+  result_type: "topic" | "entity" | "meeting" | "segment";
+  title: string;
   text: string;
   conversation_id: string;
   conversation_title: string;
   meeting_date: string;
   score: number;
+};
+
+export type CitationRef = {
+  result_id: string;
+  result_type: string;
+  conversation_id: string;
+  conversation_title: string;
+  meeting_date: string;
+  snippet: string;
+};
+
+export type AskResponse = {
+  answer: string;
+  citations: CitationRef[];
 };
 
 export type IndexStats = {
@@ -453,15 +469,50 @@ export async function getConversationConnections(id: string): Promise<Conversati
   return response.connections;
 }
 
-export async function search(q: string, limit = 10): Promise<SearchResult[]> {
+export async function search(
+  q: string,
+  limit = 10,
+  options: { dateFrom?: string; dateTo?: string } = {},
+): Promise<SearchResult[]> {
   const normalized = q.toLowerCase().trim();
   if (!normalized) {
     return [];
   }
   return request<SearchResult[]>("/search", {
     method: "POST",
-    body: JSON.stringify({ q: normalized, limit }),
+    body: JSON.stringify({
+      q: normalized,
+      limit,
+      ...(options.dateFrom ? { date_from: options.dateFrom } : {}),
+      ...(options.dateTo ? { date_to: options.dateTo } : {}),
+    }),
   });
+}
+
+export async function ask(
+  q: string,
+  options: { dateFrom?: string; dateTo?: string } = {},
+): Promise<AskResponse> {
+  const normalized = q.trim();
+  return request<AskResponse>("/search/ask", {
+    method: "POST",
+    body: JSON.stringify({
+      q: normalized,
+      ...(options.dateFrom ? { date_from: options.dateFrom } : {}),
+      ...(options.dateTo ? { date_to: options.dateTo } : {}),
+    }),
+  });
+}
+
+export async function backfillEmbeddings(): Promise<{
+  digests_generated: number;
+  topic_clusters_embedded: number;
+  entities_embedded: number;
+  digest_embeddings_stored: number;
+  conversations_processed: number;
+  conversations_skipped: number;
+}> {
+  return request("/admin/backfill-embeddings", { method: "POST" });
 }
 
 export async function getIndexStats(): Promise<IndexStats> {

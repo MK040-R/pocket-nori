@@ -45,7 +45,19 @@ def _make_db() -> MagicMock:
     commitments_table.select.return_value.eq.return_value.execute.return_value.count = 5
 
     entities_table = MagicMock()
-    entities_table.select.return_value.eq.return_value.execute.return_value.count = 11
+    entities_table.select.return_value.eq.return_value.execute.return_value.data = [
+        {"name": "Opus", "type": "product", "mentions": 3, "conversation_id": "conv-1"},
+        {"name": "Opus", "type": "company", "mentions": 2, "conversation_id": "conv-2"},
+        {"name": "N8", "type": "product", "mentions": 1, "conversation_id": "conv-3"},
+        {"name": "N8N", "type": "product", "mentions": 4, "conversation_id": "conv-4"},
+        {
+            "name": "Nabil Mansouri",
+            "type": "person",
+            "mentions": 2,
+            "conversation_id": "conv-5",
+        },
+        {"name": "Nabil", "type": "person", "mentions": 1, "conversation_id": "conv-6"},
+    ]
 
     db = MagicMock()
 
@@ -112,7 +124,7 @@ class TestIndexStats:
             "conversation_count": 7,
             "topic_count": 2,
             "commitment_count": 5,
-            "entity_count": 11,
+            "entity_count": 3,
             "last_updated_at": "2026-03-12T10:00:00+00:00",
         }
 
