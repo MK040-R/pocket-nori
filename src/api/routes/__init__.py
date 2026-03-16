@@ -12,6 +12,7 @@ from src.api.routes.commitments import router as commitments_router
 from src.api.routes.conversations import router as conversations_router
 from src.api.routes.entities import router as entities_router
 from src.api.routes.health import router as health_router
+from src.api.routes.home import router as home_router
 from src.api.routes.index_stats import router as index_stats_router
 from src.api.routes.onboarding import router as onboarding_router
 from src.api.routes.search import router as search_router
@@ -29,4 +30,5 @@ router.include_router(commitments_router, prefix="/commitments", tags=["commitme
 router.include_router(entities_router, prefix="/entities", tags=["entities"])
 router.include_router(index_stats_router, prefix="/index", tags=["index"])
 router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])
+router.include_router(home_router, prefix="/home", tags=["home"])
 router.include_router(admin_router, prefix="/admin", tags=["admin"])

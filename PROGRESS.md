@@ -67,7 +67,35 @@ Building a software product from scratch happens in stages, like constructing a 
 | Phase 5 plan 05-01 — Dashboard backend aggregation            | ✅ Complete | `/calendar/today` now returns recent activity + recent connections                           |
 | Phase 5 plan 05-02 — Dashboard UI completion                  | ✅ Complete | `/today` renders all required sections with meeting deep links                               |
 | Phase 5 — Personal context dashboard                          | ✅ Complete | 2/2 plans delivered and validated                                                            |
+| Round 2 Wave H — GET /home/summary (AI daily briefing)        | ✅ Complete | New endpoint + generate_home_summary() + 6 tests, cached per user per day                   |
+| Round 2 Wave J — topic_labels on GET /conversations           | ✅ Complete | ConversationSummary gains topic_labels: list[str], up to 3 per meeting                      |
 
+
+---
+
+## ✅ Milestone Update — 2026-03-16 (Round 2 Wave H + Wave J backend)
+
+### What was completed in this milestone
+
+- **Wave H — `GET /home/summary`**: New endpoint that generates a personalised 2-3 sentence daily briefing using upcoming Google Calendar meetings, open commitment count, and recent topic labels. Falls back gracefully to plain text if the LLM call fails. Cached per user per calendar day (6-hour TTL).
+  - New file: `src/api/routes/home.py`
+  - New helper: `generate_home_summary()` in `src/llm_client.py` (uses claude-sonnet-4-6, max_tokens=200)
+  - 6 unit tests in `tests/test_home.py`
+
+- **Wave J — `topic_labels` on `GET /conversations`**: Each meeting in the list view now returns up to 3 topic labels, enabling the frontend to render topic chips on meeting cards. No new endpoint — extends the existing list response.
+  - `ConversationSummary` model gains `topic_labels: list[str] = []`
+  - `list_conversations` fetches topic labels in a second DB query and attaches them per meeting
+
+### Validation results
+
+- Ruff: `ruff check . && ruff format --check .` → **pass**
+- Mypy: `mypy src/ --ignore-missing-imports` → **pass**
+- Backend tests: `pytest -q` → **141 passed, 7 skipped**
+
+### What comes next
+
+- **Wave H frontend (Codex)**: Add `getHomeSummary()` to `api.ts`; render Quick Summary card above KPIs on Home page
+- **Wave J frontend (Codex)**: Update `ConversationSummary` type to include `topic_labels: string[]`; rebuild meeting cards with topic chips and Today/This week/Earlier date grouping
 
 ---
 
@@ -975,3 +1003,24 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 ### What comes next
 
 - Run the compact QA pass across Search, Topics, Dashboard, Meetings, and Actions, or define the next UI cleanup wave explicitly
+
+---
+
+## 2026-03-16 — Wave I frontend: onboarding wizard + skip path
+
+**Goal:** Restructure onboarding into a simple 3-step setup flow without changing any backend APIs.
+
+- Rebuilt `/onboarding` into a three-step wizard: `Welcome`, `Import`, and `Processing`.
+- Moved the existing Drive recording picker, filters, batching, and import submission flow into the `Import` step.
+- Moved the existing import polling/status view into the `Processing` step and added a `Go to my meetings →` CTA once all queued imports finish.
+- Added `Skip for now` navigation on the `Import` and `Processing` steps so users can enter the app without starting an import.
+- Added a zero-meetings empty state on `/meetings` so skipped users land on a clear prompt directly below the permanent `Import past meetings` entry point.
+
+### Validation
+
+- `cd frontend && npm run lint` ✅
+- `cd frontend && npm run build` ✅
+
+### What comes next
+
+- Wave I is complete; next local work is either Wave H/Wave J once their dependencies are ready, or the compact QA pass across Search, Topics, Dashboard, Meetings, and Actions

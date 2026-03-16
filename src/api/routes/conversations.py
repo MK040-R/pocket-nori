@@ -36,6 +36,7 @@ class ConversationSummary(BaseModel):
     status: str  # "processing" | "indexed"
     latest_brief_id: str | None = None
     latest_brief_generated_at: str | None = None
+    topic_labels: list[str] = []
 
 
 class TopicOut(BaseModel):
@@ -435,6 +436,27 @@ def list_conversations(
         .range(offset, offset + limit - 1)
         .execute()
     )
+    rows = result.data or []
+
+    # Fetch up to 3 topic labels per conversation in a single query.
+    labels_by_conv: dict[str, list[str]] = {}
+    if rows:
+        conv_ids = [str(row["id"]) for row in rows]
+        topic_rows = (
+            db.table("topics")
+            .select("conversation_id, label")
+            .eq("user_id", user_id)
+            .in_("conversation_id", conv_ids)
+            .order("updated_at", desc=True)
+            .execute()
+        ).data or []
+        for t in topic_rows:
+            cid = str(t.get("conversation_id", ""))
+            lbl = str(t.get("label", "") or "").strip()
+            if cid and lbl:
+                bucket = labels_by_conv.setdefault(cid, [])
+                if len(bucket) < 3:
+                    bucket.append(lbl)
 
     return [
         ConversationSummary(
@@ -446,8 +468,9 @@ def list_conversations(
             status=row.get("status", "processing"),
             latest_brief_id=None,
             latest_brief_generated_at=None,
+            topic_labels=labels_by_conv.get(str(row["id"]), []),
         )
-        for row in (result.data or [])
+        for row in rows
     ]
 
 

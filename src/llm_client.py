@@ -157,6 +157,16 @@ Guidelines:
 
 Return a single plain-text brief. No JSON. No headers unless they genuinely aid scannability."""
 
+_HOME_SUMMARY_SYSTEM_PROMPT = """You are a personal meeting intelligence assistant.
+Given a brief context about a person's day - upcoming meetings, open actions, and recent discussion topics - write a 2-3 sentence plain-English briefing for them.
+
+Guidelines:
+- Write in second person ("You have...", "Your recent meetings covered...").
+- Be specific: use the actual meeting names, counts, and topic names provided.
+- Do not speculate beyond the data given.
+- If context is sparse, write something grounding and brief — never pad.
+- Plain prose only. No headers, no bullet points, no JSON."""
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -468,3 +478,42 @@ def generate_brief(context: str) -> str:
     if not isinstance(block, TextBlock):
         raise ValueError(f"Expected TextBlock from brief generation, got {type(block).__name__}")
     return block.text
+
+
+def generate_home_summary(
+    upcoming_meeting_titles: list[str],
+    open_commitment_count: int,
+    recent_topic_labels: list[str],
+) -> str:
+    """Generate a 2-3 sentence personalized daily briefing for the home page.
+
+    Args:
+        upcoming_meeting_titles: Titles of meetings starting later today (max 3).
+        open_commitment_count: Total number of open actions for this user.
+        recent_topic_labels: Most recent distinct topic labels (max 3).
+
+    Returns:
+        Plain-text 2-3 sentence summary. Never logged — may reference user data.
+    """
+    parts: list[str] = []
+    if upcoming_meeting_titles:
+        mtg_list = ", ".join(f'"{t}"' for t in upcoming_meeting_titles)
+        parts.append(f"Upcoming meetings today: {mtg_list}.")
+    else:
+        parts.append("No upcoming meetings scheduled for the rest of today.")
+    parts.append(f"Open actions: {open_commitment_count}.")
+    if recent_topic_labels:
+        parts.append(f"Recent discussion topics: {', '.join(recent_topic_labels)}.")
+
+    context = "\n".join(parts)
+    logger.debug("LLM call — generate_home_summary model=%s", _Model.EXTRACTION)
+    response = _raw_client().messages.create(
+        model=str(_Model.EXTRACTION),
+        max_tokens=200,
+        system=_HOME_SUMMARY_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": context}],
+    )
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        raise ValueError(f"Expected TextBlock from home summary, got {type(block).__name__}")
+    return block.text.strip()

@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-16 — shipped Wave G on the Meetings page. Users now always see an `Import past meetings` entry point above the meeting list linking to `/onboarding`, with frontend lint/build green.
+Last activity: 2026-03-16 — shipped Round 2 Wave H + Wave J backend. `GET /home/summary` live with LLM briefing + plain-text fallback + 6h cache. `GET /conversations` now returns `topic_labels: list[str]` per meeting. 141 tests passing, ruff + mypy clean.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -75,9 +75,12 @@ Recent decisions affecting current work:
 - [UI]: The shared app shell now includes a persistent global search bar, and `/search` reads `?q=` URL state so direct links and cross-page search launches resolve into the same flow.
 - [UI]: Meeting detail now uses per-item `action_type` from `GET /conversations/{id}` to separate `Commitments` and `Follow-ups` in the `Actions` tab.
 - [UI]: The Meetings page now keeps a permanent `Import past meetings` entry point visible above the list so users can add more recordings at any time.
+- [UI]: `/onboarding` is now a 3-step wizard with explicit skip paths, and `/meetings` shows a no-meetings prompt when users skip before importing anything.
 - [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
 - [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
 - [Ops]: Upstash free tier (500k req/month) is exhausted; worker requires Pay As You Go upgrade to resume ingest pipeline.
+- [API]: `GET /home/summary` returns AI-generated 2-3 sentence daily briefing; uses claude-sonnet-4-6 (max_tokens=200), falls back to plain text on LLM failure, cached per user per day at 6h TTL.
+- [API]: `GET /conversations` now includes `topic_labels: list[str]` (up to 3 per meeting) for meeting card previews.
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Wave G shipped; Meetings now has a persistent import entry point. Next local work is compact QA across Search, Topics, Dashboard, Meetings, and Actions, unless a new cleanup wave is defined first.
+Last session: 2026-03-16
+Stopped at: Wave H + Wave J backends shipped and verified (141 tests green). Codex next: Wave H frontend (Quick Summary card) + Wave J frontend (topic chips + date grouping on Meetings page).
 Resume file: None
