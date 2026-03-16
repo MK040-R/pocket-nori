@@ -1,4 +1,4 @@
-# FARZ
+# Pocket Nori
 ## Personal Intelligence Layer for the Working Professional
 ### Product Requirements Document
 

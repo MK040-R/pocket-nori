@@ -93,7 +93,7 @@ export function AppFrame({ children }: AppFrameProps) {
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px]">
         <aside className="sidebar-shell w-[248px] px-4 py-6">
           <div className="sidebar-logo mb-8 px-4 py-3 text-sm font-bold tracking-[0.18em] text-white">
-            FARZ
+            Pocket Nori
           </div>
 
           <nav className="space-y-1">
@@ -124,7 +124,7 @@ export function AppFrame({ children }: AppFrameProps) {
 
         <div className="flex min-h-screen flex-1 flex-col">
           <header className="flex items-center justify-between border-b border-standard bg-bg-surface-raised px-6 py-4">
-            <div className="text-sm text-ink-secondary">Private Office Interface</div>
+            <div className="text-sm text-ink-secondary">Pocket Nori Workspace</div>
             <div className="flex items-center gap-3 text-sm">
               {loadingSession && <span className="text-ink-tertiary">Checking session...</span>}
 
