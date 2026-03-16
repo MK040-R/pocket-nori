@@ -52,6 +52,7 @@ class CommitmentOut(BaseModel):
     owner: str
     due_date: str | None
     status: str
+    action_type: str = "commitment"
 
 
 class EntityOut(BaseModel):
@@ -520,7 +521,7 @@ def get_conversation(
     # --- Commitments ---
     commitments_result = (
         db.table("commitments")
-        .select("id, text, owner, due_date, status")
+        .select("id, text, owner, due_date, status, action_type")
         .eq("conversation_id", conversation_id)
         .eq("user_id", user_id)
         .order("created_at")
@@ -592,6 +593,7 @@ def get_conversation(
                 owner=c["owner"],
                 due_date=c.get("due_date"),
                 status=c["status"],
+                action_type=c.get("action_type") or "commitment",
             )
             for c in (commitments_result.data or [])
         ],
