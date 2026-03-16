@@ -4,23 +4,56 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
+  getCommitments,
   getIndexStats,
   getTodayBriefing,
+  type ActionType,
+  type Commitment,
   type IndexStats,
   type TodayBriefing,
 } from "@/lib/api";
-import { formatDueDate, formatMeetingTitle, formatDateTime } from "@/lib/presentation";
+import { formatDueDate, formatMeetingTitle } from "@/lib/presentation";
 
 const kpiCards = [
   { label: "Conversations", href: "/meetings", key: "conversation_count" as const },
   { label: "Topics", href: "/topics", key: "topic_count" as const },
-  { label: "Commitments", href: "/commitments", key: "commitment_count" as const },
+  { label: "Actions", href: "/commitments", key: "commitment_count" as const },
   { label: "Entities", href: "/entities", key: "entity_count" as const },
 ];
 
-export default function DashboardPage() {
+function ActionList({
+  items,
+  emptyLabel,
+}: {
+  items: Commitment[];
+  emptyLabel: string;
+}) {
+  if (items.length === 0) {
+    return <p className="text-sm text-ink-tertiary">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {items.map((item) => (
+        <div key={item.id} className="rounded border border-soft px-3 py-2">
+          <p className="text-sm text-ink-primary">{item.text}</p>
+          <p className="mt-1 text-xs text-ink-tertiary">
+            {item.owner || "Unassigned"} · due {formatDueDate(item.due_date)} ·{" "}
+            {item.conversation_title ? formatMeetingTitle(item.conversation_title) : "Manual action"}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function HomePage() {
   const [briefing, setBriefing] = useState<TodayBriefing | null>(null);
   const [stats, setStats] = useState<IndexStats | null>(null);
+  const [actions, setActions] = useState<Record<ActionType, Commitment[]>>({
+    commitment: [],
+    follow_up: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,14 +64,23 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [todayData, statsData] = await Promise.all([getTodayBriefing(), getIndexStats()]);
+        const [todayData, statsData, commitmentsData, followUpsData] = await Promise.all([
+          getTodayBriefing(),
+          getIndexStats(),
+          getCommitments("open", { actionType: "commitment", limit: 3 }),
+          getCommitments("open", { actionType: "follow_up", limit: 3 }),
+        ]);
         if (mounted) {
           setBriefing(todayData);
           setStats(statsData);
+          setActions({
+            commitment: commitmentsData,
+            follow_up: followUpsData,
+          });
         }
       } catch (loadError) {
         if (mounted) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
+          setError(loadError instanceof Error ? loadError.message : "Failed to load home");
         }
       } finally {
         if (mounted) {
@@ -55,24 +97,34 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return <section className="card p-4 text-sm text-ink-secondary">Loading dashboard...</section>;
+    return <section className="card p-4 text-sm text-ink-secondary">Loading home...</section>;
   }
 
   if (error || !briefing || !stats) {
     return (
       <section className="card border border-emphasis bg-accent-subtle p-4 text-sm text-accent">
-        {error ?? "Dashboard unavailable"}
+        {error ?? "Home unavailable"}
       </section>
     );
   }
 
+  const formatCalendarDate = (value: string) =>
+    new Date(value).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
+
+  const formatCalendarTime = (value: string) =>
+    new Date(value).toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
   return (
     <div className="space-y-6">
       <section className="card p-6">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-2 text-sm text-ink-secondary">
-          A quick view of your indexed meetings, active commitments, and the next two days of calendar context.
-        </p>
+        <h1 className="text-2xl font-semibold">Home</h1>
       </section>
 
       <section className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
@@ -87,17 +139,24 @@ export default function DashboardPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="card p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Upcoming today and tomorrow</h2>
+            <h2 className="text-lg font-semibold">Coming Up</h2>
             <Link href="/today" className="text-xs text-accent hover:text-accent-hover">
               Open full view
             </Link>
           </div>
           <div className="mt-3 space-y-2">
             {briefing.upcoming_meetings.map((meeting) => (
-              <div key={meeting.id} className="rounded border border-soft px-3 py-2">
-                <p className="font-medium text-ink-primary">{formatMeetingTitle(meeting.title)}</p>
-                <p className="mt-1 text-xs text-ink-tertiary">
-                  {formatDateTime(meeting.start_time)} · {meeting.attendees.join(", ")}
+              <div
+                key={meeting.id}
+                className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 rounded border border-soft px-3 py-2"
+              >
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-tertiary">
+                  {formatCalendarDate(meeting.start_time)}
+                </p>
+                <p className="min-w-0 text-sm text-ink-primary">
+                  <span className="text-ink-secondary">{formatCalendarTime(meeting.start_time)}</span>
+                  {" · "}
+                  <span className="font-medium">{formatMeetingTitle(meeting.title)}</span>
                 </p>
               </div>
             ))}
@@ -109,26 +168,31 @@ export default function DashboardPage() {
 
         <article className="card p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Open commitments</h2>
+            <h2 className="text-lg font-semibold">Actions</h2>
             <Link href="/commitments" className="text-xs text-accent hover:text-accent-hover">
               View all
             </Link>
           </div>
 
-          <div className="mt-3 space-y-2">
-            {briefing.open_commitments.slice(0, 4).map((commitment) => (
-              <div key={commitment.id} className="rounded border border-soft px-3 py-2">
-                <p className="text-sm text-ink-primary">{commitment.text}</p>
-                <p className="mt-1 text-xs text-ink-tertiary">
-                  {commitment.owner} · due {formatDueDate(commitment.due_date)} ·{" "}
-                  {formatMeetingTitle(commitment.conversation_title)}
-                </p>
-              </div>
-            ))}
-
-            {briefing.open_commitments.length === 0 && (
-              <p className="text-sm text-ink-tertiary">No open commitments in the current dataset.</p>
-            )}
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-ink-tertiary">
+                Commitments
+              </p>
+              <ActionList
+                items={actions.commitment}
+                emptyLabel="No open commitments in the current dataset."
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-ink-tertiary">
+                Follow-ups
+              </p>
+              <ActionList
+                items={actions.follow_up}
+                emptyLabel="No open follow-ups in the current dataset."
+              />
+            </div>
           </div>
         </article>
       </section>

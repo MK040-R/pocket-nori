@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { AppFrame } from "@/components/AppFrame";
@@ -17,7 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppFrame>{children}</AppFrame>
+        <Suspense>
+          <AppFrame>{children}</AppFrame>
+        </Suspense>
       </body>
     </html>
   );

@@ -1,18 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BASE_URL, getSession, logout, subscribeToAuth, type Session } from "@/lib/api";
 
 const navItems = [
-  { href: "/", label: "Dashboard" },
+  { href: "/", label: "Home" },
   { href: "/meetings", label: "Meetings" },
   { href: "/search", label: "Search" },
   { href: "/topics", label: "Topics" },
-  { href: "/commitments", label: "Commitments" },
-  { href: "/entities", label: "Entities" },
+  { href: "/commitments", label: "Actions" },
   { href: "/onboarding", label: "Onboarding" },
 ];
 
@@ -20,12 +19,46 @@ type AppFrameProps = {
   children: React.ReactNode;
 };
 
+function deriveDisplayName(email: string): string {
+  const localPart = email.split("@")[0] ?? email;
+  const tokens = localPart
+    .split(/[._+-]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    return email;
+  }
+
+  return tokens
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function deriveInitials(email: string): string {
+  const localPart = email.split("@")[0] ?? email;
+  const tokens = localPart
+    .split(/[._+-]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  if (tokens.length >= 2) {
+    return `${tokens[0][0] ?? ""}${tokens[1][0] ?? ""}`.toUpperCase();
+  }
+
+  return localPart.replace(/[^a-z0-9]/gi, "").slice(0, 2).toUpperCase() || "PN";
+}
+
 export function AppFrame({ children }: AppFrameProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [globalQuery, setGlobalQuery] = useState("");
 
   const loadSession = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!options.silent) {
@@ -86,7 +119,65 @@ export function AppFrame({ children }: AppFrameProps) {
     };
   }, [loadSession]);
 
+  useEffect(() => {
+    if (!profileOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [profileOpen]);
+
+  useEffect(() => {
+    setGlobalQuery(searchParams.get("q") ?? "");
+  }, [searchParams]);
+
   const loginUrl = useMemo(() => `${BASE_URL}/auth/login`, []);
+  const profileName = useMemo(
+    () => (session?.email ? deriveDisplayName(session.email) : "Profile"),
+    [session?.email],
+  );
+  const profileInitials = useMemo(
+    () => (session?.email ? deriveInitials(session.email) : "PN"),
+    [session?.email],
+  );
+  const handleLogout = useCallback(async () => {
+    try {
+      await logout();
+    } finally {
+      setProfileOpen(false);
+      router.push("/");
+      router.refresh();
+    }
+  }, [router]);
+  const handleGlobalSearch = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = globalQuery.trim();
+      const params = new URLSearchParams();
+      if (trimmed) {
+        params.set("q", trimmed);
+      }
+      router.push(`/search${params.toString() ? `?${params.toString()}` : ""}`);
+    },
+    [globalQuery, router],
+  );
 
   return (
     <div className="min-h-screen bg-bg-base text-ink-primary">
@@ -116,15 +207,28 @@ export function AppFrame({ children }: AppFrameProps) {
             })}
           </nav>
 
-          <div className="sidebar-panel mt-8 px-4 py-4 text-xs leading-6">
-            MVP pilot mode. Use Search, Topics, Commitments, and Entities to review the indexed
-            meeting history before broadening rollout.
-          </div>
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-standard bg-bg-surface-raised px-6 py-4">
-            <div className="text-sm text-ink-secondary">Pocket Nori Workspace</div>
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-standard bg-bg-surface-raised px-6 py-4">
+            <form onSubmit={handleGlobalSearch} className="flex min-w-[240px] flex-1 max-w-xl gap-2">
+              <input
+                value={globalQuery}
+                onChange={(event) => {
+                  setGlobalQuery(event.target.value);
+                }}
+                placeholder="Search all meetings"
+                className="w-full rounded border border-standard bg-bg-control px-3 py-2 text-sm text-ink-primary outline-none focus:border-emphasis"
+                aria-label="Global search"
+              />
+              <button
+                type="submit"
+                className="rounded border border-emphasis bg-accent-subtle px-3 py-2 text-sm font-medium text-accent"
+              >
+                Search
+              </button>
+            </form>
+
             <div className="flex items-center gap-3 text-sm">
               {loadingSession && <span className="text-ink-tertiary">Checking session...</span>}
 
@@ -153,25 +257,70 @@ export function AppFrame({ children }: AppFrameProps) {
               )}
 
               {!loadingSession && session && (
-                <>
-                  <span className="rounded border border-soft px-2 py-1 text-ink-secondary">
-                    {session.email}
-                  </span>
+                <div className="relative" ref={profileMenuRef}>
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        await logout();
-                      } finally {
-                        router.push("/");
-                        router.refresh();
-                      }
+                    onClick={() => {
+                      setProfileOpen((current) => !current);
                     }}
-                    className="rounded border border-standard px-3 py-1.5 text-ink-secondary hover:border-emphasis hover:text-ink-primary"
+                    className="flex items-center gap-2 rounded-full border border-standard bg-bg-control px-2 py-1.5 text-ink-secondary transition hover:border-emphasis hover:text-ink-primary"
+                    aria-haspopup="menu"
+                    aria-expanded={profileOpen}
+                    aria-label="Open profile menu"
                   >
-                    Logout
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-surface-raised text-xs font-semibold text-ink-primary">
+                      {profileInitials}
+                    </span>
+                    <span className="hidden text-sm md:inline">{profileName}</span>
                   </button>
-                </>
+
+                  {profileOpen && (
+                    <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-72 rounded-2xl border border-standard bg-bg-surface-raised p-2 shadow-lg shadow-black/5">
+                      <div className="rounded-2xl border border-soft bg-bg-control px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.08em] text-ink-tertiary">
+                          Profile
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-ink-primary">{profileName}</p>
+                        <p className="mt-1 text-sm text-ink-secondary">{session.email}</p>
+                      </div>
+
+                      <div className="mt-2 space-y-1">
+                        <Link
+                          href="/entities"
+                          onClick={() => {
+                            setProfileOpen(false);
+                          }}
+                          className="block rounded-xl px-3 py-2 text-sm text-ink-primary transition hover:bg-bg-control"
+                        >
+                          Manage Entities
+                        </Link>
+                        <button
+                          type="button"
+                          disabled
+                          className="block w-full cursor-not-allowed rounded-xl px-3 py-2 text-left text-sm text-ink-muted"
+                        >
+                          Language
+                        </button>
+                        <button
+                          type="button"
+                          disabled
+                          className="block w-full cursor-not-allowed rounded-xl px-3 py-2 text-left text-sm text-ink-muted"
+                        >
+                          Help Center
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleLogout();
+                          }}
+                          className="block w-full rounded-xl px-3 py-2 text-left text-sm text-ink-primary transition hover:bg-bg-control"
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </header>

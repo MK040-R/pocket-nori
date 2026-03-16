@@ -53,9 +53,24 @@ export default function MeetingsPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Meetings</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Review indexed meetings, open each conversation, and move into topic and commitment detail.
+          Review indexed meetings, open each conversation, and move into topic and action detail.
         </p>
       </section>
+
+      <Link
+        href="/onboarding"
+        className="card flex items-center justify-between gap-4 border-soft bg-bg-control px-5 py-4 transition hover:border-emphasis"
+      >
+        <div>
+          <p className="text-sm font-medium text-ink-primary">Import past meetings</p>
+          <p className="mt-1 text-sm text-ink-secondary">
+            Bring in additional recordings whenever you want to expand your meeting history.
+          </p>
+        </div>
+        <span className="shrink-0 text-sm text-ink-tertiary" aria-hidden="true">
+          →
+        </span>
+      </Link>
 
       {loading && <section className="card p-4 text-sm text-ink-secondary">Loading meetings...</section>}
 

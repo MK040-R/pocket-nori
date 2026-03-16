@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** Intelligent search shipped (embed-at-ingest, multi-table vector search, conversational Q&A). Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
+**Current focus:** Pilot UX polish and production QA on top of intelligent search. Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-15 — shipped intelligent search (migration 009, digest generation, multi-table vector search, /search/ask Q&A, /admin/backfill-embeddings). PR #14 open. Two post-deploy bugs fixed (citation UUID resolution, unused type: ignore). Upstash free tier limit hit — worker crashes until plan upgraded.
+Last activity: 2026-03-16 — shipped Wave G on the Meetings page. Users now always see an `Import past meetings` entry point above the meeting list linking to `/onboarding`, with frontend lint/build green.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -72,6 +72,9 @@ Recent decisions affecting current work:
 - [Product]: `/entities` and dashboard `entity_count` now share a conservative normalization layer for safe brand aliases (`N8`/`N8N`, `company`/`product` variants) and unambiguous short-form person names.
 - [Product]: Despite phase completion, Pocket Nori remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 - [Search]: Search is now fully intelligent — LLM understands each meeting once at ingest (digest + topic/entity embeddings stored), search queries pre-stored vectors at ~$0.00001/query with zero LLM tokens.
+- [UI]: The shared app shell now includes a persistent global search bar, and `/search` reads `?q=` URL state so direct links and cross-page search launches resolve into the same flow.
+- [UI]: Meeting detail now uses per-item `action_type` from `GET /conversations/{id}` to separate `Commitments` and `Follow-ups` in the `Actions` tab.
+- [UI]: The Meetings page now keeps a permanent `Import past meetings` entry point visible above the list so users can add more recordings at any time.
 - [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
 - [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
 - [Ops]: Upstash free tier (500k req/month) is exhausted; worker requires Pay As You Go upgrade to resume ingest pipeline.
@@ -95,5 +98,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Intelligent search shipped and on PR #14. Two post-deploy bugs fixed in CI. Upstash Redis free tier hit — upgrade required before worker can restart and ingest pipeline resumes.
+Stopped at: Wave G shipped; Meetings now has a persistent import entry point. Next local work is compact QA across Search, Topics, Dashboard, Meetings, and Actions, unless a new cleanup wave is defined first.
 Resume file: None

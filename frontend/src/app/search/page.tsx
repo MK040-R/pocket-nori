@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ask,
@@ -21,6 +21,14 @@ type SearchMode = "find" | "ask";
 
 function normalizeValue(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function buildSearchParams(query: string): string {
+  const params = new URLSearchParams();
+  if (query.trim()) {
+    params.set("q", query.trim());
+  }
+  return params.toString();
 }
 
 function formatTopicDate(value: string): string {
@@ -58,6 +66,7 @@ const RESULT_TYPE_LINKS: Record<SearchResult["result_type"], (r: SearchResult) =
 
 export default function SearchPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<SearchMode>("find");
   const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -69,6 +78,8 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const manualUrlSyncRef = useRef<string | null>(null);
+  const urlQuery = searchParams.get("q") ?? "";
 
   useEffect(() => {
     let mounted = true;
@@ -168,10 +179,68 @@ export default function SearchPage() {
     return order.map((type) => ({ type, items: groups.get(type) ?? [] })).filter((g) => g.items.length > 0);
   }, [results]);
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
+  const runSearch = useCallback(
+    async (
+      rawQuery: string,
+      nextMode: SearchMode,
+      options: { allowTopicRedirect: boolean },
+    ) => {
+      const trimmedQuery = rawQuery.trim();
+      if (!trimmedQuery) {
+        setQuery("");
+        setHasSubmitted(false);
+        setLoading(false);
+        setError(null);
+        setResults([]);
+        setAskResponse(null);
+        return;
+      }
+
+      if (nextMode === "find" && options.allowTopicRedirect && exactTopicMatch) {
+        router.push(`/topics/${exactTopicMatch.id}`);
+        return;
+      }
+
+      setHasSubmitted(true);
+      setLoading(true);
+      setError(null);
+      setResults([]);
+      setAskResponse(null);
+
+      const dateOptions = {
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+      };
+
+      try {
+        if (nextMode === "ask") {
+          const data = await ask(trimmedQuery, dateOptions);
+          setAskResponse(data);
+        } else {
+          const data = await search(trimmedQuery, SEARCH_RESULTS_LIMIT, dateOptions);
+          setResults(data);
+        }
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Search failed");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [dateFrom, dateTo, exactTopicMatch, router],
+  );
+
+  useEffect(() => {
+    if (manualUrlSyncRef.current !== null) {
+      const shouldSkipSync = manualUrlSyncRef.current === urlQuery;
+      manualUrlSyncRef.current = null;
+      if (shouldSkipSync) {
+        return;
+      }
+    }
+
+    setQuery(urlQuery);
+
+    if (!urlQuery.trim()) {
       setHasSubmitted(false);
       setLoading(false);
       setError(null);
@@ -180,36 +249,18 @@ export default function SearchPage() {
       return;
     }
 
-    // In Find mode with an exact topic match, route directly to topic detail
-    if (mode === "find" && exactTopicMatch) {
-      router.push(`/topics/${exactTopicMatch.id}`);
-      return;
-    }
+    setMode("find");
+    void runSearch(urlQuery, "find", { allowTopicRedirect: false });
+  }, [runSearch, urlQuery]);
 
-    setHasSubmitted(true);
-    setLoading(true);
-    setError(null);
-    setResults([]);
-    setAskResponse(null);
-
-    const dateOptions = {
-      ...(dateFrom ? { dateFrom } : {}),
-      ...(dateTo ? { dateTo } : {}),
-    };
-
-    try {
-      if (mode === "ask") {
-        const data = await ask(trimmedQuery, dateOptions);
-        setAskResponse(data);
-      } else {
-        const data = await search(trimmedQuery, SEARCH_RESULTS_LIMIT, dateOptions);
-        setResults(data);
-      }
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Search failed");
-    } finally {
-      setLoading(false);
-    }
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmedQuery = query.trim();
+    const nextParams = buildSearchParams(trimmedQuery);
+    setQuery(trimmedQuery);
+    manualUrlSyncRef.current = trimmedQuery;
+    router.replace(`/search${nextParams ? `?${nextParams}` : ""}`);
+    await runSearch(trimmedQuery, mode, { allowTopicRedirect: true });
   };
 
   return (

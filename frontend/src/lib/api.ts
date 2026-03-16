@@ -10,6 +10,8 @@ export type Session = {
   email: string;
 };
 
+export type ActionType = "commitment" | "follow_up";
+
 export type AuthEvent =
   | { type: "refreshed"; session: Session }
   | { type: "expired" | "signed_out" };
@@ -95,6 +97,7 @@ export type ConversationDetail = {
     owner: string;
     due_date: string | null;
     status: "open" | "resolved";
+    action_type: ActionType;
   }>;
   entities: Array<{
     id: string;
@@ -194,10 +197,18 @@ export type Commitment = {
   owner: string;
   due_date: string | null;
   status: "open" | "resolved";
+  action_type: ActionType;
   conversation_id: string;
   conversation_title: string;
   meeting_date: string | null;
   topic_labels: string[];
+};
+
+export type CreateCommitmentInput = {
+  text: string;
+  action_type: ActionType;
+  owner: string;
+  due_date?: string | null;
 };
 
 export type EntitySummary = {
@@ -585,6 +596,7 @@ export async function getTopicArc(id: string): Promise<TopicArc> {
 export async function getCommitments(
   status?: "open" | "resolved",
   options: {
+    actionType?: ActionType;
     assignee?: string;
     attributedTo?: string;
     topic?: string;
@@ -598,6 +610,9 @@ export async function getCommitments(
   const params = new URLSearchParams();
   if (status) {
     params.set("status", status);
+  }
+  if (options.actionType) {
+    params.set("action_type", options.actionType);
   }
   if (options.assignee?.trim()) {
     params.set("assignee", options.assignee.trim());
@@ -625,6 +640,13 @@ export async function getCommitments(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request<Commitment[]>(`/commitments${suffix}`, { method: "GET" });
+}
+
+export async function createCommitment(input: CreateCommitmentInput): Promise<Commitment> {
+  return request<Commitment>("/commitments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function resolveCommitment(id: string): Promise<Commitment> {

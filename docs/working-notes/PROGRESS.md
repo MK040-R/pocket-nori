@@ -521,6 +521,127 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 
 ---
 
+## ✅ 2026-03-16 — Wave C frontend: Actions UI refresh
+
+### What changed
+
+- Renamed the touched shell/dashboard surfaces to `Home` and `Actions` where required by the new root brief.
+- Added frontend support for `action_type` filtering plus manual action creation in `frontend/src/lib/api.ts`.
+- Rebuilt `/commitments` as an `Actions` page with `Commitments` / `Follow-ups` tabs, compact cards, resolve buttons, meeting deep links, and a manual add form.
+- Updated the home dashboard widget to split open items into `Commitments` and `Follow-ups`.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Proceed to Wave D (`You` dropdown + move Entities out of primary nav)
+
+---
+
+## ✅ 2026-03-16 — Wave D frontend: profile dropdown + entity management
+
+### What changed
+
+- Added a top-right profile dropdown driven by the signed-in session, with initials, profile summary, `Manage Entities`, placeholder items, and sign-out.
+- Removed `Entities` from the main sidebar navigation.
+- Rebuilt `/entities` as `Manage Entities` with search, type filtering, sort controls, and browser-local label overrides.
+- Kept label editing local-only because the current API exposes read-only grouped entity summaries without stable entity IDs or an update route.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Proceed to Wave E (meeting detail overhaul)
+
+---
+
+## ✅ 2026-03-16 — Wave E frontend: meeting detail overhaul
+
+### What changed
+
+- Rebuilt the meeting detail page around `Topics`, `Actions`, and `Transcript` tabs.
+- Cleaned up the header and added count chips plus the existing latest-brief deep link.
+- Added a dedicated connections block sourced from `GET /conversations/{id}/connections`.
+- Replaced the raw segment list with a grouped conversation-style transcript view.
+- Removed the inline entities block and renamed `Commitments` to `Actions`.
+- Left per-meeting action splitting unsplit because the current conversation-detail API does not return `action_type`.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Proceed to Wave F (global search bar)
+
+---
+
+## ✅ 2026-03-16 — Wave F frontend: persistent global search bar
+
+### What changed
+
+- Added a shared header search form so search can be launched from anywhere in the app shell.
+- Updated `/search` to hydrate from the `q` URL param and auto-run a `Find` search when navigation originates from the global header or a deep link.
+- Synced manual `/search` submissions back into the URL so the page input and global header input stay aligned.
+- Wrapped the shared app shell in `Suspense` so Next.js prerendering accepts the new search-param-aware shell.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Proceed to Wave G
+
+---
+
+## ✅ 2026-03-16 — Wave E follow-up: meeting detail actions split by type
+
+### What changed
+
+- Added `action_type` to the frontend conversation-detail contract for `GET /conversations/{id}`.
+- Split the meeting detail `Actions` tab into `Commitments` and `Follow-ups`.
+- Removed the old “waiting for action_type” placeholder copy because the backend field is now live.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Proceed to Wave G or run compact QA across Search, Topics, Dashboard, and Actions
+
+---
+
+## ✅ 2026-03-16 — Wave G frontend: persistent import entry on Meetings
+
+### What changed
+
+- Added a permanent `Import past meetings` entry point above the Meetings list.
+- Linked that entry directly to `/onboarding`.
+- Styled it as a quiet secondary row so it stays discoverable without reading like an alert banner.
+- Kept it visible regardless of meeting count so users can import more history later.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Run compact QA across Search, Topics, Dashboard, Meetings, and Actions, or define the next cleanup wave explicitly
+
+---
+
 ## ✅ 2026-03-13 — Topic cluster IDs stabilized across recluster
 
 ### What changed

@@ -119,6 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 - [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
 - [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
+- [x] Pilot UX polish waves C-G — shipped Home/Actions naming cleanup, profile menu and entity management, meeting-detail simplification, persistent global search, and persistent Meetings import access
 - [ ] Topic intelligence cleanup — current active workstream
   - Deployed and verified live:
     - stored `topic_clusters` canonical layer with `topics.cluster_id` and `topic_arcs.cluster_id`
