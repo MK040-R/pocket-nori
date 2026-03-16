@@ -5,10 +5,23 @@ The server must NOT start if any required env var is missing.
 """
 
 import logging
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_origin(url: str) -> str:
+    """Return a URL's scheme + host origin, dropping any path or trailing slash."""
+    value = url.strip()
+    if not value:
+        return value
+
+    parts = urlsplit(value)
+    if parts.scheme and parts.netloc:
+        return f"{parts.scheme}://{parts.netloc}"
+    return value.rstrip("/")
 
 
 class Settings(BaseSettings):
@@ -38,6 +51,11 @@ class Settings(BaseSettings):
     SUPABASE_JWT_ISSUER: str | None = None
     SUPABASE_JWT_SECRET: str | None = None
     SUPABASE_JWKS_TTL_SECONDS: int = 3600
+
+    @property
+    def frontend_origin(self) -> str:
+        """Normalized frontend origin used for CORS and browser redirects."""
+        return normalize_origin(self.FRONTEND_URL)
 
 
 # Module-level singleton — import this directly from other modules.

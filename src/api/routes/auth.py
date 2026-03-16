@@ -209,7 +209,7 @@ async def callback(
         logger.error("Failed to upsert user_index for user=%s: %s", user.id, type(exc).__name__)
 
     # --- Set HttpOnly session cookies and redirect to frontend ---
-    redirect = RedirectResponse(url=f"{settings.FRONTEND_URL}/onboarding")
+    redirect = RedirectResponse(url=f"{settings.frontend_origin}/onboarding")
     _set_session_cookies(redirect, session.access_token, session.refresh_token)
     return redirect
 
