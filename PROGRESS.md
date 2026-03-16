@@ -1044,3 +1044,26 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 ### What comes next
 
 - Run a compact QA pass on Home and Meetings against the live Wave H/Wave J backend, then merge and deploy if no regressions appear
+
+---
+
+## 2026-03-16 — Frontend batch merged/deployed + partial production QA
+
+**Goal:** Confirm the Wave I / H / J frontend batch is live in production and capture the real next blocker after deploy.
+
+- Confirmed the frontend batch was merged and deployed.
+- Verified the production frontend root responds and renders the Pocket Nori shell.
+- Verified the deployed auth entrypoint redirects to the Google account chooser, so the top-level login handshake is live.
+- Verified unauthenticated production behavior surfaces a clear `Session expired. Sign in again.` state instead of a blank/crashed page.
+- Could not complete the signed-in QA pass from this environment because non-browser network tools (`curl`, Firecrawl CLI) could not resolve the production hosts, and the available browser automation could not finish Google-authenticated flows reliably enough for a trustworthy end-to-end check.
+
+### Validation
+
+- Production frontend root reached successfully
+- `/auth/login` redirected to Google account chooser successfully
+- Protected live app routes without a valid session showed the expected session-expired state
+
+### What comes next
+
+- Run a manual signed-in production QA pass across `/`, `/meetings`, `/onboarding`, `/meetings/[id]`, `/search`, `/topics`, `/today`, and `/commitments`
+- If the worker is still blocked after deploy, upgrade Upstash Redis, restart the worker, then run `POST /admin/backfill-embeddings` and verify `/search/ask`

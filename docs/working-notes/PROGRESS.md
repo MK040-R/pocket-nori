@@ -683,6 +683,29 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 
 ---
 
+## ✅ 2026-03-16 — Frontend batch merged/deployed + partial production QA
+
+### What changed
+
+- Confirmed the Wave I / H / J frontend batch was merged and deployed.
+- Verified the production frontend root responds and renders the Pocket Nori shell.
+- Verified `/auth/login` redirects into the Google account chooser flow.
+- Verified unauthenticated production behavior shows `Session expired. Sign in again.` instead of leaving the app blank or crashed.
+- Could not finish a signed-in production walkthrough from this environment because shell-based network tools could not resolve the production hosts, and browser automation could not complete Google-authenticated flows reliably enough for a trustworthy E2E pass.
+
+### Validation
+
+- Production frontend root reached successfully
+- `/auth/login` redirected to Google account chooser successfully
+- Protected live app routes without a valid session showed the expected session-expired state
+
+### Next focus
+
+- Run a manual signed-in production QA pass across Home, Meetings, onboarding, meeting detail, Search, Topics, Today, and Actions
+- If ingest is still blocked, upgrade Upstash Redis, restart the worker, run `POST /admin/backfill-embeddings`, then verify `/search/ask`
+
+---
+
 ## ✅ 2026-03-13 — Topic cluster IDs stabilized across recluster
 
 ### What changed

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work also shipped: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest multi-table vector search + conversational Q&A), and the current pilot UX cleanup through Wave J. Next: merge/deploy the latest frontend batch, upgrade Upstash Redis (free tier exhausted), merge PR #14, run backfill, then post-MVP hardening.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work is also now merged and deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest multi-table vector search + conversational Q&A), and the current pilot UX cleanup through Wave J. Partial production QA confirmed the deployed shell and auth redirect are live; next is a manual signed-in QA pass, then Upstash upgrade/backfill work and broader post-MVP hardening.
 
 ## Phases
 
@@ -194,3 +194,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `ruff check . && ruff format --check .` ✅
 - 2026-03-16 Wave I + Wave H/Wave J frontend validation (local):
   - `frontend: npm run lint && npm run build` ✅
+- 2026-03-16 partial production QA after deploy:
+  - deployed frontend root reachable ✅
+  - `/auth/login` redirects to Google account chooser ✅
+  - unauthenticated protected routes show session-expired state ✅
+  - full signed-in walkthrough blocked by environment/tooling limits ⚠️

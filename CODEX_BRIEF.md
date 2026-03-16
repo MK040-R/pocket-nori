@@ -85,7 +85,7 @@ Wave I — Codex                ✅ DONE     (Onboarding multi-step flow + Skip 
 Wave J — Claude Code + Codex  ✅ DONE     (Meetings list redesign — topic_labels on GET /conversations + richer cards)
 ```
 
-**✅ All completed UI polish through Wave J is now shipped locally. 3 items stay in the future milestone.**
+**✅ All completed UI polish through Wave J is now merged and deployed. 3 items stay in the future milestone.**
 
 **Backend fix for Wave E** (PR #23 merged): `GET /conversations/{id}` now returns `action_type` on each commitment — meeting detail Actions tab can split into Commitments vs Follow-ups.
 
