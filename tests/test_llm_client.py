@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.llm_client import AnswerResult, CitationRef, TopicResult, check_topic_merge
+from src.llm_client import AnswerResult, TopicResult, check_topic_merge
 
 
 def _mock_response(text: str) -> SimpleNamespace:
@@ -133,22 +133,16 @@ def test_generate_meeting_digest_does_not_log_content(caplog: pytest.LogCaptureF
 
 @pytest.mark.unit
 def test_answer_question_returns_answer_result() -> None:
-    fake_result = AnswerResult(
+    from types import SimpleNamespace
+
+    # Mock returns _InstructorAnswer (index-based) — server resolves to CitationRef
+    fake_instructor_answer = SimpleNamespace(
         answer="The migration is blocked on IAM [1].",
-        citations=[
-            CitationRef(
-                result_id="cluster-1",
-                result_type="topic",
-                conversation_id="conv-1",
-                conversation_title="Infra Sync",
-                meeting_date="2025-03-01",
-                snippet="IAM is blocking the migration.",
-            )
-        ],
+        cited_indices=[1],
     )
 
     mock_instructor = MagicMock()
-    mock_instructor.messages.create.return_value = fake_result
+    mock_instructor.messages.create.return_value = fake_instructor_answer
 
     with patch("src.llm_client._instructor_client", return_value=mock_instructor):
         from src.llm_client import answer_question
@@ -172,6 +166,8 @@ def test_answer_question_returns_answer_result() -> None:
     assert isinstance(result, AnswerResult)
     assert isinstance(result.answer, str)
     assert isinstance(result.citations, list)
+    assert result.citations[0].result_id == "cluster-1"
+    assert result.citations[0].snippet == "IAM is blocking the migration."
 
 
 @pytest.mark.unit
@@ -190,7 +186,7 @@ def test_answer_question_empty_context_returns_gracefully() -> None:
 @pytest.mark.unit
 def test_answer_question_does_not_log_context(caplog: pytest.LogCaptureFixture) -> None:
     """Context (meeting content) must not appear in any log record."""
-    fake_result = AnswerResult(answer="Short answer.", citations=[])
+    fake_result = SimpleNamespace(answer="Short answer.", cited_indices=[])
     mock_instructor = MagicMock()
     mock_instructor.messages.create.return_value = fake_result
 

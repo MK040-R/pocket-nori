@@ -356,7 +356,16 @@ You have been given a set of relevant excerpts retrieved from their meeting hist
 Answer concisely and directly based only on the provided excerpts.
 Do not speculate beyond what the excerpts contain.
 For each claim you make, cite the source excerpt by its index number [1], [2], etc.
-If the excerpts do not contain enough information to answer the question, say so clearly."""
+If the excerpts do not contain enough information to answer the question, say so clearly.
+Return cited_indices as a list of the [N] numbers from the context that support your answer.
+For example, if your answer draws on sources [1] and [3], return cited_indices: [1, 3]."""
+
+
+class _InstructorAnswer(BaseModel):
+    """Private intermediate model: Claude returns index numbers, server resolves to CitationRef."""
+
+    answer: str
+    cited_indices: list[int]  # 1-based indices matching [N] labels in the context block
 
 
 def answer_question(
@@ -399,7 +408,9 @@ def answer_question(
     logger.debug(
         "LLM call — answer_question model=%s context_items=%d", _Model.DIGEST, len(context_results)
     )
-    result: AnswerResult = _instructor_client().messages.create(
+    # Claude returns only index numbers — server resolves them to CitationRef objects.
+    # This avoids asking Claude to populate database UUIDs it cannot know.
+    instructor_result: _InstructorAnswer = _instructor_client().messages.create(
         model=str(_Model.DIGEST),
         max_tokens=1024,
         system=_ANSWER_SYSTEM_PROMPT,
@@ -409,18 +420,26 @@ def answer_question(
                 "content": f"Question: {question}\n\nContext:\n{context_block}",
             }
         ],
-        response_model=AnswerResult,
+        response_model=_InstructorAnswer,
     )
 
-    # Backfill citation snippets from context_results
-    id_to_result = {str(r.get("result_id", "")): r for r in context_results}
-    for citation in result.citations:
-        if not citation.snippet:
-            source = id_to_result.get(citation.result_id)
-            if source:
-                citation.snippet = str(source.get("text", ""))[:200]
+    # Map cited indices → CitationRef using the actual context_results metadata
+    citations: list[CitationRef] = []
+    for idx in instructor_result.cited_indices:
+        if 1 <= idx <= len(context_results):
+            src = context_results[idx - 1]
+            citations.append(
+                CitationRef(
+                    result_id=str(src.get("result_id", "")),
+                    result_type=str(src.get("result_type", "")),
+                    conversation_id=str(src.get("conversation_id", "")),
+                    conversation_title=str(src.get("conversation_title", "")),
+                    meeting_date=str(src.get("meeting_date", "")),
+                    snippet=str(src.get("text", ""))[:200],
+                )
+            )
 
-    return result
+    return AnswerResult(answer=instructor_result.answer, citations=citations)
 
 
 def generate_brief(context: str) -> str:

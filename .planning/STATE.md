@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** MVP stabilization, with live topic-cluster verification completed and entity normalization queued for deploy/QA
+**Current focus:** Intelligent search shipped (embed-at-ingest, multi-table vector search, conversational Q&A). Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-13 — verified the durable topic-cluster rollout live (false merges materially reduced after recluster) and implemented conservative entity normalization for `/entities` and dashboard counts locally. Next step is deploy the entity batch and QA `/entities` against production data.
+Last activity: 2026-03-15 — shipped intelligent search (migration 009, digest generation, multi-table vector search, /search/ask Q&A, /admin/backfill-embeddings). PR #14 open. Two post-deploy bugs fixed (citation UUID resolution, unused type: ignore). Upstash free tier limit hit — worker crashes until plan upgraded.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -71,13 +71,20 @@ Recent decisions affecting current work:
 - [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
 - [Product]: `/entities` and dashboard `entity_count` now share a conservative normalization layer for safe brand aliases (`N8`/`N8N`, `company`/`product` variants) and unambiguous short-form person names.
 - [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
+- [Search]: Search is now fully intelligent — LLM understands each meeting once at ingest (digest + topic/entity embeddings stored), search queries pre-stored vectors at ~$0.00001/query with zero LLM tokens.
+- [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
+- [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
+- [Ops]: Upstash free tier (500k req/month) is exhausted; worker requires Pay As You Go upgrade to resume ingest pipeline.
 
 ### Pending Todos
 
-- Deploy migration `007_topic_clusters.sql` and the stored-cluster API/worker changes
-- Run a compact production QA pass on Search, Topics, Dashboard, Commitments, and meeting detail against stored clusters after the latest entity batch deploys
-- Deploy and verify conservative entity normalization for `/entities` and dashboard stats
-- Decide whether historical pre-fix topic URLs need a redirect/alias layer beyond the new future-stable cluster IDs
+- **URGENT**: Upgrade Upstash Redis to Pay As You Go — free tier limit exhausted, worker cannot start
+- Restart Farz worker on Render after Upstash upgrade
+- Merge PR #14 (`feat/durable-topic-clusters`) → Render auto-deploys
+- Run `POST /admin/backfill-embeddings` once after deploy to process all existing meetings
+- Verify `/search/ask` returns cited answers and grouped search results include topic/meeting/entity types
+- Run compact production QA on Search, Topics, Dashboard, Commitments against stored clusters
+- Decide whether historical pre-fix topic URLs need redirect aliases
 - Resume post-MVP hardening roadmap after MVP topic quality is acceptable
 
 ### Blockers/Concerns
@@ -87,6 +94,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: Conservative entity normalization implemented locally after live QA confirmed stored topic clusters fixed the main false-merge issue; next step is deploy the entity batch and verify `/entities` plus dashboard counts on production.
+Last session: 2026-03-15
+Stopped at: Intelligent search shipped and on PR #14. Two post-deploy bugs fixed in CI. Upstash Redis free tier hit — upgrade required before worker can restart and ingest pipeline resumes.
 Resume file: None
