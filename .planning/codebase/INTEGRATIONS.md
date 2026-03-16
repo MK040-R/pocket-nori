@@ -135,13 +135,13 @@
 **Hosting:**
 
 - Render.com (4 services in `render.yaml`)
-  1. `farz-api` (web, starter plan, ~$7/mo)
-  2. `farz-worker` (combined Celery worker, starter plan, ~$7/mo)
+  1. `pocket-nori-api` (web, starter plan, ~$7/mo)
+  2. `pocket-nori-worker` (combined Celery worker, starter plan, ~$7/mo)
   3. Estimated total: ~$28/mo for 4 services (API + worker was combined in latest config)
   4. Region: Oregon
   5. Auto-deploy: Connected to `main` branch
 
-- Frontend (Next.js 15): Auto-deployed to Vercel (separate from backend, URL: `https://farz-personal-intelligence.vercel.app`)
+- Frontend (Next.js 15): Auto-deployed to Vercel (separate from backend, URL: `https://pocket-nori-personal-intelligence.vercel.app`)
 
 **CI Pipeline:**
 
@@ -154,7 +154,7 @@
 
 **Deployment URL:**
 
-- Backend health check: https://farz-personal-intelligence.onrender.com/health
+- Backend health check: https://pocket-nori-personal-intelligence.onrender.com/health
 - Auto-restart on push to main via Render GitHub integration
 
 ## Environment Configuration

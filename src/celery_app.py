@@ -10,5 +10,5 @@ from celery import Celery
 
 from src import celeryconfig
 
-celery_app = Celery("farz")
+celery_app = Celery("pocket-nori")
 celery_app.config_from_object(celeryconfig)

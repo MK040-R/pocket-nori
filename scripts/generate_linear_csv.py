@@ -1,7 +1,7 @@
 """
 generate_linear_csv.py
 
-Generates farz-linear-import.csv for import into Linear.
+Generates pocket-nori-linear-import.csv for import into Linear.
 Import via: Linear → Settings → Import → CSV
 
 CSV columns: Title, Description, Status, Priority, Labels, Project, Parent
@@ -12,7 +12,7 @@ CSV columns: Title, Description, Status, Priority, Labels, Project, Parent
 import csv
 import os
 
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "farz-linear-import.csv")
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "pocket-nori-linear-import.csv")
 
 FIELDNAMES = ["Title", "Description", "Status", "Priority", "Labels", "Project", "Parent"]
 

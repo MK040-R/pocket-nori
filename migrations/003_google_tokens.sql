@@ -1,5 +1,5 @@
 -- ============================================================
--- Farz — Migration 003: Google OAuth token storage + Drive dedup
+-- Pocket Nori — Migration 003: Google OAuth token storage + Drive dedup
 --
 -- Adds two columns to user_index so the ingest pipeline can
 -- call Google APIs on behalf of the user without redirecting

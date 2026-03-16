@@ -2,7 +2,7 @@
 
 **Status:** Pending human-provided recordings — automated code scaffolding complete.
 
-**Spike goal:** Determine whether Deepgram Nova-3 meets Farz's accuracy and diarization requirements for real meeting audio, and produce a go/no-go recommendation.
+**Spike goal:** Determine whether Deepgram Nova-3 meets Pocket Nori's accuracy and diarization requirements for real meeting audio, and produce a go/no-go recommendation.
 
 ---
 
@@ -59,7 +59,7 @@
 | 10–20% | Marginal | Conditional — investigate audio quality |
 | > 20% | Failing | No-Go |
 
-**Farz target:** WER < 10% on typical meeting audio.
+**Pocket Nori target:** WER < 10% on typical meeting audio.
 
 ### 4.2 Speaker Diarization
 
@@ -69,7 +69,7 @@
 | Consistency score | > 0.90 | 0.75–0.90 | < 0.75 |
 | Avg words per turn | > 20 | 10–20 | < 10 (over-segmented) |
 
-**Farz target:** Speaker count exact or off by 1; consistency ≥ 0.80.
+**Pocket Nori target:** Speaker count exact or off by 1; consistency ≥ 0.80.
 
 ### 4.3 Latency
 
@@ -135,5 +135,5 @@ human-provided audio files and a live Deepgram API key.
 ## 7. Open Questions
 
 - Does Deepgram Nova-3 handle meeting-specific jargon (product names, technical terms) better with a custom vocabulary/hints? If WER is marginal, test with `keywords` parameter.
-- How does performance degrade for non-native English speakers? Farz users may include global teams.
+- How does performance degrade for non-native English speakers? Pocket Nori users may include global teams.
 - What is the fallback if Deepgram has an outage? Evaluate AssemblyAI or Whisper as alternatives.

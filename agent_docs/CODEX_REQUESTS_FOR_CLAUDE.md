@@ -11,8 +11,8 @@ Why:
 - Any authenticated user who learns another job ID can potentially read status/result metadata.
 
 Evidence:
-- [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/onboarding.py:280)
-- [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/onboarding.py:350)
+- [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/onboarding.py:280)
+- [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/onboarding.py:350)
 
 Request:
 1. Persist ownership at enqueue time (`job_id -> user_id`, and optionally `file_id`) in Redis/DB.
@@ -32,9 +32,9 @@ Why:
 - Current backend returns per-conversation rows for `/topics` and a single-row detail for `/topics/{id}`.
 
 Evidence:
-- Contract in [CODEX_BRIEF.md](/Users/Murali/Desktop/Work/claude-code-1/Farz/agent_docs/CODEX_BRIEF.md:275)
-- Current response model in [src/api/routes/topics.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/topics.py:50)
-- Current detail shape in [src/api/routes/topics.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/topics.py:113)
+- Contract in [CODEX_BRIEF.md](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/agent_docs/CODEX_BRIEF.md:275)
+- Current response model in [src/api/routes/topics.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/topics.py:50)
+- Current detail shape in [src/api/routes/topics.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/topics.py:113)
 
 Request:
 1. Make `/topics` return summary rows (`conversation_count`, `latest_date`) grouped at topic level.
@@ -49,7 +49,7 @@ Why:
 - Current backend only accepts `filter_status`; this creates avoidable client coupling.
 
 Evidence:
-- Current parameter in [src/api/routes/commitments.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/commitments.py:52)
+- Current parameter in [src/api/routes/commitments.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/commitments.py:52)
 
 Request:
 1. Support `status` as canonical query param (`open|resolved`).
@@ -63,8 +63,8 @@ Why:
 - Current backend returns `job_id/status/detail/result` with no `file_id`.
 
 Evidence:
-- Brief example in [CODEX_BRIEF.md](/Users/Murali/Desktop/Work/claude-code-1/Farz/agent_docs/CODEX_BRIEF.md:144)
-- Current model in [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Farz/src/api/routes/onboarding.py:55)
+- Brief example in [CODEX_BRIEF.md](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/agent_docs/CODEX_BRIEF.md:144)
+- Current model in [src/api/routes/onboarding.py](/Users/Murali/Desktop/Work/claude-code-1/Pocket Nori/src/api/routes/onboarding.py:55)
 
 Request:
 1. Either add `file_id` into aggregate `jobs[]` output,

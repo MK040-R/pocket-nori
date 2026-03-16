@@ -1,5 +1,5 @@
 -- ============================================================
--- Farz — Core Schema Migration 001
+-- Pocket Nori — Core Schema Migration 001
 -- Hard-delete only: no deleted_at columns anywhere.
 -- Per-user isolation enforced via FORCE ROW LEVEL SECURITY.
 -- ============================================================

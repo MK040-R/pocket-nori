@@ -1,4 +1,4 @@
-# Requirements: Farz
+# Requirements: Pocket Nori
 
 **Defined:** 2026-03-11
 **Last aligned with source docs:** 2026-03-11
@@ -8,8 +8,8 @@
 
 This file follows the documented hierarchy in `DOCS.md`:
 
-1. `farz-tech-requirements-mvp.md` (implementation decisions)
-2. `farz-prd.md` (product intent and UX principles)
+1. `pocket-nori-tech-requirements-mvp.md` (implementation decisions)
+2. `pocket-nori-prd.md` (product intent and UX principles)
 
 Execution phases in `.planning/ROADMAP.md` intentionally split PRD/MVP Phase 2 into smaller delivery phases (2, 3, and 4). That decomposition is sequencing, not a scope change.
 

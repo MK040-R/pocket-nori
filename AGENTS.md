@@ -4,7 +4,7 @@ This file provides guidance to Codex when working with code in this repository.
 
 ## Project
 
-**Farz** — a personal intelligence layer for working professionals. Captures and synthesizes context from meetings (starting with Google Meet/Calendar), surfacing topical search, cross-meeting connections, pre-meeting briefings, and a personal context dashboard.
+**Pocket Nori** — a personal intelligence layer for working professionals. Captures and synthesizes context from meetings (starting with Google Meet/Calendar), surfacing topical search, cross-meeting connections, pre-meeting briefings, and a personal context dashboard.
 
 **Current stage:** Phases 1–5 are complete (frontend web app, topic arcs/commitment tracker, connection graph, calendar sync + recurring briefs, personal context dashboard). `Insightful Dashboard` visual refresh and read-path performance improvements are deployed. The durable topic-cluster batch is now implemented locally (stored `topic_clusters`, write-time merge, `POST /topics/recluster`) and the current execution target is deploy + per-user recluster + production QA before broader rollout.
 
@@ -17,16 +17,16 @@ Read these before writing any code — they are the source of truth for all deci
 | File | Purpose | When to read |
 |---|---|---|
 | `DOCS.md` | Documentation index — what each file is, conflict resolution hierarchy, change protocol | Read first |
-| `farz-prd.md` | Product requirements — Sections 3 and 5 are mandatory before any code | Always |
-| `farz-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
-| `farz-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
+| `pocket-nori-prd.md` | Product requirements — Sections 3 and 5 are mandatory before any code | Always |
+| `pocket-nori-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
+| `pocket-nori-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
 | `.interface-design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
 | `PROGRESS.md` | Append-only milestone log | Before/after every milestone |
 | `POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
 | `spikes/PHASE_0A_SUMMARY.md` | QA summary of all 5 spikes — go/no-go decisions, bugs found and fixed | Before Phase 0 build |
 | `agent_docs/CODEX_BRIEF.md` | Live Codex/Claude contract for frontend-backend integration | Before frontend/API contract work |
 | `docs/working-notes/PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
-| `docs/later-stages/farz-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
+| `docs/later-stages/pocket-nori-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
 | `competitive-analysis.md` | Competitor profiles (Granola, Otter, Fireflies, Notion, Mem0) | Background reading |
 
 ---

@@ -50,7 +50,7 @@ For distribution, `com.apple.security.device.audio-input` and
 audio track is typically silent because Chromium's tab audio routes through
 the renderer process, not a capturable audio device.
 
-The recommended capture strategy for Farz Phase 1:
+The recommended capture strategy for Pocket Nori Phase 1:
 - Capture "Entire Screen" audio (catches Meet + any other app audio).
 - Apply speaker diarisation / VAD post-capture to isolate speech.
 
@@ -139,7 +139,7 @@ This is the optimal format for Deepgram Nova-2 (no server-side resampling needed
 1. `cd spikes/spike1_electron_audio && npm install && npm start`
 2. Grant Screen Recording permission if prompted (then relaunch with `npm start`).
 3. Open Google Meet in Chrome and join/start a meeting.
-4. In the Farz app, click Refresh Sources, then select "Entire Screen" (or the Chrome window).
+4. In the Pocket Nori app, click Refresh Sources, then select "Entire Screen" (or the Chrome window).
 5. Click **Start Capture**.
 6. Speak for 10–30 seconds; have another participant speak if possible.
 7. Click **Stop & Save**.
@@ -184,7 +184,7 @@ it via `child_process`. More complex but removes Chromium limitations.
 
 **Option C — Browser extension approach:** Capture tab audio from within the
 browser using a Chrome extension with `chrome.tabCapture` API, then POST PCM
-chunks to the local Farz backend over localhost. No Electron needed.
+chunks to the local Pocket Nori backend over localhost. No Electron needed.
 
 ### Recommendation
 

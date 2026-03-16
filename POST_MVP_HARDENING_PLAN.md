@@ -1,4 +1,4 @@
-# Farz Post-MVP Hardening Plan (10-User Pilot)
+# Pocket Nori Post-MVP Hardening Plan (10-User Pilot)
 
 **Status:** Deferred until MVP topic-intelligence cleanup is complete
 **Date:** 2026-03-11
@@ -12,7 +12,7 @@ MVP execution phases are complete (Phases 1-5). This document is the single hand
 
 Use this file as the first reference in any new Codex session for post-MVP work.
 
-**Current note (2026-03-12):** Do not treat this as the active execution plan yet. Farz is still in MVP cleanup mode for topic quality, topic merging, and pilot-critical UX/data quality. Resume this hardening plan only after the topic-intelligence workstream is accepted.
+**Current note (2026-03-12):** Do not treat this as the active execution plan yet. Pocket Nori is still in MVP cleanup mode for topic quality, topic merging, and pilot-critical UX/data quality. Resume this hardening plan only after the topic-intelligence workstream is accepted.
 
 ---
 
@@ -181,7 +181,7 @@ Do not close a milestone without both validation evidence and doc sync.
 ## New Chat Kickoff Prompt (Copy/Paste)
 
 ```text
-Continue Farz in /Users/Murali/Desktop/Work/claude-code-1/Farz.
+Continue Pocket Nori in /Users/Murali/Desktop/Work/claude-code-1/Pocket Nori.
 
 Before coding, read in this order:
 1) DOCS.md
@@ -190,9 +190,9 @@ Before coding, read in this order:
 4) .planning/ROADMAP.md
 5) .planning/STATE.md
 6) .planning/PROJECT.md
-7) farz-tech-requirements-mvp.md
+7) pocket-nori-tech-requirements-mvp.md
 8) POST_MVP_HARDENING_PLAN.md
-9) Later stages/farz-tech-requirements-full.md
+9) Later stages/pocket-nori-tech-requirements-full.md
 
 Then execute hardening milestone H-01 from POST_MVP_HARDENING_PLAN.md.
 After the milestone:
@@ -205,7 +205,7 @@ After the milestone:
 
 ## Definition of Done (Post-MVP Pilot Ready)
 
-Farz is pilot-ready when:
+Pocket Nori is pilot-ready when:
 - H-01 to H-06 are complete
 - quality gate remains green
 - legal/privacy and operational controls are documented and tested

@@ -1,7 +1,7 @@
-# Farz Technical Requirements Review
+# Pocket Nori Technical Requirements Review
 
 **Date:** 2026-03-09  
-**Scope:** Review of `farz-tech-requirements.md` against `farz-prd.md`  
+**Scope:** Review of `pocket-nori-tech-requirements.md` against `pocket-nori-prd.md`  
 **Baseline:** Lean internal MVP with early guardrails to avoid privacy/compliance rework
 
 ## Executive Summary
@@ -16,12 +16,12 @@ Critical issues to fix before implementation:
 
 ### P0-1: ZDR enforcement is under-specified and internally inconsistent
 **Evidence**
-- `farz-tech-requirements.md:36` requires signed ZDR agreements.
-- `farz-tech-requirements.md:215` treats default provider policy as sufficient for Phase 1.
-- `farz-tech-requirements.md:225` startup enforcement checks only for API key presence.
-- `farz-tech-requirements.md:331` allows embedding providers not clearly covered by signed ZDR controls.
-- `farz-tech-requirements.md:414` defers formal ZDR agreement to later phase.
-- `farz-prd.md:67` requires no model training and vendor-level zero-data-retention agreements.
+- `pocket-nori-tech-requirements.md:36` requires signed ZDR agreements.
+- `pocket-nori-tech-requirements.md:215` treats default provider policy as sufficient for Phase 1.
+- `pocket-nori-tech-requirements.md:225` startup enforcement checks only for API key presence.
+- `pocket-nori-tech-requirements.md:331` allows embedding providers not clearly covered by signed ZDR controls.
+- `pocket-nori-tech-requirements.md:414` defers formal ZDR agreement to later phase.
+- `pocket-nori-prd.md:67` requires no model training and vendor-level zero-data-retention agreements.
 
 **Why this is a blocker**
 The architecture currently describes ZDR as both non-negotiable and phase-dependent. This creates compliance ambiguity and opens a path to non-compliant provider use at runtime.
@@ -42,10 +42,10 @@ The architecture currently describes ZDR as both non-negotiable and phase-depend
 
 ### P0-2: PRD privacy principles are incompletely translated into technical requirements
 **Evidence**
-- `farz-tech-requirements.md:30` defines only two non-negotiables.
-- `farz-prd.md:70` requires immediate irreversible delete/export.
-- `farz-prd.md:73` prohibits admin visibility into personal intelligence.
-- `farz-prd.md:76` defines encryption and least-privilege with audit logging.
+- `pocket-nori-tech-requirements.md:30` defines only two non-negotiables.
+- `pocket-nori-prd.md:70` requires immediate irreversible delete/export.
+- `pocket-nori-prd.md:73` prohibits admin visibility into personal intelligence.
+- `pocket-nori-prd.md:76` defines encryption and least-privilege with audit logging.
 
 **Why this is a blocker**
 The technical doc omits explicit implementation contracts for deletion, admin visibility, and audit/compliance controls. Missing these now increases re-architecture risk once real users are onboarded.
@@ -64,8 +64,8 @@ The technical doc omits explicit implementation contracts for deletion, admin vi
 
 ### P0-3: Per-user isolation depends on RLS, but role/bypass model is missing
 **Evidence**
-- `farz-tech-requirements.md:104` defines RLS predicate.
-- `farz-tech-requirements.md:281` claims DB-level enforcement.
+- `pocket-nori-tech-requirements.md:104` defines RLS predicate.
+- `pocket-nori-tech-requirements.md:281` claims DB-level enforcement.
 
 **Why this is a blocker**
 RLS alone is insufficient without role boundaries because privileged/service roles can bypass policies. Background workers and internal tooling can accidentally become cross-user read paths.
@@ -85,10 +85,10 @@ RLS alone is insufficient without role boundaries because privileged/service rol
 
 ### P1-4: PRD and tech roadmap mismatch on capture approach and phase timing
 **Evidence**
-- `farz-prd.md:417` states Phase 1 leverages Google Meet native transcription.
-- `farz-tech-requirements.md:168` states Phase 1 uses Deepgram via manual upload.
-- `farz-tech-requirements.md:385` puts productized Electron capture in Phase 3.
-- `farz-tech-requirements.md:444` requires Electron spike validation in first two weeks.
+- `pocket-nori-prd.md:417` states Phase 1 leverages Google Meet native transcription.
+- `pocket-nori-tech-requirements.md:168` states Phase 1 uses Deepgram via manual upload.
+- `pocket-nori-tech-requirements.md:385` puts productized Electron capture in Phase 3.
+- `pocket-nori-tech-requirements.md:444` requires Electron spike validation in first two weeks.
 
 **Why this matters**
 The current documents mix product milestones with technical risk spikes, causing confusion on what is required for MVP delivery versus what is only feasibility validation.
@@ -106,10 +106,10 @@ The current documents mix product milestones with technical risk spikes, causing
 
 ### P1-5: Brief timing mismatch and audio-retention lifecycle ambiguity
 **Evidence**
-- `farz-prd.md:106` specifies pre-meeting brief delivery approximately 10-15 minutes before meeting.
-- `farz-tech-requirements.md:26` and `farz-tech-requirements.md:380` specify 5 minutes.
-- `farz-tech-requirements.md:126` says no audio storage.
-- `farz-tech-requirements.md:366` allows audio file upload in Phase 1.
+- `pocket-nori-prd.md:106` specifies pre-meeting brief delivery approximately 10-15 minutes before meeting.
+- `pocket-nori-tech-requirements.md:26` and `pocket-nori-tech-requirements.md:380` specify 5 minutes.
+- `pocket-nori-tech-requirements.md:126` says no audio storage.
+- `pocket-nori-tech-requirements.md:366` allows audio file upload in Phase 1.
 
 **Why this matters**
 Timing inconsistency affects product behavior, user expectation, and scheduling logic. Audio ingestion without a strict retention lifecycle creates privacy ambiguity against stated principles.
@@ -128,8 +128,8 @@ Timing inconsistency affects product behavior, user expectation, and scheduling 
 
 ### P2-6: Feasibility gaps to validate without blocking MVP
 **Evidence**
-- `farz-tech-requirements.md:177` selects Celery + Redis.
-- `farz-tech-requirements.md:332` claims vector + BM25 hybrid ranking.
+- `pocket-nori-tech-requirements.md:177` selects Celery + Redis.
+- `pocket-nori-tech-requirements.md:332` claims vector + BM25 hybrid ranking.
 
 **Why this matters**
 These are execution risks, not architectural blockers. Clarifying them now avoids implementation churn.
@@ -194,13 +194,13 @@ These are execution risks, not architectural blockers. Clarifying them now avoid
 ## Cross-Doc Consistency Matrix (P0/P1)
 | Finding | PRD reference | Tech reference | Status |
 |---|---|---|---|
-| P0-1 ZDR consistency | `farz-prd.md:67` | `farz-tech-requirements.md:215`, `:225`, `:331`, `:414` | Fails now |
-| P0-2 Privacy completeness | `farz-prd.md:70`, `:73`, `:76` | `farz-tech-requirements.md:30` | Fails now |
-| P0-3 Isolation enforceability | `farz-prd.md:65`, `:177` | `farz-tech-requirements.md:104`, `:281` | Partial |
-| P1-4 Phase alignment | `farz-prd.md:417` | `farz-tech-requirements.md:168`, `:385`, `:444` | Fails now |
-| P1-5 Brief timing + retention | `farz-prd.md:106` | `farz-tech-requirements.md:26`, `:126`, `:366`, `:380` | Fails now |
+| P0-1 ZDR consistency | `pocket-nori-prd.md:67` | `pocket-nori-tech-requirements.md:215`, `:225`, `:331`, `:414` | Fails now |
+| P0-2 Privacy completeness | `pocket-nori-prd.md:70`, `:73`, `:76` | `pocket-nori-tech-requirements.md:30` | Fails now |
+| P0-3 Isolation enforceability | `pocket-nori-prd.md:65`, `:177` | `pocket-nori-tech-requirements.md:104`, `:281` | Partial |
+| P1-4 Phase alignment | `pocket-nori-prd.md:417` | `pocket-nori-tech-requirements.md:168`, `:385`, `:444` | Fails now |
+| P1-5 Brief timing + retention | `pocket-nori-prd.md:106` | `pocket-nori-tech-requirements.md:26`, `:126`, `:366`, `:380` | Fails now |
 
-## Implementation-Ready Edits For `farz-tech-requirements.md`
+## Implementation-Ready Edits For `pocket-nori-tech-requirements.md`
 1. Update Section `Non-Negotiable Constraints` to include all PRD Section 3 principles as enforceable technical requirements.
 2. Add new sections: `LLM Provider Policy`, `Isolation Contract`, `Data Lifecycle Contract`.
 3. Update `LLM Integration` and `Search & Indexing` sections to remove provider ambiguity and enforce ZDR on embeddings.
@@ -215,6 +215,6 @@ These are execution risks, not architectural blockers. Clarifying them now avoid
 4. Engineer handoff check (risk + exact change): satisfied in this review document.
 
 ## Assumptions Used In This Review
-- Output target is `farz-tech-review.md` in repository root.
+- Output target is `pocket-nori-tech-review.md` in repository root.
 - Review style is severity-first, actionable, and implementation-oriented.
 - Product baseline remains lean internal MVP, without relaxing privacy or isolation constraints.

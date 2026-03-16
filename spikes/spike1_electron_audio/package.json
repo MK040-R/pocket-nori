@@ -1,7 +1,7 @@
 {
-  "name": "farz-spike1-electron-audio",
+  "name": "pocket-nori-spike1-electron-audio",
   "version": "0.1.0",
-  "description": "Spike 1: Electron audio capture for Farz — captures system/tab audio to .wav",
+  "description": "Spike 1: Electron audio capture for Pocket Nori — captures system/tab audio to .wav",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",

@@ -3,7 +3,7 @@
 ## Directory Layout
 
 ```
-Farz/
+Pocket Nori/
 ├── src/                          # Application source (Python)
 │   ├── main.py                   # FastAPI app factory + lifespan
 │   ├── config.py                 # Pydantic-settings (env var validation at startup)
@@ -84,9 +84,9 @@ Farz/
 ├── pyproject.toml                # Ruff + mypy config
 ├── CLAUDE.md                     # Claude Code project instructions
 ├── DOCS.md                       # Documentation index + hierarchy
-├── farz-prd.md                   # Product requirements document
-├── farz-tech-requirements-mvp.md # Technical decisions (source of truth)
-└── farz-ui-spec.md               # UI object model + screen specs
+├── pocket-nori-prd.md                   # Product requirements document
+├── pocket-nori-tech-requirements-mvp.md # Technical decisions (source of truth)
+└── pocket-nori-ui-spec.md               # UI object model + screen specs
 ```
 
 ## Key Locations

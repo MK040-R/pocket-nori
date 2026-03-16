@@ -1,5 +1,5 @@
 """
-Farz QA Check — runs all checks against the built foundation and generates qa_report.html.
+Pocket Nori QA Check — runs all checks against the built foundation and generates qa_report.html.
 
 Run from the project root:
     source .venv/bin/activate
@@ -356,7 +356,7 @@ html = f"""<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farz QA Report</title>
+  <title>Pocket Nori QA Report</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -386,7 +386,7 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-  <h1>Farz — QA Report</h1>
+  <h1>Pocket Nori — QA Report</h1>
   <div class="meta">Generated {datetime.now().strftime("%d %B %Y at %H:%M")}</div>
 
   <div class="summary">
@@ -448,7 +448,7 @@ html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Farz QA Report</title>
+  <title>Pocket Nori QA Report</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -479,7 +479,7 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-  <h1>Farz — QA Report</h1>
+  <h1>Pocket Nori — QA Report</h1>
   <div class="meta">Phase 0 Foundation · {datetime.now().strftime("%-d %B %Y, %H:%M")}</div>
 
   <div class="summary">

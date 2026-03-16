@@ -1,5 +1,5 @@
 """
-tests/conftest.py — Shared pytest fixtures for the Farz production test suite.
+tests/conftest.py — Shared pytest fixtures for the Pocket Nori production test suite.
 
 Merges fixtures from:
   - spikes/spike4_supabase_rls  (Supabase / RLS fixtures)

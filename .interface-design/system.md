@@ -1,4 +1,4 @@
-# Farz — Interface Design System
+# Pocket Nori — Interface Design System
 
 ## Direction: "Insightful Dashboard"
 
@@ -8,7 +8,7 @@
 
 ## Product Context
 
-**Who is this human:** Working professionals (PMs, team leads, founders, cross-functional operators) context-switching between meetings. They open Farz to recall decisions, prepare for the next meeting, track commitments. Smart, busy, information-dense. They don't need handholding.
+**Who is this human:** Working professionals (PMs, team leads, founders, cross-functional operators) context-switching between meetings. They open Pocket Nori to recall decisions, prepare for the next meeting, track commitments. Smart, busy, information-dense. They don't need handholding.
 
 **What they must do:** Recall ("what did we decide about X?"), prepare ("what do I need to know before my 2pm?"), track ("what have I committed to?"), discover ("what threads did I miss?").
 
@@ -101,7 +101,7 @@ Friendly and consistent. Larger radii on primary cards to echo the reference das
 
 ## Signature Element — The Arc Thread
 
-The **Topic Arc** is Farz's core concept: a topic's journey across meetings over time. A thin `--accent` line threads through meeting nodes in chronological order. Makes the product's intelligence visible.
+The **Topic Arc** is Pocket Nori's core concept: a topic's journey across meetings over time. A thin `--accent` line threads through meeting nodes in chronological order. Makes the product's intelligence visible.
 
 - Thread weight: 1.5px
 - Color: `--accent` at 60% opacity between nodes, 100% at active node

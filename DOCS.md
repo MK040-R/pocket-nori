@@ -1,28 +1,28 @@
 # DOCS.md — Documentation Index
 
-This file is the entry point for understanding the Farz documentation suite. Read this first before reading any other document. It tells you what each file is, when to read it, and what to do when documents conflict.
+This file is the entry point for understanding the Pocket Nori documentation suite. Read this first before reading any other document. It tells you what each file is, when to read it, and what to do when documents conflict.
 
 ---
 
 ## Document Registry
 
-### `farz-prd.md` — Product Requirements Document
+### `pocket-nori-prd.md` — Product Requirements Document
 **Audience:** Everyone (product, engineering, design)
-**Purpose:** Defines what Farz does and why. Covers user experience, intelligence capabilities, privacy principles, the conceptual data model, and the phased roadmap.
+**Purpose:** Defines what Pocket Nori does and why. Covers user experience, intelligence capabilities, privacy principles, the conceptual data model, and the phased roadmap.
 **When to read:** Before writing any code. Sections 3 (Privacy Principles) and 5 (Conceptual Data Model) are mandatory prerequisites.
 **Does NOT cover:** How to build it, which libraries to use, infrastructure choices. For those, see the tech requirements.
 
 ---
 
-### `farz-tech-requirements-mvp.md` — Technical Requirements (MVP)
+### `pocket-nori-tech-requirements-mvp.md` — Technical Requirements (MVP)
 **Audience:** Engineers building Phases 0a through 2
 **Purpose:** Records every major engineering decision with its rationale. Stack choices, database strategy, authentication, ingestion pipeline, async job design, infrastructure, per-user isolation enforcement. Explicitly overrides the PRD on implementation choices where the two conflict.
 **When to read:** Before any architecture or infrastructure work. The definitive source for "why did we choose X?"
-**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `docs/later-stages/farz-tech-requirements-full.md`.
+**Does NOT cover:** Phase 3+ (Electron, AWS, compliance). For those, see `docs/later-stages/pocket-nori-tech-requirements-full.md`.
 
 ---
 
-### `farz-ui-spec.md` — UI Specification
+### `pocket-nori-ui-spec.md` — UI Specification
 **Audience:** Frontend engineers, backend engineers (for the API surface section)
 **Purpose:** Screen-by-screen specification of every view, component, and state. Defines the API contract (endpoints, payloads, phase labels). Defines Day 1 / Day N user journeys and empty states.
 **When to read:** Before any frontend work. Backend engineers should read Section 9 (API Surface) before building any endpoint.
@@ -45,7 +45,7 @@ This file is the entry point for understanding the Farz documentation suite. Rea
 
 ---
 
-### `docs/later-stages/farz-tech-requirements-full.md` — Full Architecture (Phase 3+)
+### `docs/later-stages/pocket-nori-tech-requirements-full.md` — Full Architecture (Phase 3+)
 **Audience:** Engineers planning Phase 3 and beyond
 **Purpose:** Covers the full architectural vision: AWS ECS/RDS migration, Electron desktop app, formal compliance (SOC 2, GDPR, ADGM), enterprise multi-tenancy.
 **When to read:** Phase 3+ planning only. Do not apply Phase 3+ decisions to MVP work.
@@ -105,9 +105,9 @@ When two documents say different things about the same topic, this hierarchy det
 
 | Priority | Document | Scope |
 |---|---|---|
-| 1 | `farz-tech-requirements-mvp.md` | Implementation decisions — explicitly overrides PRD on technical choices |
-| 2 | `farz-prd.md` | Product intent and user experience |
-| 3 | `farz-ui-spec.md` | Screen behavior and API contract |
+| 1 | `pocket-nori-tech-requirements-mvp.md` | Implementation decisions — explicitly overrides PRD on technical choices |
+| 2 | `pocket-nori-prd.md` | Product intent and user experience |
+| 3 | `pocket-nori-ui-spec.md` | Screen behavior and API contract |
 | 4 | `.interface-design/system.md` | Visual tokens and styling |
 
 **Example:** If the PRD and tech requirements disagree on the Phase 1 ingestion method, the tech requirements wins. If the UI spec and design system disagree on a color value, the design system wins.
@@ -140,11 +140,11 @@ When a decision changes, all affected documents must be updated in the same sess
 ## Document Relationship Diagram
 
 ```
-farz-prd.md                     ← product intent, user experience, privacy principles
+pocket-nori-prd.md                     ← product intent, user experience, privacy principles
     ↓ overridden on impl. by
-farz-tech-requirements-mvp.md   ← engineering decisions, stack, infra, pipeline
+pocket-nori-tech-requirements-mvp.md   ← engineering decisions, stack, infra, pipeline
     ↓ detailed for UI/API by
-farz-ui-spec.md                 ← screens, components, API surface, phase tags
+pocket-nori-ui-spec.md                 ← screens, components, API surface, phase tags
     ↓ styled using
 .interface-design/system.md     ← tokens, typography, color
 

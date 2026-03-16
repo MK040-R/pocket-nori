@@ -1,9 +1,9 @@
-# Farz UI Specification
+# Pocket Nori UI Specification
 ## Product Intelligence Layer — Frontend & Backend Reference
 
 > **Status:** Approved for implementation
 > **Audience:** Frontend engineers, backend engineers, product
-> **Dependency:** Read `farz-prd.md` (Section 3, 5, 6) before this document
+> **Dependency:** Read `pocket-nori-prd.md` (Section 3, 5, 6) before this document
 
 ---
 
@@ -171,7 +171,7 @@ Understanding these phases is critical for both frontend (progressive states) an
 
 **Problem:** A new user has no indexed meetings. Arcs don't exist. Briefs can't generate. Connections can't detect. An empty Dashboard drives churn.
 
-**Solution: Retroactive import.** On first login, Farz detects past Google Meet recordings and offers to import them. One click gives the user weeks of meeting history immediately.
+**Solution: Retroactive import.** On first login, Pocket Nori detects past Google Meet recordings and offers to import them. One click gives the user weeks of meeting history immediately.
 
 **Backend must:**
 - On auth completion, enumerate available past Google Meet recordings (configurable lookback window, default 60 days)
@@ -215,7 +215,7 @@ After 5–10 meetings indexed across multiple sessions:
 - Connections are frequent and contextually meaningful
 - Briefs for all recurring meetings are comprehensive (last session + commitments + connections + suggested agenda)
 - Insights page shows meaningful patterns: topic trends, commitment completion rate, cross-group topic bridges
-- Farz has become the default pre-meeting ritual and the go-to answer for "did we decide this?"
+- Pocket Nori has become the default pre-meeting ritual and the go-to answer for "did we decide this?"
 
 ---
 
@@ -292,7 +292,7 @@ FARZ
 │   ├── Sharer name + meeting title
 │   ├── Last session summary
 │   ├── Open threads
-│   └── Farz attribution + signup CTA
+│   └── Pocket Nori attribution + signup CTA
 │
 ├── /commitments (Commitments)
 │   ├── Open (sorted by due date)
@@ -322,7 +322,7 @@ FARZ
 │   ■ FARZ                                                                 │
 │                                                                          │
 │   Welcome, Layla.                                                        │
-│   Farz is your personal intelligence layer for meetings.                 │
+│   Pocket Nori is your personal intelligence layer for meetings.                 │
 │                                                                          │
 │   ┌─── IMPORT YOUR HISTORY ───────────────────────────────────────────┐ │
 │   │                                                                    │ │
@@ -334,7 +334,7 @@ FARZ
 │   │   Your data stays private. No one else can access your meetings.  │ │
 │   └────────────────────────────────────────────────────────────────── ┘ │
 │                                                                          │
-│   What Farz will do:                                                     │
+│   What Pocket Nori will do:                                                     │
 │   ● Summarize every meeting automatically                                │
 │   ● Track your commitments across meetings                               │
 │   ● Generate pre-meeting briefings for recurring meetings                │
@@ -461,7 +461,7 @@ FARZ
 
 **Route:** `/search` (no query)
 
-The Search page is never a blank screen. Before the user types anything, it shows the full Topic directory — everything Farz has identified across their indexed meetings, organized by what is most immediately useful. This serves two purposes: discovery ("what can I search for?") and direct navigation (clicking a Topic goes straight to its Arc, no typing needed).
+The Search page is never a blank screen. Before the user types anything, it shows the full Topic directory — everything Pocket Nori has identified across their indexed meetings, organized by what is most immediately useful. This serves two purposes: discovery ("what can I search for?") and direct navigation (clicking a Topic goes straight to its Arc, no typing needed).
 
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
@@ -520,7 +520,7 @@ The Search page is never a blank screen. Before the user types anything, it show
 **Interaction:** Clicking any Topic card navigates to `/search?q=[topic.label]` and renders the Topic Arc immediately — no additional typing required.
 
 **Empty state (0 meetings indexed):**
-> "Your Topic directory will appear here once Farz has indexed some meetings. [Go to Meetings →] to see what's been captured."
+> "Your Topic directory will appear here once Pocket Nori has indexed some meetings. [Go to Meetings →] to see what's been captured."
 
 **Data required from backend:**
 - `GET /topics?status=open&sort=last_mentioned&limit=10` — Open Topics section
@@ -586,7 +586,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 │    Reporting feature mentioned for the first time. No decision yet.   │
 │                            → 00:08:45  [Jump to clip]                │
 │                                                                        │
-│  Farz will build a full Topic Arc once this subject appears in        │
+│  Pocket Nori will build a full Topic Arc once this subject appears in        │
 │  more meetings.                                                        │
 ```
 
@@ -644,7 +644,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 │              │                                                          │
 │              │  ─────────────────────────────────────────────────────  │
 │              │  [Share this Brief with attendees]                      │
-│              │  Read-only · Includes your name and Farz attribution    │
+│              │  Read-only · Includes your name and Pocket Nori attribution    │
 │              │  Revocable at any time · [Preview what they'll see →]  │
 └──────────────┴──────────────────────────────────────────────────────────┘
 ```
@@ -858,7 +858,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 
 **"Building" state (< 10 meetings):**
-> "Insights appear after Farz has indexed 10 or more meetings. You have [N] so far. Keep going — your patterns are forming."
+> "Insights appear after Pocket Nori has indexed 10 or more meetings. You have [N] so far. Keep going — your patterns are forming."
 
 **Data required from backend:**
 - `GET /insights/topics?period=30d` → topic frequency counts + trend direction
@@ -893,7 +893,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 │   └─────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 │   ─────────────────────────────────────────────────────────────     │
-│   Generated by Farz · Personal intelligence for meetings             │
+│   Generated by Pocket Nori · Personal intelligence for meetings             │
 │   This Brief was created from Layla's meeting history only.          │
 │   Your data is not included.                                         │
 │   [Get your own pre-meeting briefings →]                            │

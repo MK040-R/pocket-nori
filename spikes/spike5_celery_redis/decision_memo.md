@@ -78,7 +78,7 @@ Action required (FAR-67): Human must create Upstash account and add `UPSTASH_RED
 Decision criteria:
 - If meeting processing stays under ~5K Celery task dispatches/day → Upstash pay-per-use is cost-competitive with Render ($7/month).
 - If processing scales to tens of thousands of tasks/day → Render Redis flat rate becomes cheaper.
-- If Farz deploys to Render (likely, given FastAPI + uvicorn stack) → co-location latency advantage favours Render Redis.
+- If Pocket Nori deploys to Render (likely, given FastAPI + uvicorn stack) → co-location latency advantage favours Render Redis.
 
 **Provisional Phase 1 recommendation: Render Redis** ($7/month), provisioned alongside the Render web service, to eliminate cross-datacenter latency and use standard Redis protocol.
 

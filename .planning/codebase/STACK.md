@@ -105,7 +105,7 @@ Environment variables are validated at startup via `src/config.py` using Pydanti
 
 **Production:**
 
-- Render.com deployment (currently live at https://farz-personal-intelligence.onrender.com)
+- Render.com deployment (currently live at https://pocket-nori-personal-intelligence.onrender.com)
 - Starter plan (4 services: 1× API web service + 1× combined Celery worker)
 - Render builds via `buildCommand: pip install -r requirements.txt`
 - Render starts API with: `uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 2`

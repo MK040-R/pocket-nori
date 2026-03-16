@@ -1,5 +1,5 @@
 -- ============================================================
--- Farz — Migration 007: Durable topic clusters
+-- Pocket Nori — Migration 007: Durable topic clusters
 --
 -- Adds a canonical topic cluster layer so topics can be merged at
 -- ingestion time and read cheaply without clustering on every request.

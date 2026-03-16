@@ -6,7 +6,7 @@ import { writeWavFile } from "./wav-writer";
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-const OUTPUT_DIR = process.env.OUTPUT_DIR ?? path.join(app.getPath("userData"), "farz-audio");
+const OUTPUT_DIR = process.env.OUTPUT_DIR ?? path.join(app.getPath("userData"), "pocket-nori-audio");
 const OUTPUT_FILE = path.join(OUTPUT_DIR, "output.wav");
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    title: "Farz — Audio Capture Spike",
+    title: "Pocket Nori — Audio Capture Spike",
     resizable: false,
   });
 

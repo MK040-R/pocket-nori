@@ -1,7 +1,7 @@
-# Farz Technical Requirements Review V2
+# Pocket Nori Technical Requirements Review V2
 
 **Date:** 2026-03-09  
-**Input Docs:** `farz-prd.md`, `farz-tech-requirements.md`  
+**Input Docs:** `pocket-nori-prd.md`, `pocket-nori-tech-requirements.md`  
 **Goal:** One final, prioritized review list balanced across Intelligence Quality, Technology Choices, Execution/Roadmap, and Security/Privacy.
 
 ## Consolidated Prioritized Findings (Single Source of Truth)
@@ -12,8 +12,8 @@
 - **Finding:** ZDR is declared as non-negotiable, but runtime enforcement is API-key presence, not provider-policy validation; embedding provider policy is also inconsistent.
 - **Why it matters:** This creates a direct compliance escape hatch where non-attested providers can be used while claiming ZDR compliance.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:67`, `farz-prd.md:68`, `farz-prd.md:421`
-  - `Tech:` `farz-tech-requirements.md:36`, `farz-tech-requirements.md:225`, `farz-tech-requirements.md:231`, `farz-tech-requirements.md:331`
+  - `PRD:` `pocket-nori-prd.md:67`, `pocket-nori-prd.md:68`, `pocket-nori-prd.md:421`
+  - `Tech:` `pocket-nori-tech-requirements.md:36`, `pocket-nori-tech-requirements.md:225`, `pocket-nori-tech-requirements.md:231`, `pocket-nori-tech-requirements.md:331`
 - **Exact recommendation:** Add a mandatory allowlist of `(provider, model, purpose)` with `zdr_attested=true`; fail startup if any enabled inference or embedding model lacks attestation; route all SDK calls via one validated client.
 - **Priority rationale:** Violates a stated non-negotiable product constraint.
 
@@ -23,8 +23,8 @@
 - **Finding:** RLS is specified, but role/bypass boundaries and forced-RLS requirements are not documented.
 - **Why it matters:** Privileged/service-role execution can bypass intended isolation and create cross-user exposure paths.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:65`, `farz-prd.md:177`, `farz-prd.md:425`
-  - `Tech:` `farz-tech-requirements.md:104`, `farz-tech-requirements.md:281`, `farz-tech-requirements.md:286`
+  - `PRD:` `pocket-nori-prd.md:65`, `pocket-nori-prd.md:177`, `pocket-nori-prd.md:425`
+  - `Tech:` `pocket-nori-tech-requirements.md:104`, `pocket-nori-tech-requirements.md:281`, `pocket-nori-tech-requirements.md:286`
 - **Exact recommendation:** Define a DB role matrix (`authenticated`, `worker`, `migration_admin`), require `FORCE ROW LEVEL SECURITY` on user-owned tables, ban unrestricted runtime reads with admin/service roles, and add CI isolation tests for API + worker flows.
 - **Priority rationale:** Isolation is also a non-negotiable boundary in both PRD and tech doc.
 
@@ -34,8 +34,8 @@
 - **Finding:** PRD Phase 1 assumes Google Meet transcription as input; tech requirements define manual upload + Deepgram for Phase 1.
 - **Why it matters:** Team will build to different acceptance criteria and timeline assumptions.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:317`, `farz-prd.md:417`
-  - `Tech:` `farz-tech-requirements.md:168`, `farz-tech-requirements.md:366`, `farz-tech-requirements.md:367`
+  - `PRD:` `pocket-nori-prd.md:317`, `pocket-nori-prd.md:417`
+  - `Tech:` `pocket-nori-tech-requirements.md:168`, `pocket-nori-tech-requirements.md:366`, `pocket-nori-tech-requirements.md:367`
 - **Exact recommendation:** Choose one canonical Phase-1 ingestion path and mark the other as explicit spike/alternative. If manual upload remains Phase 1, update PRD Phase 1 input statement to match.
 - **Priority rationale:** Critical architecture and milestone contradiction.
 
@@ -45,8 +45,8 @@
 - **Finding:** Only commitment-capture quality is quantified; Topic, Connection, and Brief quality gates are missing.
 - **Why it matters:** Product value depends on all intelligence surfaces, not only commitments.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:100`, `farz-prd.md:399`
-  - `Tech:` `farz-tech-requirements.md:373`, `farz-tech-requirements.md:408`
+  - `PRD:` `pocket-nori-prd.md:100`, `pocket-nori-prd.md:399`
+  - `Tech:` `pocket-nori-tech-requirements.md:373`, `pocket-nori-tech-requirements.md:408`
 - **Exact recommendation:** Define an evaluation contract covering Topic, Connection, Commitment, and Brief with explicit metrics and release gates (see contract section below).
 - **Priority rationale:** High risk of shipping intelligence that appears complete but is not trustworthy.
 
@@ -56,8 +56,8 @@
 - **Finding:** PRD requires every generated claim to be traceable to source meeting and timestamp; tech pipeline does not define citation payload fields.
 - **Why it matters:** Without first-class citations, users cannot verify outputs and hallucination handling is weak.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:92`, `farz-prd.md:135`, `farz-prd.md:175`
-  - `Tech:` `farz-tech-requirements.md:239`, `farz-tech-requirements.md:242`, `farz-tech-requirements.md:378`
+  - `PRD:` `pocket-nori-prd.md:92`, `pocket-nori-prd.md:135`, `pocket-nori-prd.md:175`
+  - `Tech:` `pocket-nori-tech-requirements.md:239`, `pocket-nori-tech-requirements.md:242`, `pocket-nori-tech-requirements.md:378`
 - **Exact recommendation:** Require citation fields (`conversation_id`, `start_ts`, `end_ts`, `speaker`, `evidence_text`) on Topic Arc, Connection, Commitment, and Brief claims.
 - **Priority rationale:** Directly impacts user trust and debuggability of intelligence outputs.
 
@@ -67,8 +67,8 @@
 - **Finding:** Hybrid retrieval is described conceptually, but chunking, fusion formula, and reranking policy are unspecified.
 - **Why it matters:** Query behavior for synonym/context search can vary dramatically without deterministic retrieval design.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:92`, `farz-prd.md:429`
-  - `Tech:` `farz-tech-requirements.md:329`, `farz-tech-requirements.md:332`, `farz-tech-requirements.md:337`
+  - `PRD:` `pocket-nori-prd.md:92`, `pocket-nori-prd.md:429`
+  - `Tech:` `pocket-nori-tech-requirements.md:329`, `pocket-nori-tech-requirements.md:332`, `pocket-nori-tech-requirements.md:337`
 - **Exact recommendation:** Define chunk unit, fusion method, top-k limits, reranker policy, and response citation assembly in a retrieval contract.
 - **Priority rationale:** Core intelligence behavior depends on retrieval quality more than model choice.
 
@@ -78,8 +78,8 @@
 - **Finding:** Current merge flow says “find similar + merge duplicates” without false-positive controls or user correction feedback.
 - **Why it matters:** Over-merging or bad links will degrade Topic Arc and dashboard quality over time.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:100`, `farz-prd.md:132`, `farz-prd.md:137`
-  - `Tech:` `farz-tech-requirements.md:341`, `farz-tech-requirements.md:345`
+  - `PRD:` `pocket-nori-prd.md:100`, `pocket-nori-prd.md:132`, `pocket-nori-prd.md:137`
+  - `Tech:` `pocket-nori-tech-requirements.md:341`, `pocket-nori-tech-requirements.md:345`
 - **Exact recommendation:** Add dual-threshold merge policy (`auto-merge`, `needs-review`), confidence storage on all links, and a simple user correction mechanism feeding the clustering job.
 - **Priority rationale:** High downstream quality risk with compounding error.
 
@@ -89,8 +89,8 @@
 - **Finding:** Queue stack is chosen, but broker behavior for retries/visibility/reconnection is not validated against brief-generation timing needs.
 - **Why it matters:** Reliability gaps here will surface as missing extractions and late briefs.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:100`, `farz-prd.md:106`
-  - `Tech:` `farz-tech-requirements.md:177`, `farz-tech-requirements.md:299`, `farz-tech-requirements.md:301`
+  - `PRD:` `pocket-nori-prd.md:100`, `pocket-nori-prd.md:106`
+  - `Tech:` `pocket-nori-tech-requirements.md:177`, `pocket-nori-tech-requirements.md:299`, `pocket-nori-tech-requirements.md:301`
 - **Exact recommendation:** Run a broker qualification spike (delayed jobs, retry storms, worker restarts); if limits are hit, keep Upstash for cache and move task broker to a dedicated Redis/RabbitMQ tier.
 - **Priority rationale:** High operational risk, but not a product-definition blocker.
 
@@ -100,8 +100,8 @@
 - **Finding:** Model lists core entities but does not explicitly include speaker-turn/utterance-level storage required for reliable attribution and claim citations.
 - **Why it matters:** Commitment assignment and evidence linking require stable utterance-level references.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:92`, `farz-prd.md:141`
-  - `Tech:` `farz-tech-requirements.md:102`, `farz-tech-requirements.md:170`, `farz-tech-requirements.md:239`
+  - `PRD:` `pocket-nori-prd.md:92`, `pocket-nori-prd.md:141`
+  - `Tech:` `pocket-nori-tech-requirements.md:102`, `pocket-nori-tech-requirements.md:170`, `pocket-nori-tech-requirements.md:239`
 - **Exact recommendation:** Add `TranscriptSegment` (or equivalent) to technical data model with fields: `conversation_id`, `speaker_id`, `start_ts`, `end_ts`, `text`, `segment_confidence`; link derived entities to segment IDs.
 - **Priority rationale:** Needed for product-grade attribution and traceability.
 
@@ -111,8 +111,8 @@
 - **Finding:** PRD states 10-15 minutes pre-meeting; tech doc states 5 minutes.
 - **Why it matters:** This changes scheduler behavior, cache warm-up strategy, and user expectation.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:106`
-  - `Tech:` `farz-tech-requirements.md:26`, `farz-tech-requirements.md:380`
+  - `PRD:` `pocket-nori-prd.md:106`
+  - `Tech:` `pocket-nori-tech-requirements.md:26`, `pocket-nori-tech-requirements.md:380`
 - **Exact recommendation:** Standardize to one default (recommended: `T-12m`) and add fallback behavior (`late brief` label if generated after trigger).
 - **Priority rationale:** High UX and reliability impact; easy to fix early.
 
@@ -122,8 +122,8 @@
 - **Finding:** “No audio storage” is stated, but Phase-1 upload flow includes audio ingestion without explicit transient retention/deletion/export behavior.
 - **Why it matters:** Privacy claims require exact lifecycle semantics, not intent language.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:70`, `farz-prd.md:71`, `farz-prd.md:73`
-  - `Tech:` `farz-tech-requirements.md:126`, `farz-tech-requirements.md:366`, `farz-tech-requirements.md:30`
+  - `PRD:` `pocket-nori-prd.md:70`, `pocket-nori-prd.md:71`, `pocket-nori-prd.md:73`
+  - `Tech:` `pocket-nori-tech-requirements.md:126`, `pocket-nori-tech-requirements.md:366`, `pocket-nori-tech-requirements.md:30`
 - **Exact recommendation:** Define transient-audio lifecycle (ingest -> transcribe -> hard-delete), irreversible user-delete cascade across all stores, and complete user-export contract.
 - **Priority rationale:** High compliance/trust risk but can be addressed with clear policy + implementation gates.
 
@@ -133,8 +133,8 @@
 - **Finding:** Current model assignment is static and cost range is broad; no explicit routing policy for complexity, latency, or budget.
 - **Why it matters:** Cost volatility and latency spikes can appear early during internal testing.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:429`
-  - `Tech:` `farz-tech-requirements.md:222`, `farz-tech-requirements.md:223`, `farz-tech-requirements.md:303`
+  - `PRD:` `pocket-nori-prd.md:429`
+  - `Tech:` `pocket-nori-tech-requirements.md:222`, `pocket-nori-tech-requirements.md:223`, `pocket-nori-tech-requirements.md:303`
 - **Exact recommendation:** Add model-routing contract by task complexity and token budget with deterministic fallback chain and monthly spend alert thresholds.
 - **Priority rationale:** Strong quality/cost lever; not a foundational blocker.
 
@@ -144,8 +144,8 @@
 - **Finding:** Upgrade paths are listed as “when needed” without measurable trigger thresholds.
 - **Why it matters:** Teams tend to either migrate too early or too late without objective triggers.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:425`
-  - `Tech:` `farz-tech-requirements.md:319`, `farz-tech-requirements.md:320`, `farz-tech-requirements.md:321`
+  - `PRD:` `pocket-nori-prd.md:425`
+  - `Tech:` `pocket-nori-tech-requirements.md:319`, `pocket-nori-tech-requirements.md:320`, `pocket-nori-tech-requirements.md:321`
 - **Exact recommendation:** Add explicit trigger thresholds (p95 query latency, index size, write throughput, link-traversal depth) for each migration decision.
 - **Priority rationale:** Optimization concern, not immediate blocker.
 
@@ -155,8 +155,8 @@
 - **Finding:** PRD identifies both as open product risks, but tech roadmap does not include explicit mitigation milestones.
 - **Why it matters:** Early user experience quality may underperform even if core pipeline works.
 - **Evidence:**
-  - `PRD:` `farz-prd.md:401`, `farz-prd.md:403`
-  - `Tech:` `farz-tech-requirements.md:363`, `farz-tech-requirements.md:375`
+  - `PRD:` `pocket-nori-prd.md:401`, `pocket-nori-prd.md:403`
+  - `Tech:` `pocket-nori-tech-requirements.md:363`, `pocket-nori-tech-requirements.md:375`
 - **Exact recommendation:** Add Phase-1/2 tasks for cold-start utility mode and language-scope decision with acceptance criteria.
 - **Priority rationale:** Important for adoption quality, but can follow core architecture alignment.
 
@@ -220,6 +220,6 @@
 5. **Finality test:** Pass. One consolidated prioritized list only.
 
 ## Assumptions Used
-- File name `farz-tech-review-v2.md` is the intended “v2” deliverable.
+- File name `pocket-nori-tech-review-v2.md` is the intended “v2” deliverable.
 - Prioritization is execution-first (blockers first), then quality/system design, then optimizations.
-- Existing files remain unchanged: `farz-tech-review.md`, `farz-tech-requirements.md`, `farz-prd.md`.
+- Existing files remain unchanged: `pocket-nori-tech-review.md`, `pocket-nori-tech-requirements.md`, `pocket-nori-prd.md`.

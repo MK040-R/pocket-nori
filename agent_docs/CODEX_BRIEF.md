@@ -1,4 +1,4 @@
-# Farz — Codex Brief: Parallel Work Division
+# Pocket Nori — Codex Brief: Parallel Work Division
 
 > Status update (2026-03-11): This document is now **historical reference only**.
 > Active execution tracking has moved to:
@@ -12,9 +12,9 @@
 
 ---
 
-## What is Farz?
+## What is Pocket Nori?
 
-Farz is a personal intelligence layer for working professionals. It connects to Google Drive, pulls in past meeting recordings, transcribes them, and extracts topics, commitments, and named entities using AI. Users can then search across all their meetings.
+Pocket Nori is a personal intelligence layer for working professionals. It connects to Google Drive, pulls in past meeting recordings, transcribes them, and extracts topics, commitments, and named entities using AI. Users can then search across all their meetings.
 
 ---
 
@@ -364,7 +364,7 @@ frontend/.env.local.example
   NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Read `farz-ui-spec.md` in the repo root for the full screen spec and navigation structure.
+Read `pocket-nori-ui-spec.md` in the repo root for the full screen spec and navigation structure.
 
 ---
 

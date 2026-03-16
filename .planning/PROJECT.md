@@ -1,8 +1,8 @@
-# Farz
+# Pocket Nori
 
 ## What This Is
 
-Farz is a personal intelligence layer for working professionals. It captures meeting conversations via Google Meet/Calendar, extracts topics, commitments, and entities with LLM-powered analysis, and surfaces that intelligence through semantic search, topic timelines, connection graphs, and pre-meeting briefings. It's built for the individual professional — a private, per-user memory system that knows what you've discussed, decided, and committed to across all your meetings.
+Pocket Nori is a personal intelligence layer for working professionals. It captures meeting conversations via Google Meet/Calendar, extracts topics, commitments, and entities with LLM-powered analysis, and surfaces that intelligence through semantic search, topic timelines, connection graphs, and pre-meeting briefings. It's built for the individual professional — a private, per-user memory system that knows what you've discussed, decided, and committed to across all your meetings.
 
 ## Core Value
 

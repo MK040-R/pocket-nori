@@ -1,11 +1,11 @@
 """
 create_linear_issues.py
 
-Creates all Farz MVP issues in Linear via the GraphQL API.
+Creates all Pocket Nori MVP issues in Linear via the GraphQL API.
 
 Setup:
     export LINEAR_API_KEY=lin_api_xxxxxxxxxxxx
-    export LINEAR_TEAM_NAME="Farz"   # must match your team name exactly
+    export LINEAR_TEAM_NAME="Pocket Nori"   # must match your team name exactly
     source .venv/bin/activate
     python scripts/create_linear_issues.py
 
@@ -722,7 +722,7 @@ def main() -> None:
         sys.exit(1)
     if not TEAM_NAME:
         print("ERROR: LINEAR_TEAM_NAME environment variable not set.")
-        print("       Set it to your Linear team name, e.g. export LINEAR_TEAM_NAME='Farz'")
+        print("       Set it to your Linear team name, e.g. export LINEAR_TEAM_NAME='Pocket Nori'")
         sys.exit(1)
 
     print(f"Connecting to Linear as team: {TEAM_NAME}")

@@ -1,5 +1,5 @@
 """
-Celery configuration for Farz — Upstash Redis broker.
+Celery configuration for Pocket Nori — Upstash Redis broker.
 
 Reads UPSTASH_REDIS_URL from the settings singleton (fail-fast if missing).
 All settings are tuned for reliability with a serverless Redis backend.

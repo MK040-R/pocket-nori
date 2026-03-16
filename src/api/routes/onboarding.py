@@ -120,7 +120,7 @@ async def available_recordings(
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[AvailableRecording]:
     """Return Google Meet transcript documents from the last lookback_days,
-    annotated with whether each has already been imported into Farz.
+    annotated with whether each has already been imported into Pocket Nori.
     """
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]

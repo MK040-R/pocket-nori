@@ -1,13 +1,13 @@
-# Farz — Build Progress
+# Pocket Nori — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
 > Last updated: 2026-03-12 (durable topic intelligence implemented locally; deploy + recluster next)
 
 ---
 
-## What is Farz?
+## What is Pocket Nori?
 
-Farz is a personal intelligence layer for working professionals. It connects to your Google Calendar and meeting recordings, listens to what happens in your meetings, and automatically surfaces what matters — the topics discussed, the commitments made, the people mentioned, and how everything connects over time. Before your next meeting, it gives you a personalised briefing based on everything that was discussed in past meetings with the same people or on the same topic. Think of it as a private, AI-powered chief of staff that never forgets anything said in a meeting, and always prepares you for the next one.
+Pocket Nori is a personal intelligence layer for working professionals. It connects to your Google Calendar and meeting recordings, listens to what happens in your meetings, and automatically surfaces what matters — the topics discussed, the commitments made, the people mentioned, and how everything connects over time. Before your next meeting, it gives you a personalised briefing based on everything that was discussed in past meetings with the same people or on the same topic. Think of it as a private, AI-powered chief of staff that never forgets anything said in a meeting, and always prepares you for the next one.
 
 ---
 
@@ -15,7 +15,7 @@ Farz is a personal intelligence layer for working professionals. It connects to 
 
 Building a software product from scratch happens in stages, like constructing a building:
 
-| Phase | Analogy | What it means for Farz |
+| Phase | Analogy | What it means for Pocket Nori |
 |-------|---------|------------------------|
 | **Phase 0a — Proof of Concept** | Testing the materials before building | We tried each piece of technology separately to see if it works at all — can we capture audio? Can AI extract useful information from a transcript? |
 | **Phase 0 — Foundation** | Laying pipes, wiring, and concrete | Building the invisible infrastructure the app runs on — the server, the database, the login system, the background processing engine |
@@ -32,7 +32,7 @@ Building a software product from scratch happens in stages, like constructing a 
 |-----------|--------|-------|
 | Phase 0a — Proof of Concept | ✅ Complete | All 5 technology tests passed |
 | Infrastructure & credentials set up | ✅ Complete | All services connected |
-| Code repository (GitHub) | ✅ Complete | `MK040-R/Farz-personal-intelligence` |
+| Code repository (GitHub) | ✅ Complete | `MK040-R/pocket-nori` |
 | Running web server | ✅ Complete | App starts, responds to requests |
 | Data blueprint (9 entities) | ✅ Complete | All data types defined |
 | Database schema | ✅ Complete | Ready to apply to Supabase |
@@ -79,7 +79,7 @@ Building a software product from scratch happens in stages, like constructing a 
 ### ✅ Infrastructure & Credentials
 **What happened:** We connected all the external services the app needs to function.
 
-| Service | What it does for Farz |
+| Service | What it does for Pocket Nori |
 |---------|----------------------|
 | **Supabase** | The database where all user data is stored securely |
 | **Upstash Redis** | A fast memory store that queues background jobs |
@@ -92,14 +92,14 @@ Building a software product from scratch happens in stages, like constructing a 
 ---
 
 ### ✅ GitHub Repository
-**What happened:** The codebase is now stored on GitHub at `MK040-R/Farz-personal-intelligence`. Every change made going forward is tracked, versioned, and recoverable.
+**What happened:** The codebase is now stored on GitHub at `MK040-R/pocket-nori`. Every change made going forward is tracked, versioned, and recoverable.
 
 **Why it mattered:** This is the single source of truth for all code. It enables collaboration, rollback if something goes wrong, and a CI/CD pipeline in the future.
 
 ---
 
 ### ✅ Running Web Server (FastAPI Application)
-**What happened:** We built the skeleton of the Farz backend — a web server that starts up, checks that all credentials are present, and listens for incoming requests.
+**What happened:** We built the skeleton of the Pocket Nori backend — a web server that starts up, checks that all credentials are present, and listens for incoming requests.
 
 What it can currently do:
 - Start up and refuse to run if any required credential is missing (fail-fast protection)
@@ -114,7 +114,7 @@ What it can currently do:
 ---
 
 ### ✅ Data Blueprint — 9 Core Data Types
-**What happened:** We defined the exact shape of every piece of information Farz stores. Think of this like designing the filing system before you start filing things.
+**What happened:** We defined the exact shape of every piece of information Pocket Nori stores. Think of this like designing the filing system before you start filing things.
 
 | Data type | What it represents |
 |-----------|-------------------|
@@ -153,12 +153,12 @@ What it can currently do:
 | LLM calls | Your transcript text is never mixed with another user's in an AI call |
 | Background jobs | Every job carries your user ID and validates ownership before touching data |
 
-**Why it mattered:** This is the most critical non-negotiable in the product. Farz handles private meeting conversations. A breach of user isolation would be catastrophic. Building it in at the foundation means it's never an afterthought.
+**Why it mattered:** This is the most critical non-negotiable in the product. Pocket Nori handles private meeting conversations. A breach of user isolation would be catastrophic. Building it in at the foundation means it's never an afterthought.
 
 ---
 
 ### ✅ Background Job System (Celery + Redis)
-**What happened:** We set up the system that processes meetings in the background. When a meeting recording is imported, Farz doesn't make you wait — it queues the work and processes it asynchronously.
+**What happened:** We set up the system that processes meetings in the background. When a meeting recording is imported, Pocket Nori doesn't make you wait — it queues the work and processes it asynchronously.
 
 **Analogy:** Like dropping a letter in a post box. You don't stand there waiting for it to be delivered. You drop it and go. The postal system handles the rest.
 
@@ -171,13 +171,13 @@ Current jobs defined:
 ---
 
 ### ✅ Google Sign-In
-**What happened:** We built the login flow. Users will be able to click "Sign in with Google", grant Farz permission to read their calendar, and be authenticated in the app.
+**What happened:** We built the login flow. Users will be able to click "Sign in with Google", grant Pocket Nori permission to read their calendar, and be authenticated in the app.
 
 Two endpoints built:
 - `GET /auth/login` — redirects to Google's consent screen
 - `GET /auth/callback` — receives the user back from Google, exchanges the code for a session, and logs them in
 
-**Why it mattered:** Google login is the front door for users. It also gives Farz permission to read the user's Google Calendar (needed for pre-meeting briefs) and eventually Google Meet recordings.
+**Why it mattered:** Google login is the front door for users. It also gives Pocket Nori permission to read the user's Google Calendar (needed for pre-meeting briefs) and eventually Google Meet recordings.
 
 ---
 
@@ -195,7 +195,7 @@ Current test coverage:
 ## ✅ Wave 3 — Completed
 
 ### ✅ AI Gateway Module (`src/llm_client.py`)
-**What it is:** A single, controlled entry point for all AI calls. Every time Farz needs to talk to Claude (for extracting topics, writing briefs, etc.), it goes through this one module — nowhere else.
+**What it is:** A single, controlled entry point for all AI calls. Every time Pocket Nori needs to talk to Claude (for extracting topics, writing briefs, etc.), it goes through this one module — nowhere else.
 
 Four functions built:
 - `extract_topics` — reads a transcript and returns the main topics discussed
@@ -256,7 +256,7 @@ Outcome: A secure, running backend that can accept requests, store data, process
 ### Phase 1 — First Working Product (IN PROGRESS ✅ Waves 1–3 complete, Wave 4 in progress)
 
 ### Phase 1 — First Working Product (Weeks 5–12)
-What becomes usable: You can connect your Google Drive, import past meeting recordings, and Farz will transcribe them, extract topics and commitments, and let you search across all your meetings.
+What becomes usable: You can connect your Google Drive, import past meeting recordings, and Pocket Nori will transcribe them, extract topics and commitments, and let you search across all your meetings.
 
 Key deliverables:
 - Google Drive retro-import (pull in past meeting recordings)
@@ -268,14 +268,14 @@ Key deliverables:
 Quality gate: Before moving to Phase 2, we manually evaluate AI extraction quality on 10 real meeting transcripts.
 
 ### Phase 2 — Full Product (Weeks 13–20)
-What becomes usable: The full Farz experience — timeline views, pre-meeting briefs, connection detection, dashboard.
+What becomes usable: The full Pocket Nori experience — timeline views, pre-meeting briefs, connection detection, dashboard.
 
 Key deliverables:
 - Topic Arc timeline (see how topics evolve across meetings over weeks/months)
 - Connection detection (AI surfaces links between meetings you may have missed)
 - Pre-meeting Brief (auto-generated 12 minutes before a meeting starts, based on all relevant history)
 - Commitment tracker (all promises made, by whom, by when)
-- Google Calendar sync (Farz knows what meetings you have coming up)
+- Google Calendar sync (Pocket Nori knows what meetings you have coming up)
 - Full dashboard
 
 ### Phase 3 — Desktop App + Scale (Future)
@@ -289,13 +289,13 @@ What becomes usable: A native macOS desktop app that listens to Google Meet in r
 
 ### What was built
 
-This is the first piece of Phase 1 — the pipeline that connects Farz to your Google Drive and pulls in your past meeting recordings.
+This is the first piece of Phase 1 — the pipeline that connects Pocket Nori to your Google Drive and pulls in your past meeting recordings.
 
 **What it can now do:**
-- After you sign in with Google, Farz stores your Google credentials securely so it can access Drive on your behalf — even when you're not actively using the app
+- After you sign in with Google, Pocket Nori stores your Google credentials securely so it can access Drive on your behalf — even when you're not actively using the app
 - A new screen (when the UI is built) will show you your last 60 days of Drive video recordings and which ones are already imported
-- You select which recordings to import; Farz queues background jobs for each one
-- Each job: connects to Drive → downloads the audio/video to memory → sends it to Deepgram for transcription with speaker labels → stores the transcript in the database as a series of speaking segments → **immediately deletes the audio from memory** — Farz never stores audio
+- You select which recordings to import; Pocket Nori queues background jobs for each one
+- Each job: connects to Drive → downloads the audio/video to memory → sends it to Deepgram for transcription with speaker labels → stores the transcript in the database as a series of speaking segments → **immediately deletes the audio from memory** — Pocket Nori never stores audio
 - You can check the status of each import job at any time
 
 **Safety guardrails built in:**
@@ -358,7 +358,7 @@ This is the intelligence layer — the part that turns raw transcripts into sear
 This is the search layer — the part that lets you find anything said in any meeting, just by describing what you're looking for.
 
 **What the system can now do:**
-- You type a question or phrase — e.g. "shipping deadline discussion" or "budget concerns" — and Farz finds the most relevant transcript segments across all your meetings, ranked by semantic similarity (meaning, not keywords)
+- You type a question or phrase — e.g. "shipping deadline discussion" or "budget concerns" — and Pocket Nori finds the most relevant transcript segments across all your meetings, ranked by semantic similarity (meaning, not keywords)
 - The search converts your query into a mathematical vector (using the same OpenAI embedding model used for transcript segments) and compares it against every stored segment in the database using pgvector's cosine similarity operator
 - All topics, commitments, and index statistics are now accessible via API — the frontend has everything it needs to build the main screens
 
@@ -478,7 +478,7 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 
 ### What changed
 
-- Added a stored canonical topic layer with `topic_clusters`, plus `cluster_id` on `topics` and `topic_arcs`, so Farz no longer depends on read-time clustering as the source of truth.
+- Added a stored canonical topic layer with `topic_clusters`, plus `cluster_id` on `topics` and `topic_arcs`, so Pocket Nori no longer depends on read-time clustering as the source of truth.
 - Tightened topic extraction to prefer stable initiative-level labels and added `is_background`, then filtered background/admin/introductory topics before insert.
 - Moved semantic merge to write time only: lexical match first, then bounded LLM merge through `src/llm_client.py`, never on the read path.
 - Added `POST /topics/recluster` and a worker task to rebuild stored topic clusters and arcs for already indexed meetings.

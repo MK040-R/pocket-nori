@@ -1,4 +1,4 @@
-# Farz — Technical Requirements Document
+# Pocket Nori — Technical Requirements Document
 
 **Version:** 1.0
 **Date:** March 2026
@@ -11,17 +11,17 @@
 
 **Build a personal intelligence layer that turns your meeting conversations into a searchable, connected memory system — starting with internal testing, designed to hand off to a full-time engineer.**
 
-Farz captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through search, topic timelines, and pre-meeting briefings. Think of it as a second brain for your professional life — one that remembers every decision, every commitment, and every conversation you've had, and connects them across time.
+Pocket Nori captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through search, topic timelines, and pre-meeting briefings. Think of it as a second brain for your professional life — one that remembers every decision, every commitment, and every conversation you've had, and connects them across time.
 
 **What this document does:**
-- Translates the Farz PRD into concrete technology choices
+- Translates the Pocket Nori PRD into concrete technology choices
 - Explains *why* each technology was chosen, not just what
 - Lays out a realistic build sequence: validate the hard things early, build complexity incrementally
 - Is designed to be handed directly to an engineer on day one
 
 **What success looks like at the end of internal testing:**
 1. You upload a recording or transcript from a real meeting
-2. Farz extracts topics, decisions, and commitments from it automatically
+2. Pocket Nori extracts topics, decisions, and commitments from it automatically
 3. You can ask "What did we decide about X?" and get an accurate answer across all your past meetings
 4. You get a pre-meeting brief 5 minutes before your next call showing relevant context
 
@@ -95,7 +95,7 @@ Desktop-first; mobile adds platform complexity with no unique value at this stag
 
 ### Primary: PostgreSQL 16 via Supabase
 
-**Why PostgreSQL:** PostgreSQL is the gold standard for relational databases. It has been battle-tested for 30 years, supports the vector search extension (pgvector) Farz needs, and has Row-Level Security (RLS) — a feature that enforces per-user data isolation at the database engine level. This means even if the application code has a bug, the database itself will refuse to return User A's data to User B. That is the safest, most robust way to enforce the non-negotiable isolation constraint.
+**Why PostgreSQL:** PostgreSQL is the gold standard for relational databases. It has been battle-tested for 30 years, supports the vector search extension (pgvector) Pocket Nori needs, and has Row-Level Security (RLS) — a feature that enforces per-user data isolation at the database engine level. This means even if the application code has a bug, the database itself will refuse to return User A's data to User B. That is the safest, most robust way to enforce the non-negotiable isolation constraint.
 
 **Why Supabase:** Supabase is managed PostgreSQL that also provides authentication, file storage, and real-time subscriptions — all in one service. For a solo founder testing internally, this eliminates the need to run your own database server, manage backups, or set up a separate auth system. The free tier handles the volumes involved in internal testing.
 
@@ -123,7 +123,7 @@ The Topic Arc feature (tracking how a topic evolved across meetings) can be impl
 
 ### Object Storage: Supabase Storage (S3-compatible)
 
-**Why no audio storage:** Audio files are the most sensitive data category. Storing them creates liability, increases storage costs, and violates the spirit of the product's privacy principles. Granola made the same choice and it's a competitive differentiator. Farz stores transcripts only.
+**Why no audio storage:** Audio files are the most sensitive data category. Storing them creates liability, increases storage costs, and violates the spirit of the product's privacy principles. Granola made the same choice and it's a competitive differentiator. Pocket Nori stores transcripts only.
 
 - Transcript path: `/users/{user_id}/conversations/{conversation_id}/transcript.txt`
 - Path structure enforces per-user isolation at the storage layer
@@ -262,7 +262,7 @@ class EntityList(BaseModel):
 
 ### Google OAuth 2.0 via Supabase Auth
 
-**Why Google OAuth:** The PRD specifies Google Workspace accounts for Phase 1. Google OAuth also grants access to the Google Calendar API — which Farz needs to read upcoming meetings, link recordings to calendar events, and auto-detect meeting start times. Building a custom auth system would be unnecessary complexity when Google OAuth provides everything needed and users already trust the Google sign-in flow.
+**Why Google OAuth:** The PRD specifies Google Workspace accounts for Phase 1. Google OAuth also grants access to the Google Calendar API — which Pocket Nori needs to read upcoming meetings, link recordings to calendar events, and auto-detect meeting start times. Building a custom auth system would be unnecessary complexity when Google OAuth provides everything needed and users already trust the Google sign-in flow.
 
 **Why Supabase Auth:** Supabase Auth handles the full OAuth flow, stores and refreshes tokens securely, and generates a `user_id` (`auth.uid()`) that plugs directly into PostgreSQL's Row-Level Security policies. Every table's isolation rule references this same ID. One auth system → isolation enforced at every layer automatically.
 

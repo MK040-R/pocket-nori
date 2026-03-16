@@ -1,4 +1,4 @@
-# Roadmap: Farz
+# Roadmap: Pocket Nori
 
 ## Overview
 
@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Frontend Web App
-**Goal**: Users can access Farz through a web browser, log in, import their meetings, and interact with all intelligence the backend already produces
+**Goal**: Users can access Pocket Nori through a web browser, log in, import their meetings, and interact with all intelligence the backend already produces
 **Depends on**: Nothing (backend is already complete; this surfaces it)
 **Requirements**: FRONT-01, FRONT-02, FRONT-03, FRONT-04, FRONT-05, FRONT-06
 **Success Criteria** (what must be TRUE):

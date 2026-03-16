@@ -1,5 +1,5 @@
 """
-Celery application and task definitions for Farz workers.
+Celery application and task definitions for Pocket Nori workers.
 
 All tasks include user_id in their payload to enforce per-user isolation.
 Transcript content is never logged — only IDs are written to the log.

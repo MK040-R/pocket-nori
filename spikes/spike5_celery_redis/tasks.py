@@ -1,5 +1,5 @@
 """
-Celery app and task definitions for Farz Spike 5.
+Celery app and task definitions for Pocket Nori Spike 5.
 
 Tasks defined here are deliberately simple — their purpose is to validate
 Celery + Upstash Redis behaviour (dispatch, retry, visibility timeout,
@@ -11,7 +11,7 @@ from celery import Celery
 
 import celeryconfig
 
-app = Celery("farz")
+app = Celery("pocket-nori")
 app.config_from_object(celeryconfig)
 
 

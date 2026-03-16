@@ -34,7 +34,7 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
 
 TEST_USERS = [
     {
-        "email": "user_a@test.farz.app",
+        "email": "user_a@test.pocket-nori.app",
         "password": "TestPassword_UserA_1!",
         "label": "user_a",
         "conversations": [
@@ -43,7 +43,7 @@ TEST_USERS = [
         ],
     },
     {
-        "email": "user_b@test.farz.app",
+        "email": "user_b@test.pocket-nori.app",
         "password": "TestPassword_UserB_1!",
         "label": "user_b",
         "conversations": [
@@ -148,7 +148,7 @@ def insert_conversations_for_user(
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    logger.info("=== Farz Spike 4 — Test User Setup ===\n")
+    logger.info("=== Pocket Nori Spike 4 — Test User Setup ===\n")
     admin = get_admin_client()
 
     credentials: dict[str, dict] = {}

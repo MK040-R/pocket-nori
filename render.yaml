@@ -1,16 +1,14 @@
-# render.yaml — Farz backend deployment on Render.com
+# render.yaml — Pocket Nori backend deployment on Render.com
 #
 # Services:
-#   farz-api          Web service (FastAPI + uvicorn)
-#   farz-worker-ingest  Celery worker — download + transcribe
-#   farz-worker-extract Celery worker — AI extraction (topics, commitments, entities)
-#   farz-worker-embed   Celery worker — pgvector embeddings
+#   pocket-nori-api         Web service (FastAPI + uvicorn)
+#   pocket-nori-worker      Combined Celery worker — ingest + extract + embed
 #
 # Environment variables marked sync: false must be set manually in the
 # Render dashboard (Settings → Environment) for each service.
-# Use the "Secret Group" feature to share them across all four services.
+# Use the "Secret Group" feature to share them across both services.
 #
-# Estimated cost: 4 × Starter ($7/mo) = $28/mo
+# Estimated cost: 2 × Starter ($7/mo) = $14/mo
 
 services:
 
@@ -18,7 +16,7 @@ services:
   # Web API
   # ---------------------------------------------------------------------------
   - type: web
-    name: farz-api
+    name: pocket-nori-api
     runtime: python
     region: oregon
     plan: starter
@@ -52,15 +50,15 @@ services:
       - key: SECRET_KEY
         sync: false
       - key: API_BASE_URL
-        sync: false   # set to your Render URL e.g. https://farz-api.onrender.com
+        sync: false   # set to your Render URL e.g. https://pocket-nori-personal-intelligence.onrender.com
       - key: FRONTEND_URL
-        sync: false   # set to your Vercel URL e.g. https://farz.vercel.app
+        sync: false   # set to your Vercel URL e.g. https://pocket-nori-personal-intelligence.vercel.app
 
   # ---------------------------------------------------------------------------
   # Celery worker — combined (ingest + extract + embed in one process)
   # ---------------------------------------------------------------------------
   - type: worker
-    name: farz-worker
+    name: pocket-nori-worker
     runtime: python
     region: oregon
     plan: starter

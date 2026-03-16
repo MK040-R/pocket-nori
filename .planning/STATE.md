@@ -70,7 +70,7 @@ Recent decisions affecting current work:
 - [Arch]: Recluster now preserves topic-cluster IDs when rebuilt clusters overlap the same underlying topic rows, so durable topic URLs stay stable across rebuilds where lineage is clear going forward.
 - [Product]: Background/admin/introductory topics are now filtered before insert, and topic browse surfaces default to recurring clusters while singleton topics remain searchable.
 - [Product]: `/entities` and dashboard `entity_count` now share a conservative normalization layer for safe brand aliases (`N8`/`N8N`, `company`/`product` variants) and unambiguous short-form person names.
-- [Product]: Despite phase completion, Farz remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
+- [Product]: Despite phase completion, Pocket Nori remains in MVP cleanup mode; post-MVP hardening is deferred until topic quality and remaining pilot-critical UX issues are acceptable.
 - [Search]: Search is now fully intelligent — LLM understands each meeting once at ingest (digest + topic/entity embeddings stored), search queries pre-stored vectors at ~$0.00001/query with zero LLM tokens.
 - [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
 - [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
@@ -79,7 +79,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - **URGENT**: Upgrade Upstash Redis to Pay As You Go — free tier limit exhausted, worker cannot start
-- Restart Farz worker on Render after Upstash upgrade
+- Restart Pocket Nori worker on Render after Upstash upgrade
 - Merge PR #14 (`feat/durable-topic-clusters`) → Render auto-deploys
 - Run `POST /admin/backfill-embeddings` once after deploy to process all existing meetings
 - Verify `/search/ask` returns cited answers and grouped search results include topic/meeting/entity types

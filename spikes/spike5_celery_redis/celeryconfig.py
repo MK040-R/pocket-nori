@@ -1,5 +1,5 @@
 """
-Celery configuration for Farz Spike 5 — Upstash Redis broker.
+Celery configuration for Pocket Nori Spike 5 — Upstash Redis broker.
 
 Reads UPSTASH_REDIS_URL from environment (fail-fast if missing).
 All settings are tuned for reliability with a serverless Redis backend.

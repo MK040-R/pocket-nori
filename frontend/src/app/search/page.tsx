@@ -221,7 +221,7 @@ export default function SearchPage() {
             <p className="mt-1 text-sm text-ink-secondary">
               {mode === "find"
                 ? "Search across topics, meetings, people, and transcripts."
-                : "Ask a question — Farz will answer from your meeting history with citations."}
+                : "Ask a question — Pocket Nori will answer from your meeting history with citations."}
             </p>
           </div>
 
@@ -442,7 +442,7 @@ export default function SearchPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           {topicsLoading && <span className="text-sm text-ink-tertiary">Loading topics...</span>}
           {!topicsLoading && featuredTopics.length === 0 && (
-            <span className="text-sm text-ink-tertiary">Recurring topics will appear here once Farz sees the same thread across meetings.</span>
+            <span className="text-sm text-ink-tertiary">Recurring topics will appear here once Pocket Nori sees the same thread across meetings.</span>
           )}
           {!topicsLoading &&
             featuredTopics.map((topic) => (

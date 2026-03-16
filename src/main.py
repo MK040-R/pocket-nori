@@ -1,5 +1,5 @@
 """
-Farz API — application entry point.
+Pocket Nori API — application entry point.
 
 Instantiates the FastAPI app, registers middleware, and mounts all routers.
 """
@@ -29,16 +29,16 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    logger.info("Farz API starting up")
+    logger.info("Pocket Nori API starting up")
     yield
-    logger.info("Farz API shutting down")
+    logger.info("Pocket Nori API shutting down")
 
 
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="Farz API",
+    title="Pocket Nori API",
     version="0.1.0",
     lifespan=lifespan,
 )

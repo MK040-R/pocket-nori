@@ -1,5 +1,5 @@
 -- ============================================================
--- Farz — Migration 002: Junction table RLS enforcement
+-- Pocket Nori — Migration 002: Junction table RLS enforcement
 --
 -- Context: 001_core_schema.sql was applied before junction tables
 -- had user_id columns or RLS policies. This migration adds them

@@ -5,8 +5,8 @@ import { AppFrame } from "@/components/AppFrame";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Farz Frontend",
-  description: "Farz private intelligence layer frontend",
+  title: "Pocket Nori",
+  description: "Pocket Nori — personal intelligence layer",
 };
 
 export default function RootLayout({

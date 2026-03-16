@@ -1,4 +1,4 @@
-# Farz — Technical Requirements (MVP Edition)
+# Pocket Nori — Technical Requirements (MVP Edition)
 
 **Version:** 1.1
 **Date:** March 2026
@@ -7,7 +7,7 @@
 **Audience:** You (founder) + engineer building with Claude Code
 **Cost target:** ~$50/month
 
-> This document covers what to build now. For the full architectural vision including Phase 3+ (Electron app, AWS, formal compliance, Intelligence Evaluation Contract), see `docs/later-stages/farz-tech-requirements-full.md`.
+> This document covers what to build now. For the full architectural vision including Phase 3+ (Electron app, AWS, formal compliance, Intelligence Evaluation Contract), see `docs/later-stages/pocket-nori-tech-requirements-full.md`.
 
 ---
 
@@ -15,11 +15,11 @@
 
 **Build a personal intelligence layer that turns your meeting conversations into a searchable, connected memory system — starting with internal testing, designed to hand off to a full-time engineer.**
 
-Farz captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through search, topic timelines, and pre-meeting briefings.
+Pocket Nori captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through search, topic timelines, and pre-meeting briefings.
 
 **What success looks like at the end of internal testing (Phase 2):**
 1. You upload a recording or transcript from a real meeting
-2. Farz extracts topics, decisions, and commitments from it automatically — with citations back to who said what
+2. Pocket Nori extracts topics, decisions, and commitments from it automatically — with citations back to who said what
 3. You can ask "What did we decide about X?" and get an accurate answer across all your past meetings
 4. You get a pre-meeting brief 10–15 minutes before your next call showing relevant context
 
@@ -127,7 +127,7 @@ Transcript storage path: `/users/{user_id}/conversations/{conversation_id}/trans
 
 **MVP approach: Google retro-import (Phase 1) → Automated Electron desktop app (Phase 3)**
 
-**Phase 1 — Google retro-import:** On first login, Farz uses the Google Drive API to enumerate past Google Meet recordings stored in the user's Drive (configurable lookback window, default 60 days) and bulk-ingests them. No file upload UI is built. No manual upload endpoint. Google Meet recordings are automatically saved to the meeting organizer's Drive — this is the source Farz reads from. Audio is fetched transiently, transcribed via Deepgram, then discarded; it is never stored in Supabase Storage.
+**Phase 1 — Google retro-import:** On first login, Pocket Nori uses the Google Drive API to enumerate past Google Meet recordings stored in the user's Drive (configurable lookback window, default 60 days) and bulk-ingests them. No file upload UI is built. No manual upload endpoint. Google Meet recordings are automatically saved to the meeting organizer's Drive — this is the source Pocket Nori reads from. Audio is fetched transiently, transcribed via Deepgram, then discarded; it is never stored in Supabase Storage.
 
 **Why retro-import over manual upload:** Manual upload requires user effort per meeting and doesn't deliver the "instant history" experience that makes the product valuable on day one. Retro-import gives the user weeks of indexed meetings immediately after the first OAuth consent.
 
@@ -135,7 +135,7 @@ Transcript storage path: `/users/{user_id}/conversations/{conversation_id}/trans
 
 **Phase 3 — Electron desktop app:** Native Mac/Windows app that captures system audio at the OS level (Core Audio / WASAPI). No bot. No "recorder joined" announcement. Works across Zoom, Google Meet, Teams, Slack Huddles simultaneously.
 
-**Why not a bot (Fireflies/Otter model):** Bot joins as a visible participant — everyone sees it. Requires Google Workspace admin approval in many organizations. Farz's identity is privacy-first — no bots.
+**Why not a bot (Fireflies/Otter model):** Bot joins as a visible participant — everyone sees it. Requires Google Workspace admin approval in many organizations. Pocket Nori's identity is privacy-first — no bots.
 
 ---
 
@@ -331,13 +331,13 @@ Fields: `conversation_id`, `speaker_id`, `start_ts` (seconds), `end_ts`, `text`,
 **Why this is required from Phase 0:** Without utterance-level storage, you cannot attribute commitments accurately, cannot provide citations in briefs, and cannot defend against hallucination ("show me where in the transcript this came from"). Adding this later requires a schema migration. Build it now.
 
 **Topic**
-A subject that recurs across Conversations, identified by Farz. Has: label, first_mentioned, last_mentioned, status (open/resolved), linked Conversations. Links to source TranscriptSegments.
+A subject that recurs across Conversations, identified by Pocket Nori. Has: label, first_mentioned, last_mentioned, status (open/resolved), linked Conversations. Links to source TranscriptSegments.
 
 **Topic Arc**
 A timeline view over a Topic's linked Conversations — a synthesized narrative of how the topic evolved. Every claim traceable to a TranscriptSegment.
 
 **Connection**
-A detected relationship between two or more Conversations or Topics. Created when Farz identifies overlap in subject matter, entities, or commitments across separate meetings. Links to source TranscriptSegments.
+A detected relationship between two or more Conversations or Topics. Created when Pocket Nori identifies overlap in subject matter, entities, or commitments across separate meetings. Links to source TranscriptSegments.
 
 **Commitment**
 A statement in which the user indicates a future action. Fields: extracted text, assignee, due date (if mentioned), source Conversation, source TranscriptSegments, status (open/resolved).

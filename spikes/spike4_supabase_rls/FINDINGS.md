@@ -8,7 +8,7 @@
 
 ## Objective
 
-Validate that Supabase Row Level Security (RLS) can reliably enforce per-user data isolation — the core architectural constraint for Farz. No user must be able to read, write, or enumerate another user's data at any layer.
+Validate that Supabase Row Level Security (RLS) can reliably enforce per-user data isolation — the core architectural constraint for Pocket Nori. No user must be able to read, write, or enumerate another user's data at any layer.
 
 ---
 
@@ -16,7 +16,7 @@ Validate that Supabase Row Level Security (RLS) can reliably enforce per-user da
 
 ### Table design
 
-A representative table (`conversations`) is created with a `user_id UUID NOT NULL` column that references `auth.users`. This mirrors the data model Farz will use in production (see `farz-prd.md` Section 5 — `Conversation` entity).
+A representative table (`conversations`) is created with a `user_id UUID NOT NULL` column that references `auth.users`. This mirrors the data model Pocket Nori will use in production (see `pocket-nori-prd.md` Section 5 — `Conversation` entity).
 
 ### RLS policy
 

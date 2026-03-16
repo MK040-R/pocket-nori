@@ -43,6 +43,21 @@ jobs:
             types-python-jose>=3.3.4 \
             ruff>=0.9.10
 
+      - name: Brand rename guard
+        run: |
+          set -euo pipefail
+          legacy_brand_pattern='[Ff]'"'"'arz'
+
+          if git ls-files | grep -En "${legacy_brand_pattern}"; then
+            echo "Found stale legacy brand references in tracked paths." >&2
+            exit 1
+          fi
+
+          if git grep -n -I -E "${legacy_brand_pattern}" -- .; then
+            echo "Found stale legacy brand references in tracked file contents." >&2
+            exit 1
+          fi
+
       - name: Ruff lint
         run: ruff check .
 

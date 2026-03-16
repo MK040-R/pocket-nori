@@ -1,7 +1,7 @@
 Product Team Weekly Sync — March 5, 2026
 Attendees: Priya (PM), Dan (Engineering Lead), Sofia (Design), Marcus (Data)
 
-Priya: Alright, let's get started. First up — the Farz onboarding flow. Sofia, you had designs ready to review?
+Priya: Alright, let's get started. First up — the Pocket Nori onboarding flow. Sofia, you had designs ready to review?
 
 Sofia: Yeah, I pushed the updated Figma frames yesterday. The main change is we've collapsed the three-step Google OAuth flow into a single consent screen. Users were dropping off on the second step — Marcus, you had the numbers on that?
 

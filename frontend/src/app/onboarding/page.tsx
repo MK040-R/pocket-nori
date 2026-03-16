@@ -299,7 +299,7 @@ export default function OnboardingPage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Onboarding</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Import past Google Meet notes and transcripts in batches so Farz can build your meeting history.
+          Import past Google Meet notes and transcripts in batches so Pocket Nori can build your meeting history.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <button

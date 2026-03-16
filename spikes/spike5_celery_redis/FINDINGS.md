@@ -118,7 +118,7 @@ not configured (see `conftest.py::require_redis` fixture).
 
 ## Key Findings
 
-### 1. Celery + Redis transport is well-suited to the Farz use case
+### 1. Celery + Redis transport is well-suited to the Pocket Nori use case
 
 Meeting transcript processing is inherently async (minutes-long LLM calls). Celery provides:
 - Reliable at-least-once delivery via `task_acks_late`
@@ -147,7 +147,7 @@ For Phase 1 (LLM transcript processing, estimated 30–120 s), 3600 s is safe.
 
 With `task_acks_late=True` and Redis visibility timeout semantics, a task CAN be
 executed more than once (worker crashes after completion but before ack). All
-Farz tasks must be designed to be idempotent — running them twice must not
+Pocket Nori tasks must be designed to be idempotent — running them twice must not
 produce incorrect state (e.g. deduplicate by `transcript_id` before indexing).
 
 ### 5. Prefetch multiplier = 1 is correct for long tasks

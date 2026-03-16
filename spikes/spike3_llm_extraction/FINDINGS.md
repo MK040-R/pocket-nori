@@ -30,9 +30,9 @@
 
 Two synthetic transcripts were authored to cover different meeting types:
 
-1. **`synthetic_product_meeting.txt`** — Product team weekly sync. Covers: onboarding flow redesign, Google Meet transcript ingestion blocker (Drive API), LLM extraction quality review, Notion integration backlog. Contains: 4 commitments with named owners and due dates, named entities (Priya, Dan, Sofia, Marcus, Farz, Figma, Google Meet, Linear, Notion), multiple discussion topics with clear open/resolved status.
+1. **`synthetic_product_meeting.txt`** — Product team weekly sync. Covers: onboarding flow redesign, Google Meet transcript ingestion blocker (Drive API), LLM extraction quality review, Notion integration backlog. Contains: 4 commitments with named owners and due dates, named entities (Priya, Dan, Sofia, Marcus, Pocket Nori, Figma, Google Meet, Linear, Notion), multiple discussion topics with clear open/resolved status.
 
-2. **`synthetic_1on1.txt`** — Manager (Priya) / IC (Marcus) 1:1. Covers: topic clustering quality issue and prompt iteration plan, beta transcript collection follow-up, senior IC career development, documentation gap. Contains: 4 commitments with owners, overlapping entities with product meeting transcript (Farz, Marcus, Priya, Dan, Anthropic).
+2. **`synthetic_1on1.txt`** — Manager (Priya) / IC (Marcus) 1:1. Covers: topic clustering quality issue and prompt iteration plan, beta transcript collection follow-up, senior IC career development, documentation gap. Contains: 4 commitments with owners, overlapping entities with product meeting transcript (Pocket Nori, Marcus, Priya, Dan, Anthropic).
 
 ### Real transcripts (pending — FAR-53)
 
@@ -89,7 +89,7 @@ Each extraction type has different emphasis: topics require clustering and dedup
 This is the highest-capability model available, appropriate for a quality spike. If it fails here, cheaper/faster models will not succeed. If it passes, we can test `claude-haiku-4-5` in a subsequent spike to find the quality/cost tradeoff.
 
 ### Per-user isolation note
-The extractor never persists transcript content — it sends to the Anthropic API (zero-data-retention required, per `farz-prd.md` Section 3) and returns only the structured extraction. No cross-user data is shared. Each call is stateless.
+The extractor never persists transcript content — it sends to the Anthropic API (zero-data-retention required, per `pocket-nori-prd.md` Section 3) and returns only the structured extraction. No cross-user data is shared. Each call is stateless.
 
 ---
 

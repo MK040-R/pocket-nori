@@ -1,5 +1,5 @@
 """
-Google Calendar client for Farz calendar sync and today briefing.
+Google Calendar client for Pocket Nori calendar sync and today briefing.
 
 This module fetches events from the authenticated user's primary calendar.
 It returns structured event metadata used for:

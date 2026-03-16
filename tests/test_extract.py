@@ -229,7 +229,7 @@ class TestExtractHappyPath:
             entities=[
                 EntityResult(name="Alice", type="person", mentions=3),
                 EntityResult(name="Q3 Roadmap", type="project", mentions=5),
-                EntityResult(name="Farz", type="product", mentions=2),
+                EntityResult(name="Pocket Nori", type="product", mentions=2),
             ]
         )
 

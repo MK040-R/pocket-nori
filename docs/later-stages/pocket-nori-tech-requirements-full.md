@@ -1,4 +1,4 @@
-# Farz — Technical Requirements (Complete Architecture)
+# Pocket Nori — Technical Requirements (Complete Architecture)
 
 **Version:** 1.1
 **Date:** March 2026
@@ -6,7 +6,7 @@
 **Scope:** Full vision — MVP through scale, all phases, all contracts
 **Audience:** Full-time senior engineer; scaling to real users
 
-> For the lean, Claude Code-ready MVP version covering Phase 0–2 only, see `farz-tech-requirements-mvp.md`.
+> For the lean, Claude Code-ready MVP version covering Phase 0–2 only, see `pocket-nori-tech-requirements-mvp.md`.
 
 ---
 
@@ -14,10 +14,10 @@
 
 **Build a personal intelligence layer that turns your meeting conversations into a searchable, connected memory system.**
 
-Farz captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through semantic search, topic timelines, and pre-meeting briefings. The product is personal, private, and traceable — every generated claim links back to a source meeting and speaker.
+Pocket Nori captures what you discuss in meetings, extracts who said what, what was decided, and what was committed to, and surfaces all of it through semantic search, topic timelines, and pre-meeting briefings. The product is personal, private, and traceable — every generated claim links back to a source meeting and speaker.
 
 **What success looks like at production scale:**
-1. User joins a meeting — Farz captures audio silently via desktop app, no bot
+1. User joins a meeting — Pocket Nori captures audio silently via desktop app, no bot
 2. Within 60 seconds of meeting end: topics, commitments, and entities extracted and indexed
 3. "What did we decide about the Q2 launch?" returns a synthesized narrative with citations across all past meetings
 4. 10–15 minutes before every meeting: a tailored brief surfaces context the user needs
@@ -136,7 +136,7 @@ User uploads audio file or text transcript. Deepgram transcribes audio. Intellig
 - CI: test on both macOS and Windows after each OS major version
 
 ### Why not a bot
-Bot joins as visible participant (everyone sees it). Requires Google Workspace admin approval. Farz's privacy identity requires no bots. Bot is available as fallback for non-Mac users in Phase 4.
+Bot joins as visible participant (everyone sees it). Requires Google Workspace admin approval. Pocket Nori's privacy identity requires no bots. Bot is available as fallback for non-Mac users in Phase 4.
 
 ---
 
