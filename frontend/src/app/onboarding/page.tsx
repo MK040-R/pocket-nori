@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -55,7 +56,16 @@ const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_CONSECUTIVE_POLL_ERRORS = 5;
 const MAX_IMPORT_BATCH_SIZE = 20;
 
+type WizardStep = 1 | 2 | 3;
+
+const WIZARD_STEPS: Array<{ id: WizardStep; label: string }> = [
+  { id: 1, label: "Welcome" },
+  { id: 2, label: "Import" },
+  { id: 3, label: "Processing" },
+];
+
 export default function OnboardingPage() {
+  const [step, setStep] = useState<WizardStep>(1);
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [jobs, setJobs] = useState<ImportJob[]>([]);
@@ -213,6 +223,26 @@ export default function OnboardingPage() {
     };
   }, [jobs, jobStatuses]);
 
+  const queuedJobs = useMemo(
+    () =>
+      jobs.map((job) => ({
+        job,
+        recording: recordings.find((recording) => recording.file_id === job.file_id) ?? null,
+        status: jobStatuses[job.job_id] ?? {
+          job_id: job.job_id,
+          status: "pending" as const,
+        },
+      })),
+    [jobs, jobStatuses, recordings],
+  );
+
+  const importsCompleted = useMemo(() => {
+    if (!summary) {
+      return false;
+    }
+    return summary.success + summary.failure === summary.total;
+  }, [summary]);
+
   const queueImports = useCallback(async (fileIds: string[]) => {
     const deduplicatedIds = Array.from(new Set(fileIds));
     if (deduplicatedIds.length === 0) {
@@ -242,6 +272,7 @@ export default function OnboardingPage() {
       });
       setJobStatuses(initialStates);
       setSelectedIds(new Set());
+      setStep(3);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Failed to queue import");
     } finally {
@@ -294,24 +325,29 @@ export default function OnboardingPage() {
   const allVisibleSelected =
     visibleSelectableIds.length > 0 && visibleSelectableIds.every((id) => selectedIds.has(id));
 
+  const stepLabel = WIZARD_STEPS.find((candidate) => candidate.id === step)?.label ?? "Onboarding";
+
   return (
     <div className="space-y-6">
       <section className="card p-6">
-        <h1 className="text-2xl font-semibold">Onboarding</h1>
-        <p className="mt-2 text-sm text-ink-secondary">
-          Import past Google Meet notes and transcripts in batches so Pocket Nori can build your meeting history.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              void loadRecordings();
-            }}
-            className="rounded border border-standard px-3 py-1.5 text-ink-secondary hover:border-emphasis hover:text-ink-primary"
-          >
-            Refresh recordings
-          </button>
-          {lastUpdated && <span className="text-ink-tertiary">Last updated: {lastUpdated}</span>}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-ink-tertiary">
+              Step {step} of 3
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold">{stepLabel}</h1>
+          </div>
+
+          <div className="flex items-center gap-2" aria-label={`Step ${step} of 3`}>
+            {WIZARD_STEPS.map((wizardStep) => (
+              <span
+                key={wizardStep.id}
+                className={`h-2.5 w-2.5 rounded-full ${
+                  wizardStep.id === step ? "bg-accent" : "bg-bg-control"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
@@ -321,197 +357,314 @@ export default function OnboardingPage() {
         </section>
       )}
 
-      {summary && (
-        <section className="card p-4">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <span className="font-semibold text-ink-primary">Import progress</span>
-            <span className="mono text-ink-secondary">Total {summary.total}</span>
-            <span className="mono text-ink-secondary">Pending {summary.pending}</span>
-            <span className="mono text-ink-secondary">Running {summary.progress}</span>
-            <span className="mono text-ink-secondary">Success {summary.success}</span>
-            <span className="mono text-ink-secondary">Failed {summary.failure}</span>
+      {step === 1 && (
+        <section className="card p-8">
+          <div className="max-w-2xl">
+            <h2 className="text-2xl font-semibold text-ink-primary">Welcome</h2>
+            <p className="mt-4 text-base leading-7 text-ink-secondary">
+              Let&apos;s set up Pocket Nori. We&apos;ll pull in your past Google Meet recordings so you
+              can search and track context across your meetings.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setStep(2);
+              }}
+              className="mt-8 rounded border border-emphasis bg-accent-subtle px-4 py-2.5 text-sm font-medium text-accent"
+            >
+              Get started →
+            </button>
           </div>
         </section>
       )}
 
-      <section className="card p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Available recordings</h2>
-          <div className="text-sm text-ink-tertiary">
-            {isLoading
-              ? "Loading..."
-              : hasDateFilter
-                ? `${filteredRecordings.length} shown of ${recordings.length} (${visibleSelectableCount} selectable)`
-                : `${recordings.length} found (${selectableCount} selectable)`}
-          </div>
-        </div>
-
-        <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.06em] text-ink-tertiary">
-            From
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(event) => {
-                setFromDate(event.target.value);
-              }}
-              className="rounded border border-standard bg-bg-control px-3 py-1.5 text-sm text-ink-primary"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.06em] text-ink-tertiary">
-            To
-            <input
-              type="date"
-              value={toDate}
-              onChange={(event) => {
-                setToDate(event.target.value);
-              }}
-              className="rounded border border-standard bg-bg-control px-3 py-1.5 text-sm text-ink-primary"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={!hasDateFilter || isSubmitting}
-            onClick={() => {
-              setFromDate("");
-              setToDate("");
-            }}
-            className="rounded border border-standard px-3 py-1.5 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
-          >
-            Clear dates
-          </button>
-        </div>
-
-        {hasInvalidDateRange && (
-          <p className="mb-4 text-sm text-accent">From date must be earlier than or equal to To date.</p>
-        )}
-
-        <div className="mb-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={visibleSelectableIds.length === 0 || hasInvalidDateRange || isSubmitting}
-            onClick={() => {
-              setSelectedIds((current) => {
-                const next = new Set(current);
-                if (allVisibleSelected) {
-                  visibleSelectableIds.forEach((id) => {
-                    next.delete(id);
-                  });
-                } else {
-                  visibleSelectableIds.forEach((id) => {
-                    next.add(id);
-                  });
-                }
-                return next;
-              });
-            }}
-            className="rounded border border-standard px-4 py-2 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
-          >
-            {allVisibleSelected
-              ? `Deselect visible (${visibleSelectableCount})`
-              : `Select visible (${visibleSelectableCount})`}
-          </button>
-
-          <button
-            type="button"
-            disabled={selectedIds.size === 0 || isSubmitting}
-            onClick={() => {
-              setSelectedIds(new Set());
-            }}
-            className="rounded border border-standard px-4 py-2 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
-          >
-            Clear selection
-          </button>
-
-          <button
-            type="button"
-            disabled={selectableIds.length === 0 || hasInvalidDateRange || isSubmitting}
-            onClick={() => {
-              void queueImports(selectableIds);
-            }}
-            className="rounded border border-standard px-4 py-2 text-sm font-medium text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
-          >
-            {isSubmitting ? "Queueing..." : `Import all selectable (${selectableCount})`}
-          </button>
-
-          <button
-            type="button"
-            disabled={selectedIds.size === 0 || isSubmitting}
-            onClick={() => {
-              void queueImports(Array.from(selectedIds));
-            }}
-            className="rounded border border-emphasis bg-accent-subtle px-4 py-2 text-sm font-medium text-accent disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
-          >
-            {isSubmitting ? "Queueing..." : `Import selected (${selectedIds.size})`}
-          </button>
-        </div>
-
-        {recordings.length === 0 && !isLoading && (
-          <p className="text-sm text-ink-tertiary">No recordings were returned for the current lookback window.</p>
-        )}
-        {recordings.length > 0 && filteredRecordings.length === 0 && !isLoading && !hasInvalidDateRange && (
-          <p className="text-sm text-ink-tertiary">No recordings match the selected date range.</p>
-        )}
-
-        <div className="space-y-3">
-          {filteredRecordings.map((recording) => {
-            const job = jobs.find((candidate) => candidate.file_id === recording.file_id);
-            const status = job ? jobStatuses[job.job_id]?.status : null;
-
-            return (
-              <label
-                key={recording.file_id}
-                className={`block rounded-md border px-4 py-3 ${
-                  recording.already_imported
-                    ? "border-soft bg-bg-control"
-                    : "border-standard bg-bg-surface-raised hover:border-emphasis"
-                }`}
+      {step === 2 && (
+        <section className="card p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Import past meetings</h2>
+              <p className="mt-1 text-sm text-ink-secondary">
+                Choose which recordings to bring in now. You can always return later from the Meetings page.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  void loadRecordings();
+                }}
+                className="rounded border border-standard px-3 py-1.5 text-ink-secondary hover:border-emphasis hover:text-ink-primary"
               >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    disabled={recording.already_imported}
-                    checked={selectedIds.has(recording.file_id)}
-                    onChange={(event) => {
-                      setSelectedIds((current) => {
-                        const next = new Set(current);
-                        if (event.target.checked) {
-                          next.add(recording.file_id);
-                        } else {
-                          next.delete(recording.file_id);
-                        }
-                        return next;
-                      });
-                    }}
-                  />
+                Refresh recordings
+              </button>
+              {lastUpdated && <span className="text-ink-tertiary">Last updated: {lastUpdated}</span>}
+            </div>
+          </div>
 
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium text-ink-primary">{recording.name}</p>
-                      <span className="mono text-xs text-ink-tertiary">{formatBytes(recording.size_bytes)}</span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-base font-semibold">Available recordings</h3>
+            <div className="text-sm text-ink-tertiary">
+              {isLoading
+                ? "Loading..."
+                : hasDateFilter
+                  ? `${filteredRecordings.length} shown of ${recordings.length} (${visibleSelectableCount} selectable)`
+                  : `${recordings.length} found (${selectableCount} selectable)`}
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.06em] text-ink-tertiary">
+              From
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => {
+                  setFromDate(event.target.value);
+                }}
+                className="rounded border border-standard bg-bg-control px-3 py-1.5 text-sm text-ink-primary"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs uppercase tracking-[0.06em] text-ink-tertiary">
+              To
+              <input
+                type="date"
+                value={toDate}
+                onChange={(event) => {
+                  setToDate(event.target.value);
+                }}
+                className="rounded border border-standard bg-bg-control px-3 py-1.5 text-sm text-ink-primary"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!hasDateFilter || isSubmitting}
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+              }}
+              className="rounded border border-standard px-3 py-1.5 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
+            >
+              Clear dates
+            </button>
+          </div>
+
+          {hasInvalidDateRange && (
+            <p className="mb-4 text-sm text-accent">From date must be earlier than or equal to To date.</p>
+          )}
+
+          <div className="mb-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={visibleSelectableIds.length === 0 || hasInvalidDateRange || isSubmitting}
+              onClick={() => {
+                setSelectedIds((current) => {
+                  const next = new Set(current);
+                  if (allVisibleSelected) {
+                    visibleSelectableIds.forEach((id) => {
+                      next.delete(id);
+                    });
+                  } else {
+                    visibleSelectableIds.forEach((id) => {
+                      next.add(id);
+                    });
+                  }
+                  return next;
+                });
+              }}
+              className="rounded border border-standard px-4 py-2 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
+            >
+              {allVisibleSelected
+                ? `Deselect visible (${visibleSelectableCount})`
+                : `Select visible (${visibleSelectableCount})`}
+            </button>
+
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || isSubmitting}
+              onClick={() => {
+                setSelectedIds(new Set());
+              }}
+              className="rounded border border-standard px-4 py-2 text-sm text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
+            >
+              Clear selection
+            </button>
+
+            <button
+              type="button"
+              disabled={selectableIds.length === 0 || hasInvalidDateRange || isSubmitting}
+              onClick={() => {
+                void queueImports(selectableIds);
+              }}
+              className="rounded border border-standard px-4 py-2 text-sm font-medium text-ink-secondary hover:border-emphasis hover:text-ink-primary disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
+            >
+              {isSubmitting ? "Queueing..." : `Import all selectable (${selectableCount})`}
+            </button>
+
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || isSubmitting}
+              onClick={() => {
+                void queueImports(Array.from(selectedIds));
+              }}
+              className="rounded border border-emphasis bg-accent-subtle px-4 py-2 text-sm font-medium text-accent disabled:cursor-not-allowed disabled:border-soft disabled:text-ink-muted"
+            >
+              {isSubmitting ? "Queueing..." : `Import selected (${selectedIds.size})`}
+            </button>
+          </div>
+
+          {recordings.length === 0 && !isLoading && (
+            <p className="text-sm text-ink-tertiary">No recordings were returned for the current lookback window.</p>
+          )}
+          {recordings.length > 0 && filteredRecordings.length === 0 && !isLoading && !hasInvalidDateRange && (
+            <p className="text-sm text-ink-tertiary">No recordings match the selected date range.</p>
+          )}
+
+          <div className="space-y-3">
+            {filteredRecordings.map((recording) => {
+              const job = jobs.find((candidate) => candidate.file_id === recording.file_id);
+              const status = job ? jobStatuses[job.job_id]?.status : null;
+
+              return (
+                <label
+                  key={recording.file_id}
+                  className={`block rounded-md border px-4 py-3 ${
+                    recording.already_imported
+                      ? "border-soft bg-bg-control"
+                      : "border-standard bg-bg-surface-raised hover:border-emphasis"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      disabled={recording.already_imported}
+                      checked={selectedIds.has(recording.file_id)}
+                      onChange={(event) => {
+                        setSelectedIds((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) {
+                            next.add(recording.file_id);
+                          } else {
+                            next.delete(recording.file_id);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium text-ink-primary">{recording.name}</p>
+                        <span className="mono text-xs text-ink-tertiary">{formatBytes(recording.size_bytes)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-ink-tertiary">Created {formatDate(recording.created_time)}</p>
+                      <p className="mt-1 text-xs text-ink-muted">{recording.mime_type}</p>
+
+                      {recording.already_imported && (
+                        <p className="mt-2 inline-flex rounded border border-soft px-2 py-1 text-xs text-ink-secondary">
+                          Already imported
+                        </p>
+                      )}
+
+                      {!recording.already_imported && status && (
+                        <p className="mt-2 inline-flex rounded border border-soft px-2 py-1 text-xs text-ink-secondary">
+                          Job status: {status}
+                        </p>
+                      )}
                     </div>
-                    <p className="mt-1 text-sm text-ink-tertiary">Created {formatDate(recording.created_time)}</p>
-                    <p className="mt-1 text-xs text-ink-muted">{recording.mime_type}</p>
-
-                    {recording.already_imported && (
-                      <p className="mt-2 inline-flex rounded border border-soft px-2 py-1 text-xs text-ink-secondary">
-                        Already imported
-                      </p>
-                    )}
-
-                    {!recording.already_imported && status && (
-                      <p className="mt-2 inline-flex rounded border border-soft px-2 py-1 text-xs text-ink-secondary">
-                        Job status: {status}
-                      </p>
-                    )}
                   </div>
-                </div>
-              </label>
-            );
-          })}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="mt-6">
+            <Link href="/meetings" className="text-sm text-ink-tertiary hover:text-ink-primary">
+              Skip for now
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4">
+          <section className="card p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Processing imports</h2>
+                <p className="mt-1 text-sm text-ink-secondary">
+                  Pocket Nori is pulling in your selected recordings now. You can wait here or come back later from the Meetings page.
+                </p>
+              </div>
+              {summary && (
+                <span className="mono text-sm text-ink-tertiary">
+                  {summary.success + summary.failure} / {summary.total} finished
+                </span>
+              )}
+            </div>
+
+            {summary ? (
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                <span className="font-semibold text-ink-primary">Import progress</span>
+                <span className="mono text-ink-secondary">Total {summary.total}</span>
+                <span className="mono text-ink-secondary">Pending {summary.pending}</span>
+                <span className="mono text-ink-secondary">Running {summary.progress}</span>
+                <span className="mono text-ink-secondary">Success {summary.success}</span>
+                <span className="mono text-ink-secondary">Failed {summary.failure}</span>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-ink-tertiary">Preparing import jobs...</p>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              {importsCompleted && (
+                <Link
+                  href="/meetings"
+                  className="rounded border border-emphasis bg-accent-subtle px-4 py-2 text-sm font-medium text-accent"
+                >
+                  Go to my meetings →
+                </Link>
+              )}
+
+              <Link href="/meetings" className="text-sm text-ink-tertiary hover:text-ink-primary">
+                Skip for now
+              </Link>
+            </div>
+          </section>
+
+          <section className="card p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold">Queued recordings</h3>
+              <span className="text-sm text-ink-tertiary">{queuedJobs.length} jobs</span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {queuedJobs.length === 0 && (
+                <p className="text-sm text-ink-tertiary">No imports have been queued yet.</p>
+              )}
+
+              {queuedJobs.map(({ job, recording, status }) => (
+                <article key={job.job_id} className="rounded border border-soft p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-ink-primary">{recording?.name ?? job.file_id}</p>
+                      <p className="mt-1 text-xs text-ink-tertiary">
+                        {recording ? `Created ${formatDate(recording.created_time)}` : `File ${job.file_id}`}
+                      </p>
+                    </div>
+                    <span className="rounded border border-soft px-2 py-1 text-xs text-ink-secondary">
+                      {status.status}
+                    </span>
+                  </div>
+                  {status.detail && (
+                    <p className="mt-2 text-sm text-ink-tertiary">{status.detail}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
         </div>
-      </section>
+      )}
     </div>
   );
 }

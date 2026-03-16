@@ -44,6 +44,9 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - ✓ Search cost: ~$0.004/meeting at ingest, ~$0.00001/query (zero LLM tokens at search time) — 2026-03-15
 - ✓ Persistent global search shell: shared header search launches into `/search?q=...`, and the search page auto-runs URL-driven queries while keeping manual searches in sync — 2026-03-16
 - ✓ Persistent Meetings import entry: `/meetings` now always exposes `Import past meetings` linking back to `/onboarding` — 2026-03-16
+- ✓ Onboarding wizard redesign: `/onboarding` now uses Welcome / Import / Processing steps with skip paths into `/meetings`, and `/meetings` shows a friendly no-meetings prompt after skip — 2026-03-16
+- ✓ Home quick summary card: `/` now renders an optional Quick Summary card from `GET /home/summary`, with skeleton loading and silent hide on empty/error — 2026-03-16
+- ✓ Meetings list enrichment: `/meetings` now groups cards into Today / This week / Earlier and shows up to 3 topic chips per meeting from `topic_labels` — 2026-03-16
 
 ### Active
 
@@ -68,7 +71,7 @@ A working professional can ask "What did we decide about X?" and get an accurate
 
 ## Context
 
-**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A), and the current pilot UX cleanup through Wave G persistent Meetings import access. Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
+**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A), and the current pilot UX cleanup through Wave J including onboarding redesign, Home Quick Summary, and grouped Meetings cards with topic chips. Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
 
 **Backend is complete through Phase 5 + intelligent search.** 17 tables (9 core + 8 junction), all with FORCE RLS. Migration 009 adds `digest`/`digest_embedding` to conversations, `embedding` to `topic_clusters` and `entities`. Full Celery pipeline: ingest → extract (now generates meeting digest) → embed (now embeds topic clusters, entities, digest) + recurring brief scheduling/generation + per-user reclustering. FastAPI includes all prior routes plus `POST /search/ask` and `POST /admin/backfill-embeddings`. Search is multi-table vector search (topic_clusters, entities, conversations, transcript_segments) with date filters, grouped result types, and score threshold 0.30. Current gate: `pytest -q` 30 passed (search + llm_client), `mypy`, `ruff` green on PR #14. Upstash Redis free tier exhausted — worker cannot start until plan upgraded.
 
@@ -107,4 +110,4 @@ A working professional can ask "What did we decide about X?" and get an accurate
 | Google Drive as transcript source (not Google Meet API) | Meet API lacks diarization; Drive has full recordings | ✓ Good |
 
 ---
-*Last updated: 2026-03-16 after Wave G persistent Meetings import entry shipped locally*
+*Last updated: 2026-03-16 after Wave I onboarding wizard redesign shipped locally*

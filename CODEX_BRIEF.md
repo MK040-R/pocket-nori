@@ -44,13 +44,13 @@ Both agents update `PROGRESS.md` only to record their own completed waves.
 | 5 | Profile View — "You" dropdown | New Idea | Medium | Codex | Wave D | ✅ Done |
 | 6 | Entities → move to "You" dropdown | Enhancement | Low | Codex | Wave D | ✅ Done |
 | 7 | Entities tab UX (filters, sort, edit) | UX/Interaction | Medium | Codex | Wave D | ✅ Done |
-| 8 | Onboarding journey (full multi-step flow) | New Idea | Very High | Deferred | — | ⏸ Deferred |
-| 9 | Onboarding — optional sync | Enhancement | Medium | Deferred | — | ⏸ Deferred |
+| 8 | Onboarding journey (full multi-step flow) | New Idea | Very High | Codex | Wave I | ✅ Done |
+| 9 | Onboarding — optional sync | Enhancement | Medium | Codex | Wave I | ✅ Done |
 | 10 | Import past meetings entry point under Meetings | Enhancement | Low | Codex | Wave G | ✅ Done |
-| 11 | Home personal touch (Quick Summary, Today's Meetings, Actions) | Enhancement | High | Deferred | — | ⏸ Deferred |
+| 11 | Home personal touch (Quick Summary, Today's Meetings, Actions) | Enhancement | High | Claude Code + Codex | Wave H | ✅ Done |
 | 12 | Home — Calendar widget UI | UI/Design | Low | Codex | Wave B | ✅ Done |
 | 13 | Home — Actions widget (rename + add follow-ups) | Enhancement | Medium | Codex | Wave C | ✅ Done |
-| 14 | Meetings list UI redesign (Fireflies/Otter-style) | UI/Design | High | Deferred | — | ⏸ Deferred |
+| 14 | Meetings list UI redesign (Fireflies/Otter-style) | UI/Design | High | Claude Code + Codex | Wave J | ✅ Done |
 | 15 | /today page simplification | UX/Interaction | Low | Codex | Wave B | ✅ Done |
 | 16 | Meeting detail — header cleanup | Enhancement | Low | Codex | Wave B | ✅ Done |
 | 17 | Meeting detail — tab navigation (Topics/Actions/Transcript) | UX/Interaction | Medium | Codex | Wave E | ✅ Done |
@@ -63,7 +63,7 @@ Both agents update `PROGRESS.md` only to record their own completed waves.
 | 24 | Bot as meeting participant | New Idea | Very High | Deferred | — | ⏸ Deferred |
 | 25 | Native Mac / iPhone app | New Idea | Very High | Deferred | — | ⏸ Deferred |
 
-**Deferred items** (High / Very High effort): #8, #9, #11, #14, #23, #24, #25 — not in scope for this round.
+**Deferred items** (Very High effort): #23, #24, #25 — not in scope for this round.
 
 ---
 
@@ -77,9 +77,15 @@ Wave D — Codex      ✅ DONE  (Profile dropdown + entity management)
 Wave E — Codex      ✅ DONE  (Meeting detail overhaul)
 Wave F — Codex      ✅ DONE  (Persistent global search bar)
 Wave G — Codex      ✅ DONE  (Import past meetings entry point on Meetings page)
+
+--- Round 2 ---
+
+Wave H — Claude Code + Codex  ✅ DONE     (Home Quick Summary — new GET /home/summary + frontend card)
+Wave I — Codex                ✅ DONE     (Onboarding multi-step flow + Skip option)
+Wave J — Claude Code + Codex  ✅ DONE     (Meetings list redesign — topic_labels on GET /conversations + richer cards)
 ```
 
-**✅ All 18 in-scope items complete. 7 items remain deferred for a future round.**
+**✅ All completed UI polish through Wave J is now shipped locally. 3 items stay in the future milestone.**
 
 **Backend fix for Wave E** (PR #23 merged): `GET /conversations/{id}` now returns `action_type` on each commitment — meeting detail Actions tab can split into Commitments vs Follow-ups.
 
@@ -96,6 +102,106 @@ Wave G — Codex      ✅ DONE  (Import past meetings entry point on Meetings pa
 - Clicking navigates to `/onboarding`
 - Understated style — secondary action, does not compete with the meetings list
 - Label: **"Import past meetings"** (not "sync" — avoids confusion)
+
+---
+
+## Wave H — Claude Code + Codex: Home Quick Summary ✅ DONE
+
+**Item #11 — Home personal touch (Quick Summary)**
+
+### Claude Code builds:
+
+New endpoint:
+```
+GET /home/summary
+→ { summary: string, generated_at: string }
+```
+
+- Generates a 2–3 sentence AI briefing for today (upcoming meetings + open action count + recent topics)
+- Uses `claude-sonnet-4-6` (not opus — cost)
+- Cached in Redis for 6 hours: `user:{user_id}:home_summary:{YYYY-MM-DD}`
+- Returns a sensible neutral message if no data (never errors)
+- Auth: same cookie/bearer pattern as all other endpoints
+
+### Codex builds:
+
+**Files:** `frontend/src/lib/api.ts`, `frontend/src/app/page.tsx`
+
+- Add `getHomeSummary()` to `api.ts` → `{ summary: string, generated_at: string }`
+- Render a "Quick Summary" card above the KPI grid
+- Loading skeleton while fetching; if endpoint fails, hide card silently (don't break page)
+- Design: clean card, summary text in readable body size, subtle "Generated today" timestamp
+
+---
+
+## Wave I — Codex: Onboarding Multi-Step Flow + Skip ✅ DONE
+
+**Items #8 + #9 — Onboarding journey (multi-step) + optional sync**
+
+**No backend changes required.**
+
+### What was built:
+
+- Rebuilt `/onboarding` into a 3-step wizard replacing the old flat page
+- Added `Welcome`, `Import`, and `Processing` steps
+- Moved the existing Drive picker, filters, selection, batching, and import submission flow into the `Import` step
+- Moved the existing import polling/status view into the `Processing` step
+- Added `Skip for now` links on the `Import` and `Processing` steps that navigate to `/meetings` with no server-side state changes
+- Added `Go to my meetings →` once all queued imports complete
+- Added a friendly empty state on `/meetings` for users who skip before importing any recordings
+
+### Files changed:
+
+- `frontend/src/app/onboarding/page.tsx`
+- `frontend/src/app/meetings/page.tsx`
+
+---
+
+## Wave J — Claude Code + Codex: Meetings List Redesign ✅ DONE
+
+**Item #14 — Meetings list UI redesign (Fireflies/Otter-style)**
+
+### Claude Code builds:
+
+Extend `GET /conversations` to include topic labels per meeting.
+
+**New field added to `ConversationSummary`:**
+```
++ topic_labels: list[str]   # up to 3 topic labels, empty array if none yet
+```
+
+Implementation: LEFT JOIN conversations → topics, take up to 3 labels ordered by recency.
+
+**Files modified:**
+- `src/api/routes/conversations.py`
+- `src/models/conversation.py`
+
+### Codex builds:
+
+**Files:** `frontend/src/lib/api.ts`, `frontend/src/app/meetings/page.tsx`
+
+**Richer meeting cards:**
+- Title (existing)
+- Date + duration + source pill (tighten layout)
+- Up to 3 topic label chips — small pill badges, overflow hidden gracefully ("+N more" if needed)
+- Status badge (existing)
+
+**Date grouping** — group the list into sections with small headers:
+- `Today`
+- `This week`
+- `Earlier`
+
+**api.ts update:** Add `topic_labels: string[]` to `ConversationSummary` type.
+
+---
+
+## Future Milestone — Out of Scope for Round 2
+
+| # | Feature | Why deferred |
+|---|---------|-------------|
+| 23 | Integrations (Zoom, Teams, Slack) | New OAuth connectors + ingestion workers per platform |
+| 24 | Bot as meeting participant | Real-time audio infrastructure (streaming, telephony SDK) |
+| 25 | Native Mac / iPhone app | New platform builds (Electron + Swift) |
 
 ---
 

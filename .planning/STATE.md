@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** Pilot UX polish and production QA on top of intelligent search. Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
+**Current focus:** Pilot UX polish, merge/deploy, and production QA on top of intelligent search. Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-16 — shipped Round 2 Wave H + Wave J backend. `GET /home/summary` live with LLM briefing + plain-text fallback + 6h cache. `GET /conversations` now returns `topic_labels: list[str]` per meeting. 141 tests passing, ruff + mypy clean.
+Last activity: 2026-03-16 — shipped Wave I onboarding redesign plus Round 2 Wave H + Wave J frontend. Home now renders `GET /home/summary` as an optional Quick Summary card; Meetings now group cards into `Today` / `This week` / `Earlier` and render topic chips from `topic_labels`. Frontend lint/build green.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -76,6 +76,8 @@ Recent decisions affecting current work:
 - [UI]: Meeting detail now uses per-item `action_type` from `GET /conversations/{id}` to separate `Commitments` and `Follow-ups` in the `Actions` tab.
 - [UI]: The Meetings page now keeps a permanent `Import past meetings` entry point visible above the list so users can add more recordings at any time.
 - [UI]: `/onboarding` is now a 3-step wizard with explicit skip paths, and `/meetings` shows a no-meetings prompt when users skip before importing anything.
+- [UI]: Home now renders an optional Quick Summary card above the KPI grid using `GET /home/summary`, with a loading skeleton and silent hide on empty/error states.
+- [UI]: Meetings now group conversation cards into `Today`, `This week`, and `Earlier`, and render up to 3 topic chips from `topic_labels` on each card.
 - [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
 - [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
 - [Ops]: Upstash free tier (500k req/month) is exhausted; worker requires Pay As You Go upgrade to resume ingest pipeline.
@@ -101,5 +103,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Wave H + Wave J backends shipped and verified (141 tests green). Codex next: Wave H frontend (Quick Summary card) + Wave J frontend (topic chips + date grouping on Meetings page).
+Stopped at: Wave I plus Wave H/Wave J frontend are shipped locally and validated. Next: compact live QA on Home and Meetings, then merge/deploy the frontend batch.
 Resume file: None

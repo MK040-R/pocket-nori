@@ -1024,3 +1024,23 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 ### What comes next
 
 - Wave I is complete; next local work is either Wave H/Wave J once their dependencies are ready, or the compact QA pass across Search, Topics, Dashboard, Meetings, and Actions
+
+---
+
+## 2026-03-16 — Wave H + Wave J frontend: Home summary + grouped meeting cards
+
+**Goal:** Surface the newly merged home-summary and meeting-topic-label backend fields in the frontend without adding any new dependencies or changing existing APIs.
+
+- Added `getHomeSummary()` to the frontend API layer and rendered a `Quick Summary` card above the Home KPI grid.
+- Kept the summary card optional: it shows a loading skeleton while fetching, renders relative freshness from `generated_at`, and hides silently if the endpoint errors or returns empty text.
+- Extended `ConversationSummary` with `topic_labels: string[]` so the frontend consumes the Wave J backend contract directly.
+- Rebuilt the Meetings list into date-grouped sections (`Today`, `This week`, `Earlier`) and added up to three topic chips per meeting card when labels are present.
+
+### Validation
+
+- `cd frontend && npm run lint` ✅
+- `cd frontend && npm run build` ✅
+
+### What comes next
+
+- Run a compact QA pass on Home and Meetings against the live Wave H/Wave J backend, then merge and deploy if no regressions appear

@@ -58,6 +58,7 @@ export type ConversationSummary = {
   meeting_date: string;
   duration_seconds: number | null;
   status: "indexed" | "processing";
+  topic_labels: string[];
   latest_brief_id?: string | null;
   latest_brief_generated_at?: string | null;
 };
@@ -252,6 +253,11 @@ export type TodayBriefing = {
       meeting_date: string | null;
     }>;
   }>;
+};
+
+export type HomeSummary = {
+  summary: string;
+  generated_at: string;
 };
 
 export type BriefCitation = {
@@ -658,6 +664,10 @@ export async function resolveCommitment(id: string): Promise<Commitment> {
 
 export async function getTodayBriefing(): Promise<TodayBriefing> {
   return request<TodayBriefing>("/calendar/today", { method: "GET" });
+}
+
+export async function getHomeSummary(): Promise<HomeSummary> {
+  return request<HomeSummary>("/home/summary", { method: "GET" });
 }
 
 export async function getEntities(): Promise<EntitySummary[]> {

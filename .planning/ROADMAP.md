@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work also shipped: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, and intelligent search (embed-at-ingest multi-table vector search + conversational Q&A). Next: upgrade Upstash Redis (free tier exhausted), merge PR #14, run backfill, then post-MVP hardening.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work also shipped: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest multi-table vector search + conversational Q&A), and the current pilot UX cleanup through Wave J. Next: merge/deploy the latest frontend batch, upgrade Upstash Redis (free tier exhausted), merge PR #14, run backfill, then post-MVP hardening.
 
 ## Phases
 
@@ -119,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 - [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
 - [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
-- [x] Pilot UX polish waves C-G — shipped Home/Actions naming cleanup, profile menu and entity management, meeting-detail simplification, persistent global search, and persistent Meetings import access
+- [x] Pilot UX polish waves C-J — shipped Home/Actions naming cleanup, profile menu and entity management, meeting-detail simplification, persistent global search, persistent Meetings import access, onboarding wizard redesign, Home Quick Summary, and grouped Meetings cards with topic chips
 - [ ] Topic intelligence cleanup — current active workstream
   - Deployed and verified live:
     - stored `topic_clusters` canonical layer with `topics.cluster_id` and `topic_arcs.cluster_id`
@@ -192,3 +192,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `pytest -q` ✅ (112 passed, 7 skipped)
   - `mypy src/ --ignore-missing-imports` ✅
   - `ruff check . && ruff format --check .` ✅
+- 2026-03-16 Wave I + Wave H/Wave J frontend validation (local):
+  - `frontend: npm run lint && npm run build` ✅

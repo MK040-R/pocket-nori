@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 
 import {
   getCommitments,
+  getHomeSummary,
   getIndexStats,
   getTodayBriefing,
   type ActionType,
   type Commitment,
+  type HomeSummary,
   type IndexStats,
   type TodayBriefing,
 } from "@/lib/api";
@@ -47,9 +49,31 @@ function ActionList({
   );
 }
 
+function formatSummaryUpdatedAt(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Updated recently";
+  }
+
+  const now = new Date();
+  const diffMinutes = Math.max(1, Math.round((now.getTime() - parsed.getTime()) / 60000));
+  if (diffMinutes < 60) {
+    return `Updated ${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.max(1, Math.round(diffMinutes / 60));
+  if (now.toDateString() === parsed.toDateString()) {
+    return `Updated ${diffHours}h ago`;
+  }
+
+  return `Updated ${parsed.toLocaleDateString()}`;
+}
+
 export default function HomePage() {
   const [briefing, setBriefing] = useState<TodayBriefing | null>(null);
   const [stats, setStats] = useState<IndexStats | null>(null);
+  const [homeSummary, setHomeSummary] = useState<HomeSummary | null>(null);
+  const [homeSummaryState, setHomeSummaryState] = useState<"loading" | "ready" | "hidden">("loading");
   const [actions, setActions] = useState<Record<ActionType, Commitment[]>>({
     commitment: [],
     follow_up: [],
@@ -59,6 +83,28 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true;
+
+    const loadSummary = async () => {
+      setHomeSummaryState("loading");
+      try {
+        const summaryData = await getHomeSummary();
+        if (!mounted) {
+          return;
+        }
+        if (summaryData.summary.trim()) {
+          setHomeSummary(summaryData);
+          setHomeSummaryState("ready");
+          return;
+        }
+      } catch {
+        // Hide the summary card silently if this optional endpoint fails.
+      }
+
+      if (mounted) {
+        setHomeSummary(null);
+        setHomeSummaryState("hidden");
+      }
+    };
 
     const load = async () => {
       setLoading(true);
@@ -89,6 +135,7 @@ export default function HomePage() {
       }
     };
 
+    void loadSummary();
     void load();
 
     return () => {
@@ -126,6 +173,26 @@ export default function HomePage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Home</h1>
       </section>
+
+      {homeSummaryState !== "hidden" && (
+        <section className="card p-6">
+          {homeSummaryState === "loading" ? (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-4 w-28 rounded bg-bg-control" />
+              <div className="h-4 w-full rounded bg-bg-control" />
+              <div className="h-4 w-4/5 rounded bg-bg-control" />
+            </div>
+          ) : homeSummary ? (
+            <div>
+              <h2 className="text-lg font-semibold">Quick Summary</h2>
+              <p className="mt-3 text-sm leading-7 text-ink-secondary">{homeSummary.summary}</p>
+              <p className="mt-4 text-xs text-ink-tertiary">
+                {formatSummaryUpdatedAt(homeSummary.generated_at)}
+              </p>
+            </div>
+          ) : null}
+        </section>
+      )}
 
       <section className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
         {kpiCards.map((card) => (

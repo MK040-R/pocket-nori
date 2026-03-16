@@ -642,6 +642,47 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 
 ---
 
+## ✅ 2026-03-16 — Wave I frontend: onboarding wizard + skip path
+
+### What changed
+
+- Rebuilt `/onboarding` into a 3-step wizard with `Welcome`, `Import`, and `Processing` steps.
+- Kept the existing recording fetch, filtering, selection, batching, and import queue logic, but moved it into the `Import` step.
+- Kept the existing progress polling flow, but moved it into the `Processing` step and added a `Go to my meetings →` CTA once imports finish.
+- Added `Skip for now` navigation on the `Import` and `Processing` steps.
+- Added a friendly zero-meetings empty state on `/meetings` for users who skip onboarding before importing anything.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Wave I is complete; next local work is either Wave H/Wave J once their dependencies are ready, or the compact QA pass across Search, Topics, Dashboard, Meetings, and Actions
+
+---
+
+## ✅ 2026-03-16 — Wave H + Wave J frontend: Home summary + grouped meeting cards
+
+### What changed
+
+- Added `getHomeSummary()` to the frontend API layer and rendered a `Quick Summary` card above the Home KPI grid.
+- Kept the summary optional: it shows a skeleton while loading, displays freshness from `generated_at`, and hides silently on empty/error states.
+- Updated `ConversationSummary` to include `topic_labels: string[]`.
+- Grouped the Meetings list into `Today`, `This week`, and `Earlier` sections and added up to three topic chips per meeting card when labels exist.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Run compact QA on Home and Meetings against the live Wave H/Wave J backend, then merge and deploy if the live data looks correct
+
+---
+
 ## ✅ 2026-03-13 — Topic cluster IDs stabilized across recluster
 
 ### What changed
