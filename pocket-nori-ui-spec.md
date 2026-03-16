@@ -252,7 +252,7 @@ Meetings *are* Conversations. Each row in the Meetings list is one Conversation.
 ### 3.4 Information Architecture
 
 ```
-FARZ
+Pocket Nori
 ├── / (Dashboard)
 │   ├── Today's meetings + Brief status
 │   ├── Open Commitments (top 3, by due date)
@@ -319,7 +319,7 @@ FARZ
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                                                                          │
-│   ■ FARZ                                                                 │
+│   ■ Pocket Nori                                                          │
 │                                                                          │
 │   Welcome, Layla.                                                        │
 │   Pocket Nori is your personal intelligence layer for meetings.                 │
@@ -356,7 +356,7 @@ FARZ
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  Good morning, Layla.  Monday, March 9                   │
-│  ■ FARZ      │                                                          │
+│  ■ Pocket Nori│                                                          │
 │              │  ┌─── TODAY'S MEETINGS ──────────────────────────────┐  │
 │  ● Dashboard │  │  ▶ 09:00  Product Standup                         │  │
 │  ○ Search    │  │          Recurring · Building context...           │  │
@@ -374,7 +374,7 @@ FARZ
 │              │  │    Sales Call · Mar 4               [View →]      │  │
 │              │  └────────────────────────────────────────────────── ┘  │
 │              │                                                          │
-│              │  ┌─── FARZ IS BUILDING YOUR INDEX ───────────────────┐  │
+│              │  ┌─── POCKET NORI IS BUILDING YOUR INDEX ────────────┐  │
 │              │  │  23 meetings indexed · Topics forming              │  │
 │              │  │  ████████████░░░░░░░░                              │  │
 │              │  │  Pre-meeting Briefs appear after 2 sessions of     │  │
@@ -404,7 +404,7 @@ FARZ
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  Good morning, Layla.  Monday, March 9                   │
-│  ■ FARZ      │                                                          │
+│  ■ Pocket Nori│                                                          │
 │              │  ┌─── TODAY'S MEETINGS ──────────────────────────────┐  │
 │  ● Dashboard │  │  ▶ 09:00  Product Standup      [Brief ready ✦]   │  │
 │  ○ Search    │  │          Recurring · 8 sessions indexed            │  │
@@ -466,7 +466,7 @@ The Search page is never a blank screen. Before the user types anything, it show
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │                                                          │
-│  ■ FARZ      │  ┌──────────────────────────────────────────────────┐  │
+│  ■ Pocket Nori│  ┌──────────────────────────────────────────────────┐  │
 │              │  │ 🔍  Search your conversations...                  │  │
 │  ○ Dashboard │  └──────────────────────────────────────────────────┘  │
 │  ● Search    │                                                          │
@@ -539,7 +539,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │                                                          │
-│  ■ FARZ      │  ┌──────────────────────────────────────────────────┐  │
+│  ■ Pocket Nori│  ┌──────────────────────────────────────────────────┐  │
 │              │  │ 🔍  reporting feature                         [×] │  │
 │  ○ Dashboard │  └──────────────────────────────────────────────────┘  │
 │  ● Search    │  ← All topics                                           │
@@ -615,7 +615,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  ← Back                                                  │
-│  ■ FARZ      │  Brief: Product Standup                   [Share ↗]    │
+│  ■ Pocket Nori│  Brief: Product Standup                   [Share ↗]    │
 │              │  Today 09:00  ·  Recurring  ·  8 sessions indexed       │
 │  ○ Dashboard │  ────────────────────────────────────────────────────── │
 │  ○ Search    │                                                          │
@@ -676,7 +676,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  Meetings                           [Filter ▾]          │
-│  ■ FARZ      │                                                          │
+│  ■ Pocket Nori│                                                          │
 │              │  UPCOMING TODAY                                          │
 │  ○ Dashboard │  ┌───────────────────────────────────────────────────┐  │
 │  ○ Search    │  │  ▶ 09:00  Product Standup       [Brief ready ✦]  │  │
@@ -710,7 +710,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  ← Meetings                                              │
-│  ■ FARZ      │  Product Review  ·  Mar 6, 14:00  ·  45 min  ·  5 ppl  │
+│  ■ Pocket Nori│  Product Review  ·  Mar 6, 14:00  ·  45 min  ·  5 ppl  │
 │              │  ─────────────────────────────────────────────────────  │
 │  ○ Dashboard │                                                          │
 │  ○ Search    │  ┌─── SUMMARY ───────────────────────────────────────┐  │
@@ -777,7 +777,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  My Commitments                                          │
-│  ■ FARZ      │  4 open  ·  12 resolved this month                      │
+│  ■ Pocket Nori│  4 open  ·  12 resolved this month                      │
 │              │  ─────────────────────────────────────────────────────  │
 │  ○ Dashboard │                                                          │
 │  ○ Search    │  OPEN                                                    │
@@ -819,7 +819,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────┐
 │              │  Insights                      Last 30 days [▾]        │
-│  ■ FARZ      │                                                          │
+│  ■ Pocket Nori│                                                          │
 │              │  ┌─── TOP TOPICS ────────────────────────────────────┐  │
 │  ○ Dashboard │  │  Q2 Roadmap           ██████████████  14 meetings  │  │
 │  ○ Search    │  │  Reporting Feature    ████████          8 meetings  │  │
@@ -876,7 +876,7 @@ Reached by: (a) typing a query in the search box, or (b) clicking any Topic card
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                                                                      │
-│   ■ FARZ                                       [Create your own →]  │
+│   ■ Pocket Nori                                [Create your own →]  │
 │   ─────────────────────────────────────────────────────────────────  │
 │                                                                      │
 │   Pre-Meeting Brief                                                  │

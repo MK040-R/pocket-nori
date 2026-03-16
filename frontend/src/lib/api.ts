@@ -1,4 +1,9 @@
-export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const DEFAULT_API_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:8000"
+    : "https://farz-personal-intelligence.onrender.com";
+
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 
 export type Session = {
   user_id: string;
