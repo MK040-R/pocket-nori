@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from src import llm_client
 from src.api.deps import get_current_user
+from src.api.schema_guards import feature_unavailable, is_missing_schema_feature
 from src.database import get_client, get_direct_connection
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,12 @@ class CitationOut(BaseModel):
     conversation_id: str
     conversation_title: str
     meeting_date: str
+
+
+def _chat_schema_missing(exc: Exception) -> bool:
+    return is_missing_schema_feature(exc, "chat_sessions") or is_missing_schema_feature(
+        exc, "chat_messages"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -271,13 +278,18 @@ def chat(
 
     if session_id:
         # Verify session belongs to user
-        existing = (
-            db.table("chat_sessions")
-            .select("id")
-            .eq("id", session_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        try:
+            existing = (
+                db.table("chat_sessions")
+                .select("id")
+                .eq("id", session_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as exc:
+            if _chat_schema_missing(exc):
+                raise feature_unavailable("Chat is not available yet.") from exc
+            raise
         if not existing.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -287,27 +299,42 @@ def chat(
         # Create new session
         session_id = str(uuid.uuid4())
         is_new_session = True
-        db.table("chat_sessions").insert(
-            {
-                "id": session_id,
-                "user_id": user_id,
-                "title": "New chat",
-            }
-        ).execute()
+        try:
+            db.table("chat_sessions").insert(
+                {
+                    "id": session_id,
+                    "user_id": user_id,
+                    "title": "New chat",
+                }
+            ).execute()
+        except Exception as exc:
+            if _chat_schema_missing(exc):
+                raise feature_unavailable("Chat is not available yet.") from exc
+            raise
 
     # --- Save user message ---
-    db.table("chat_messages").insert(
-        {
-            "id": str(uuid.uuid4()),
-            "session_id": session_id,
-            "user_id": user_id,
-            "role": "user",
-            "content": body.message,
-        }
-    ).execute()
+    try:
+        db.table("chat_messages").insert(
+            {
+                "id": str(uuid.uuid4()),
+                "session_id": session_id,
+                "user_id": user_id,
+                "role": "user",
+                "content": body.message,
+            }
+        ).execute()
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
 
     # --- Retrieve context + history ---
-    history = _get_session_history(db, user_id, session_id)
+    try:
+        history = _get_session_history(db, user_id, session_id)
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
     # Remove the message we just saved (it's the current turn, passed separately)
     if history and history[-1]["role"] == "user" and history[-1]["content"] == body.message:
         history = history[:-1]
@@ -402,14 +429,19 @@ def list_sessions(
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    session_rows = (
-        db.table("chat_sessions")
-        .select("id, title, created_at, updated_at")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    ).data or []
+    try:
+        session_rows = (
+            db.table("chat_sessions")
+            .select("id, title, created_at, updated_at")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
 
     if not session_rows:
         return []
@@ -418,15 +450,20 @@ def list_sessions(
     session_ids = [str(row["id"]) for row in session_rows]
     previews: dict[str, str] = {}
     for sid in session_ids:
-        msg_rows = (
-            db.table("chat_messages")
-            .select("content")
-            .eq("session_id", sid)
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        ).data or []
+        try:
+            msg_rows = (
+                db.table("chat_messages")
+                .select("content")
+                .eq("session_id", sid)
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            if _chat_schema_missing(exc):
+                raise feature_unavailable("Chat is not available yet.") from exc
+            raise
         if msg_rows:
             content = str(msg_rows[0].get("content", ""))
             previews[sid] = content[:100]
@@ -467,24 +504,38 @@ def get_session_messages(
     db = get_client(raw_jwt)
 
     # Verify session ownership
-    session_rows = (
-        db.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", user_id).execute()
-    )
+    try:
+        session_rows = (
+            db.table("chat_sessions")
+            .select("id")
+            .eq("id", session_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
     if not session_rows.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chat session not found",
         )
 
-    msg_rows = (
-        db.table("chat_messages")
-        .select("id, role, content, citations, created_at")
-        .eq("session_id", session_id)
-        .eq("user_id", user_id)
-        .order("created_at")
-        .range(offset, offset + limit - 1)
-        .execute()
-    ).data or []
+    try:
+        msg_rows = (
+            db.table("chat_messages")
+            .select("id, role, content, citations, created_at")
+            .eq("session_id", session_id)
+            .eq("user_id", user_id)
+            .order("created_at")
+            .range(offset, offset + limit - 1)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
 
     return [
         ChatMessage(
@@ -518,9 +569,18 @@ def delete_session(
     db = get_client(raw_jwt)
 
     # Verify ownership
-    existing = (
-        db.table("chat_sessions").select("id").eq("id", session_id).eq("user_id", user_id).execute()
-    )
+    try:
+        existing = (
+            db.table("chat_sessions")
+            .select("id")
+            .eq("id", session_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
     if not existing.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -528,6 +588,11 @@ def delete_session(
         )
 
     # Messages cascade on session delete
-    db.table("chat_sessions").delete().eq("id", session_id).eq("user_id", user_id).execute()
+    try:
+        db.table("chat_sessions").delete().eq("id", session_id).eq("user_id", user_id).execute()
+    except Exception as exc:
+        if _chat_schema_missing(exc):
+            raise feature_unavailable("Chat is not available yet.") from exc
+        raise
 
     logger.info("Chat session deleted — session=%s user=%s", session_id, user_id)

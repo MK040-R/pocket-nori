@@ -216,7 +216,7 @@ export default function ChatPage() {
           return;
         }
 
-        if (isApiErrorStatus(loadError, [404, 405, 501])) {
+        if (isApiErrorStatus(loadError, [404, 405, 501, 503])) {
           setFeatureUnavailable(true);
           setSessions([]);
           setSelectedSessionId(null);
@@ -269,7 +269,7 @@ export default function ChatPage() {
           return;
         }
 
-        if (isApiErrorStatus(loadError, [404, 405, 501])) {
+        if (isApiErrorStatus(loadError, [404, 405, 501, 503])) {
           setFeatureUnavailable(true);
           return;
         }
@@ -383,7 +383,7 @@ export default function ChatPage() {
       });
 
       if (!response.ok || !response.body) {
-        if ([404, 405, 501].includes(response.status)) {
+        if ([404, 405, 501, 503].includes(response.status)) {
           setFeatureUnavailable(true);
           throw new Error("Chat streaming is not available yet for this workspace.");
         }

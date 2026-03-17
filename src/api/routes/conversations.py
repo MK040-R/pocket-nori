@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from src.api.deps import get_current_user
+from src.api.schema_guards import feature_unavailable, is_missing_schema_feature
 from src.database import get_client
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,35 @@ class ConversationConnection(BaseModel):
 
 class ConnectionsResponse(BaseModel):
     connections: list[ConversationConnection]
+
+
+def _category_schema_missing(exc: Exception) -> bool:
+    return is_missing_schema_feature(exc, "conversations", "category")
+
+
+def _execute_conversation_list_query(
+    db: Any,
+    user_id: str,
+    limit: int,
+    offset: int,
+    *,
+    include_category: bool,
+    category: str | None,
+) -> Any:
+    selected_columns = "id, title, source, meeting_date, duration_seconds, status"
+    if include_category:
+        selected_columns = f"{selected_columns}, category"
+
+    query = (
+        db.table("conversations")
+        .select(selected_columns)
+        .eq("user_id", user_id)
+        .order("meeting_date", desc=True)
+        .range(offset, offset + limit - 1)
+    )
+    if category:
+        query = query.eq("category", category)
+    return query.execute()
 
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -441,17 +471,30 @@ def list_conversations(
             detail=f"category must be one of: {', '.join(sorted(_VALID_CATEGORIES))}",
         )
 
-    query = (
-        db.table("conversations")
-        .select("id, title, source, meeting_date, duration_seconds, status, category")
-        .eq("user_id", user_id)
-        .order("meeting_date", desc=True)
-        .range(offset, offset + limit - 1)
-    )
-    if category:
-        query = query.eq("category", category)
-
-    result = query.execute()
+    category_available = True
+    try:
+        result = _execute_conversation_list_query(
+            db,
+            user_id,
+            limit,
+            offset,
+            include_category=True,
+            category=category,
+        )
+    except Exception as exc:
+        if not _category_schema_missing(exc):
+            raise
+        if category:
+            raise feature_unavailable("Meeting categories are not available yet.") from exc
+        category_available = False
+        result = _execute_conversation_list_query(
+            db,
+            user_id,
+            limit,
+            offset,
+            include_category=False,
+            category=None,
+        )
     rows = result.data or []
 
     # Fetch up to 3 topic labels per conversation in a single query.
@@ -485,7 +528,7 @@ def list_conversations(
             latest_brief_id=None,
             latest_brief_generated_at=None,
             topic_labels=labels_by_conv.get(str(row["id"]), []),
-            category=row.get("category"),
+            category=row.get("category") if category_available else None,
         )
         for row in rows
     ]
@@ -516,13 +559,26 @@ def get_conversation(
     db = get_client(raw_jwt)
 
     # --- Conversation ---
-    conv_result = (
-        db.table("conversations")
-        .select("id, title, source, meeting_date, duration_seconds, status, category")
-        .eq("id", conversation_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
+    category_available = True
+    try:
+        conv_result = (
+            db.table("conversations")
+            .select("id, title, source, meeting_date, duration_seconds, status, category")
+            .eq("id", conversation_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if not _category_schema_missing(exc):
+            raise
+        category_available = False
+        conv_result = (
+            db.table("conversations")
+            .select("id, title, source, meeting_date, duration_seconds, status")
+            .eq("id", conversation_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
     if not conv_result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -615,7 +671,7 @@ def get_conversation(
                 if latest_brief and latest_brief.get("generated_at")
                 else None
             ),
-            category=conv.get("category"),
+            category=conv.get("category") if category_available else None,
         ),
         topics=[
             TopicOut(
@@ -704,13 +760,18 @@ def update_conversation(
             detail="Conversation not found",
         )
 
-    update_result = (
-        db.table("conversations")
-        .update({"category": body.category})
-        .eq("id", conversation_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
+    try:
+        update_result = (
+            db.table("conversations")
+            .update({"category": body.category})
+            .eq("id", conversation_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if _category_schema_missing(exc):
+            raise feature_unavailable("Meeting categories are not available yet.") from exc
+        raise
     if not update_result.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

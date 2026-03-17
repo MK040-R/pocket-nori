@@ -149,7 +149,7 @@ export default function HomePage() {
         }
 
         const nextBrief = [...upcoming]
-          .filter((item) => item.minutes_until_start <= 60)
+          .filter((item) => item.minutes_until_start <= 60 && item.brief_id)
           .sort((left, right) => left.minutes_until_start - right.minutes_until_start)[0] ?? null;
         setUpcomingBrief(nextBrief);
       } catch (loadError) {
@@ -157,7 +157,7 @@ export default function HomePage() {
           return;
         }
 
-        if (isApiErrorStatus(loadError, [404, 405, 501])) {
+        if (isApiErrorStatus(loadError, [404, 405, 501, 503])) {
           setUpcomingBrief(null);
           return;
         }
@@ -207,6 +207,7 @@ export default function HomePage() {
   useEffect(() => {
     if (
       !upcomingBrief ||
+      !upcomingBrief.brief_id ||
       notificationPermission !== "granted" ||
       upcomingBrief.minutes_until_start > 30 ||
       typeof window === "undefined" ||

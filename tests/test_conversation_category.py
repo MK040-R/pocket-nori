@@ -127,6 +127,84 @@ def test_list_conversations_includes_category_field() -> None:
         _clear_auth()
 
 
+@pytest.mark.unit
+def test_list_conversations_falls_back_when_category_column_is_missing() -> None:
+    """If the category migration is not applied yet, list still works without the field."""
+    _override_auth()
+    try:
+        db = MagicMock()
+
+        conversations_table = MagicMock()
+
+        missing_category_query = MagicMock()
+        missing_category_query.eq.return_value = missing_category_query
+        missing_category_query.order.return_value = missing_category_query
+        missing_category_query.range.return_value = missing_category_query
+        missing_category_query.execute.side_effect = RuntimeError(
+            "Could not find the 'category' column of 'conversations' in the schema cache"
+        )
+
+        fallback_query = MagicMock()
+        fallback_query.eq.return_value = fallback_query
+        fallback_query.order.return_value = fallback_query
+        fallback_query.range.return_value = fallback_query
+        fallback_query.execute.return_value = MagicMock(
+            data=[{k: v for k, v in _SAMPLE_CONVERSATION.items() if k != "category"}]
+        )
+
+        conversations_table.select.side_effect = lambda columns: (
+            missing_category_query if "category" in columns else fallback_query
+        )
+
+        topics_table = MagicMock()
+        topic_query = MagicMock()
+        topic_query.eq.return_value = topic_query
+        topic_query.in_.return_value = topic_query
+        topic_query.order.return_value = topic_query
+        topic_query.execute.return_value = MagicMock(data=[])
+        topics_table.select.return_value = topic_query
+
+        db.table.side_effect = lambda name: {
+            "conversations": conversations_table,
+            "topics": topics_table,
+        }[name]
+
+        with patch("src.api.routes.conversations.get_client", return_value=db):
+            response = client.get("/conversations")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload[0]["category"] is None
+    finally:
+        _clear_auth()
+
+
+@pytest.mark.unit
+def test_list_conversations_category_filter_returns_503_when_column_is_missing() -> None:
+    """Filtering by category should fail clearly until the migration is live."""
+    _override_auth()
+    try:
+        db = MagicMock()
+        conversations_table = MagicMock()
+        query = MagicMock()
+        query.eq.return_value = query
+        query.order.return_value = query
+        query.range.return_value = query
+        query.execute.side_effect = RuntimeError(
+            "Could not find the 'category' column of 'conversations' in the schema cache"
+        )
+        conversations_table.select.return_value = query
+        db.table.side_effect = lambda name: conversations_table
+
+        with patch("src.api.routes.conversations.get_client", return_value=db):
+            response = client.get("/conversations?category=team")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Meeting categories are not available yet."
+    finally:
+        _clear_auth()
+
+
 # ---------------------------------------------------------------------------
 # PATCH /conversations/{id}
 # ---------------------------------------------------------------------------

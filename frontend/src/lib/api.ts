@@ -342,7 +342,7 @@ export type DraftResponse = {
 };
 
 export type UpcomingBrief = {
-  brief_id: string;
+  brief_id: string | null;
   conversation_id: string | null;
   calendar_event_id: string;
   event_title: string;
