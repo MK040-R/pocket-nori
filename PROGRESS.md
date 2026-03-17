@@ -1,7 +1,7 @@
 # Pocket Nori — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-12 (durable topic intelligence implemented locally; deploy + recluster next)
+> Last updated: 2026-03-17 (Waves B and D frontend shipped locally; backend rollout pending)
 
 ---
 
@@ -69,7 +69,70 @@ Building a software product from scratch happens in stages, like constructing a 
 | Phase 5 — Personal context dashboard                          | ✅ Complete | 2/2 plans delivered and validated                                                            |
 | Round 2 Wave H — GET /home/summary (AI daily briefing)        | ✅ Complete | New endpoint + generate_home_summary() + 6 tests, cached per user per day                   |
 | Round 2 Wave J — topic_labels on GET /conversations           | ✅ Complete | ConversationSummary gains topic_labels: list[str], up to 3 per meeting                      |
+| Milestone 1 Wave B — Chat UI + meeting tag UI                 | ✅ Complete | `/chat` shipped locally, meeting tag filter/badges/override added with backend-safe fallback |
+| Milestone 1 Wave D — Draft UI + prep push UI                  | ✅ Complete | Draft modal launched from action cards; upcoming brief banner/notifications added to Home    |
 
+
+---
+
+## ✅ Milestone Update — 2026-03-17 (Milestone 1 Wave D frontend)
+
+### What was completed in this milestone
+
+- Built the **Draft UI**:
+  - added reusable draft generation modal with email/message toggle, editable subject/body, copy-to-clipboard, retry state, and graceful handling when `POST /commitments/{id}/draft` is not live yet
+  - added `Draft` launch buttons to the main Actions list and the meeting detail Actions tab
+
+- Built the **Prep Push UI**:
+  - added upcoming brief fetch to the Home page
+  - added a prominent prep banner above Quick Summary when a brief-backed meeting is within 60 minutes
+  - added brief CTA, open-actions/related-topics badges, and optional browser-notification prompt when the meeting is within 30 minutes
+  - kept the banner fully optional so missing backend endpoints fail closed instead of breaking Home
+
+### Validation results
+
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- Wait for the matching backend Wave C endpoints to be deployed, then run signed-in QA on:
+  - `/chat`
+  - `/meetings`
+  - `/meetings/[id]`
+  - `/commitments`
+  - `/`
+
+---
+
+## ✅ Milestone Update — 2026-03-17 (Milestone 1 Wave B frontend)
+
+### What was completed in this milestone
+
+- Built the new **Chat** workspace in the frontend:
+  - added `/chat` to the main navigation
+  - added session loading, deletion, responsive sidebar behavior, and chat empty states
+  - implemented SSE streaming for `POST /chat`
+  - added citation pills that deep-link back to source meetings
+  - added graceful fallback UI when the chat backend endpoints are not live yet
+
+- Built the **Meeting Tag UI**:
+  - added category metadata/types to the frontend contract
+  - added category filter pills to `/meetings`
+  - added category badges on meeting cards
+  - added optimistic manual category override on meeting detail with rollback if the backend patch route is unavailable
+
+### Validation results
+
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Milestone 1 Wave D frontend**
+  - add draft generation UI to action surfaces
+  - add upcoming brief banner to Home
+  - add browser notification support with a no-backend/no-permission fallback path
 
 ---
 
@@ -1044,3 +1107,26 @@ After the frontend engineer (Codex) reviewed the backend, four issues were found
 ### What comes next
 
 - Run a compact QA pass on Home and Meetings against the live Wave H/Wave J backend, then merge and deploy if no regressions appear
+
+---
+
+## 2026-03-16 — Frontend batch merged/deployed + partial production QA
+
+**Goal:** Confirm the Wave I / H / J frontend batch is live in production and capture the real next blocker after deploy.
+
+- Confirmed the frontend batch was merged and deployed.
+- Verified the production frontend root responds and renders the Pocket Nori shell.
+- Verified the deployed auth entrypoint redirects to the Google account chooser, so the top-level login handshake is live.
+- Verified unauthenticated production behavior surfaces a clear `Session expired. Sign in again.` state instead of a blank/crashed page.
+- Could not complete the signed-in QA pass from this environment because non-browser network tools (`curl`, Firecrawl CLI) could not resolve the production hosts, and the available browser automation could not finish Google-authenticated flows reliably enough for a trustworthy end-to-end check.
+
+### Validation
+
+- Production frontend root reached successfully
+- `/auth/login` redirected to Google account chooser successfully
+- Protected live app routes without a valid session showed the expected session-expired state
+
+### What comes next
+
+- Run a manual signed-in production QA pass across `/`, `/meetings`, `/onboarding`, `/meetings/[id]`, `/search`, `/topics`, `/today`, and `/commitments`
+- If the worker is still blocked after deploy, upgrade Upstash Redis, restart the worker, then run `POST /admin/backfill-embeddings` and verify `/search/ask`

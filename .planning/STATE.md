@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** A working professional can ask "What did we decide about X?" and get an accurate, cited answer across all their past meetings — without doing anything manually.
-**Current focus:** Pilot UX polish, merge/deploy, and production QA on top of intelligent search. Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
+**Current focus:** Production QA and post-deploy validation on top of intelligent search. Upstash Redis free tier limit hit — worker needs upgrade before ingest pipeline resumes.
 
 ## Current Position
 
 Phase: Post-Phase 5 stabilization
 Plan: Active follow-up workstreams (MVP quality + pilot readiness)
 Status: In progress
-Last activity: 2026-03-16 — shipped Wave I onboarding redesign plus Round 2 Wave H + Wave J frontend. Home now renders `GET /home/summary` as an optional Quick Summary card; Meetings now group cards into `Today` / `This week` / `Earlier` and render topic chips from `topic_labels`. Frontend lint/build green.
+Last activity: 2026-03-16 — merged and deployed Wave I plus Round 2 Wave H + Wave J frontend. Partial production QA confirmed the live shell loads, unauthenticated session-expired handling works, and `/auth/login` redirects to Google. Full signed-in QA remains blocked in this environment.
 
 Progress: [██████████] 100% core phases complete; stabilization work active
 
@@ -81,6 +81,7 @@ Recent decisions affecting current work:
 - [API]: `POST /search/ask` adds conversational Q&A with index-based citation mapping; `POST /admin/backfill-embeddings` processes existing meetings idempotently.
 - [Arch]: `_InstructorAnswer` intermediate model isolates Claude's citation output (index numbers only) from database-ID resolution, preventing structured-output validation failures.
 - [Ops]: Upstash free tier (500k req/month) is exhausted; worker requires Pay As You Go upgrade to resume ingest pipeline.
+- [QA]: Production frontend is reachable and auth redirect is live, but a full signed-in production walkthrough could not be completed from this environment because shell-based network tools could not resolve the production hosts and browser automation could not complete Google-authenticated flows reliably.
 - [API]: `GET /home/summary` returns AI-generated 2-3 sentence daily briefing; uses claude-sonnet-4-6 (max_tokens=200), falls back to plain text on LLM failure, cached per user per day at 6h TTL.
 - [API]: `GET /conversations` now includes `topic_labels: list[str]` (up to 3 per meeting) for meeting card previews.
 
@@ -103,5 +104,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Wave I plus Wave H/Wave J frontend are shipped locally and validated. Next: compact live QA on Home and Meetings, then merge/deploy the frontend batch.
+Stopped at: Wave I plus Wave H/Wave J frontend are merged and deployed. Partial production QA is complete; next is a manual signed-in QA pass on Home, Meetings, onboarding, meeting detail, search, topics, today, and Actions.
 Resume file: None

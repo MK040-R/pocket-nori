@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { CommitmentDraftButton } from "@/components/CommitmentDraftButton";
 import {
   createCommitment,
   getCommitments,
@@ -66,7 +67,9 @@ function ActionCard({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <CommitmentDraftButton commitmentId={item.id} />
+
           <button
             type="button"
             disabled={resolving}

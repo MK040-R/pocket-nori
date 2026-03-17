@@ -8,6 +8,7 @@ import { BASE_URL, getSession, logout, subscribeToAuth, type Session } from "@/l
 
 const navItems = [
   { href: "/", label: "Home" },
+  { href: "/chat", label: "Chat" },
   { href: "/meetings", label: "Meetings" },
   { href: "/search", label: "Search" },
   { href: "/topics", label: "Topics" },

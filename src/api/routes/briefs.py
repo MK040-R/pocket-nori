@@ -1,10 +1,13 @@
 """
 Brief routes.
 
+GET /briefs/upcoming    — upcoming meetings with brief status and metadata.
 GET /briefs/{brief_id}  — return full brief detail with citation segments.
 GET /briefs/latest      — resolve latest brief by conversation_id or calendar_event_id.
 """
 
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,6 +15,8 @@ from pydantic import BaseModel
 
 from src.api.deps import get_current_user
 from src.database import get_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -132,6 +137,149 @@ def _collect_citation_segments(
         )
         for row in segment_rows
     ]
+
+
+class UpcomingBrief(BaseModel):
+    brief_id: str | None
+    conversation_id: str | None
+    calendar_event_id: str
+    event_title: str
+    event_start: str
+    minutes_until_start: int
+    preview: str
+    open_commitments_count: int
+    related_topic_count: int
+
+
+@router.get(
+    "/upcoming",
+    response_model=list[UpcomingBrief],
+    summary="Get upcoming meetings with brief status and metadata",
+)
+async def get_upcoming_briefs(
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> list[UpcomingBrief]:
+    """Return upcoming meetings (next 2 hours) with their brief status.
+
+    For each upcoming calendar event, checks if a brief exists, counts
+    open commitments with matching attendees, and counts related topics.
+    """
+    user_id: str = current_user["sub"]
+    raw_jwt: str = current_user["_raw_jwt"]
+    db = get_client(raw_jwt)
+
+    # --- Fetch upcoming calendar events ---
+    upcoming_events: list[Any] = []
+    try:
+        token_rows = (
+            db.table("user_index")
+            .select("google_access_token, google_refresh_token")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if token_rows.data:
+            token_row = token_rows.data[0]
+            access_token = str(token_row.get("google_access_token") or "").strip()
+            refresh_token = str(token_row.get("google_refresh_token") or "").strip()
+
+            if refresh_token:
+                from src.calendar_client import list_calendar_events
+                from src.drive_client import refresh_access_token
+
+                now = datetime.now(tz=UTC)
+                window_end = now + timedelta(hours=2)
+
+                if access_token:
+                    try:
+                        upcoming_events = await list_calendar_events(
+                            access_token, time_min=now, time_max=window_end
+                        )
+                    except PermissionError:
+                        refreshed = await refresh_access_token(refresh_token)
+                        upcoming_events = await list_calendar_events(
+                            refreshed, time_min=now, time_max=window_end
+                        )
+                else:
+                    refreshed = await refresh_access_token(refresh_token)
+                    upcoming_events = await list_calendar_events(
+                        refreshed, time_min=now, time_max=window_end
+                    )
+    except Exception as exc:
+        logger.info(
+            "Upcoming briefs — calendar fetch skipped for user=%s (%s)",
+            user_id,
+            type(exc).__name__,
+        )
+        return []
+
+    if not upcoming_events:
+        return []
+
+    now = datetime.now(tz=UTC)
+    results: list[UpcomingBrief] = []
+
+    for event in upcoming_events:
+        event_id = str(getattr(event, "event_id", ""))
+        event_title = str(getattr(event, "title", ""))
+        event_start = getattr(event, "start_time", now)
+
+        minutes_until = max(0, int((event_start - now).total_seconds() / 60))
+
+        # Check if brief exists for this calendar event
+        brief_id: str | None = None
+        preview = ""
+        brief_rows = (
+            db.table("briefs")
+            .select("id, content")
+            .eq("user_id", user_id)
+            .eq("calendar_event_id", event_id)
+            .order("generated_at", desc=True)
+            .limit(1)
+            .execute()
+        ).data or []
+
+        if brief_rows:
+            brief_id = str(brief_rows[0].get("id", ""))
+            content = str(brief_rows[0].get("content", ""))
+            preview = content[:220].strip()
+            if len(content) > 220:
+                preview = f"{preview}..."
+
+        # Count open commitments (user-wide, not event-specific — quick proxy)
+        open_commitment_rows = (
+            db.table("commitments")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("status", "open")
+            .limit(100)
+            .execute()
+        ).data or []
+
+        # Count recent topics
+        recent_topic_rows = (
+            db.table("topics")
+            .select("id")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .limit(20)
+            .execute()
+        ).data or []
+
+        results.append(
+            UpcomingBrief(
+                brief_id=brief_id,
+                conversation_id=None,
+                calendar_event_id=event_id,
+                event_title=event_title,
+                event_start=event_start.isoformat(),
+                minutes_until_start=minutes_until,
+                preview=preview,
+                open_commitments_count=len(open_commitment_rows),
+                related_topic_count=len(recent_topic_rows),
+            )
+        )
+
+    return results
 
 
 @router.get(

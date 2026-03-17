@@ -8,11 +8,14 @@ import {
   getHomeSummary,
   getIndexStats,
   getTodayBriefing,
+  getUpcomingBriefs,
+  isApiErrorStatus,
   type ActionType,
   type Commitment,
   type HomeSummary,
   type IndexStats,
   type TodayBriefing,
+  type UpcomingBrief,
 } from "@/lib/api";
 import { formatDueDate, formatMeetingTitle } from "@/lib/presentation";
 
@@ -69,17 +72,49 @@ function formatSummaryUpdatedAt(value: string): string {
   return `Updated ${parsed.toLocaleDateString()}`;
 }
 
+function formatMinutesUntilStart(minutes: number): string {
+  if (minutes <= 0) {
+    return "Starting now";
+  }
+  if (minutes === 1) {
+    return "Starting in 1 minute";
+  }
+  return `Starting in ${minutes} minutes`;
+}
+
+function formatUpcomingTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function HomePage() {
   const [briefing, setBriefing] = useState<TodayBriefing | null>(null);
   const [stats, setStats] = useState<IndexStats | null>(null);
   const [homeSummary, setHomeSummary] = useState<HomeSummary | null>(null);
   const [homeSummaryState, setHomeSummaryState] = useState<"loading" | "ready" | "hidden">("loading");
+  const [upcomingBrief, setUpcomingBrief] = useState<UpcomingBrief | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [actions, setActions] = useState<Record<ActionType, Commitment[]>>({
     commitment: [],
     follow_up: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setNotificationPermission("unsupported");
+      return;
+    }
+
+    setNotificationPermission(Notification.permission);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -103,6 +138,31 @@ export default function HomePage() {
       if (mounted) {
         setHomeSummary(null);
         setHomeSummaryState("hidden");
+      }
+    };
+
+    const loadUpcomingBriefs = async () => {
+      try {
+        const upcoming = await getUpcomingBriefs();
+        if (!mounted) {
+          return;
+        }
+
+        const nextBrief = [...upcoming]
+          .filter((item) => item.minutes_until_start <= 60)
+          .sort((left, right) => left.minutes_until_start - right.minutes_until_start)[0] ?? null;
+        setUpcomingBrief(nextBrief);
+      } catch (loadError) {
+        if (!mounted) {
+          return;
+        }
+
+        if (isApiErrorStatus(loadError, [404, 405, 501])) {
+          setUpcomingBrief(null);
+          return;
+        }
+
+        setUpcomingBrief(null);
       }
     };
 
@@ -136,12 +196,40 @@ export default function HomePage() {
     };
 
     void loadSummary();
+    void loadUpcomingBriefs();
     void load();
 
     return () => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !upcomingBrief ||
+      notificationPermission !== "granted" ||
+      upcomingBrief.minutes_until_start > 30 ||
+      typeof window === "undefined" ||
+      !("Notification" in window)
+    ) {
+      return;
+    }
+
+    const notificationKey = `pocket-nori:brief:${upcomingBrief.brief_id}`;
+    if (window.localStorage.getItem(notificationKey)) {
+      return;
+    }
+
+    const notification = new Notification(`Brief ready: ${formatMeetingTitle(upcomingBrief.event_title)}`, {
+      body: `${formatMinutesUntilStart(upcomingBrief.minutes_until_start)} · ${upcomingBrief.open_commitments_count} open actions`,
+    });
+
+    window.localStorage.setItem(notificationKey, new Date().toISOString());
+
+    return () => {
+      notification.close();
+    };
+  }, [notificationPermission, upcomingBrief]);
 
   if (loading) {
     return <section className="card p-4 text-sm text-ink-secondary">Loading home...</section>;
@@ -173,6 +261,69 @@ export default function HomePage() {
       <section className="card p-6">
         <h1 className="text-2xl font-semibold">Home</h1>
       </section>
+
+      {upcomingBrief && (
+        <section className="card overflow-hidden border border-emphasis bg-[linear-gradient(135deg,rgba(0,194,122,0.14),rgba(255,255,255,0.96))] p-0">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="px-6 py-6">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-tertiary">
+                Prep push
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-ink-primary">
+                {formatMeetingTitle(upcomingBrief.event_title)}
+              </h2>
+              <p className="mt-2 text-sm font-medium text-accent">
+                {formatMinutesUntilStart(upcomingBrief.minutes_until_start)}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-secondary">
+                {upcomingBrief.preview}
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-soft bg-white/80 px-3 py-1 text-xs font-medium text-ink-secondary">
+                  {upcomingBrief.open_commitments_count} open actions
+                </span>
+                <span className="rounded-full border border-soft bg-white/80 px-3 py-1 text-xs font-medium text-ink-secondary">
+                  {upcomingBrief.related_topic_count} related topics
+                </span>
+                {notificationPermission === "default" && upcomingBrief.minutes_until_start <= 30 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!("Notification" in window)) {
+                        return;
+                      }
+                      const result = await Notification.requestPermission();
+                      setNotificationPermission(result);
+                    }}
+                    className="rounded-full border border-standard bg-white/80 px-3 py-1 text-xs font-medium text-ink-secondary transition hover:border-emphasis hover:text-ink-primary"
+                  >
+                    Enable browser alerts
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-soft bg-white/75 px-6 py-6 lg:border-l lg:border-t-0">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-tertiary">
+                Next up
+              </p>
+              <p className="mt-2 text-lg font-semibold text-ink-primary">
+                {formatUpcomingTime(upcomingBrief.event_start)}
+              </p>
+              <p className="mt-2 text-sm leading-7 text-ink-secondary">
+                Open the brief before the meeting starts and use the related topics as a fast agenda refresher.
+              </p>
+              <Link
+                href={`/briefs/${upcomingBrief.brief_id}`}
+                className="mt-5 inline-flex rounded-xl border border-emphasis bg-accent-subtle px-4 py-2 text-sm font-medium text-accent transition hover:border-accent"
+              >
+                View brief
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {homeSummaryState !== "hidden" && (
         <section className="card p-6">

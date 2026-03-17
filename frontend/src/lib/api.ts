@@ -1,3 +1,5 @@
+import { isMeetingCategory, type MeetingCategory } from "@/lib/meeting-categories";
+
 const DEFAULT_API_URL =
   process.env.NODE_ENV === "development"
     ? "http://localhost:8000"
@@ -59,6 +61,7 @@ export type ConversationSummary = {
   duration_seconds: number | null;
   status: "indexed" | "processing";
   topic_labels: string[];
+  category: MeetingCategory | null;
   latest_brief_id?: string | null;
   latest_brief_generated_at?: string | null;
 };
@@ -82,6 +85,7 @@ export type ConversationDetail = {
     title: string;
     meeting_date: string;
     duration_seconds: number | null;
+    category: MeetingCategory | null;
     latest_brief_id?: string | null;
     latest_brief_generated_at?: string | null;
   };
@@ -302,6 +306,53 @@ export type BriefLatest = {
   preview: string;
 };
 
+export type ChatCitation = {
+  result_id: string;
+  result_type: string;
+  title: string;
+  conversation_id: string;
+  conversation_title: string;
+  meeting_date: string;
+};
+
+export type ChatSessionSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  last_message_preview: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: ChatCitation[];
+  created_at: string;
+};
+
+export type DraftFormat = "email" | "message";
+
+export type DraftResponse = {
+  subject: string;
+  body: string;
+  recipient_suggestion: string;
+  commitment_text: string;
+  format: DraftFormat;
+};
+
+export type UpcomingBrief = {
+  brief_id: string;
+  conversation_id: string | null;
+  calendar_event_id: string;
+  event_title: string;
+  event_start: string;
+  minutes_until_start: number;
+  preview: string;
+  open_commitments_count: number;
+  related_topic_count: number;
+};
+
 class ApiError extends Error {
   public readonly status: number;
 
@@ -309,6 +360,10 @@ class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+export function isApiErrorStatus(error: unknown, statuses: number[]): boolean {
+  return error instanceof ApiError && statuses.includes(error.status);
 }
 
 type RequestOptions = RequestInit & {
@@ -426,6 +481,35 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T | 
   return parseResponse<T>(response, init);
 }
 
+type ConversationSummaryApi = Omit<ConversationSummary, "category" | "topic_labels"> & {
+  category?: string | null;
+  topic_labels?: string[] | null;
+};
+
+type ConversationDetailApi = Omit<ConversationDetail, "conversation"> & {
+  conversation: Omit<ConversationDetail["conversation"], "category"> & {
+    category?: string | null;
+  };
+};
+
+function normalizeConversationSummary(item: ConversationSummaryApi): ConversationSummary {
+  return {
+    ...item,
+    topic_labels: item.topic_labels ?? [],
+    category: isMeetingCategory(item.category) ? item.category : null,
+  };
+}
+
+function normalizeConversationDetail(item: ConversationDetailApi): ConversationDetail {
+  return {
+    ...item,
+    conversation: {
+      ...item.conversation,
+      category: isMeetingCategory(item.conversation.category) ? item.conversation.category : null,
+    },
+  };
+}
+
 export async function getSession(): Promise<Session | null> {
   try {
     const session = await request<Session>("/auth/session", { method: "GET" });
@@ -475,12 +559,44 @@ export async function getAllImportStatus(jobIds: string[]): Promise<AggregateImp
 }
 
 // Live Phase 1 endpoints
-export async function getConversations(): Promise<ConversationSummary[]> {
-  return request<ConversationSummary[]>("/conversations", { method: "GET" });
+export async function getConversations(options: {
+  limit?: number;
+  offset?: number;
+  category?: MeetingCategory;
+} = {}): Promise<ConversationSummary[]> {
+  const params = new URLSearchParams();
+  if (typeof options.limit === "number") {
+    params.set("limit", String(options.limit));
+  }
+  if (typeof options.offset === "number") {
+    params.set("offset", String(options.offset));
+  }
+  if (options.category) {
+    params.set("category", options.category);
+  }
+  const query = params.toString();
+  const rows = await request<ConversationSummaryApi[]>(`/conversations${query ? `?${query}` : ""}`, {
+    method: "GET",
+  });
+  return rows.map(normalizeConversationSummary);
 }
 
 export async function getConversation(id: string): Promise<ConversationDetail> {
-  return request<ConversationDetail>(`/conversations/${encodeURIComponent(id)}`, { method: "GET" });
+  const detail = await request<ConversationDetailApi>(`/conversations/${encodeURIComponent(id)}`, {
+    method: "GET",
+  });
+  return normalizeConversationDetail(detail);
+}
+
+export async function updateConversationCategory(
+  id: string,
+  category: MeetingCategory,
+): Promise<ConversationSummary> {
+  const updated = await request<ConversationSummaryApi>(`/conversations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ category }),
+  });
+  return normalizeConversationSummary(updated);
 }
 
 export async function getConversationConnections(id: string): Promise<ConversationConnection[]> {
@@ -690,4 +806,43 @@ export async function getLatestBrief(params: {
     query.set("calendar_event_id", params.calendarEventId);
   }
   return request<BriefLatest>(`/briefs/latest?${query.toString()}`, { method: "GET" });
+}
+
+export async function getUpcomingBriefs(): Promise<UpcomingBrief[]> {
+  return request<UpcomingBrief[]>("/briefs/upcoming", { method: "GET" });
+}
+
+export async function getChatSessions(): Promise<ChatSessionSummary[]> {
+  return request<ChatSessionSummary[]>("/chat/sessions", { method: "GET" });
+}
+
+export async function getChatMessages(
+  sessionId: string,
+  limit = 50,
+  offset = 0,
+): Promise<ChatMessage[]> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return request<ChatMessage[]>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  await request(`/chat/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    expectNoContent: true,
+  });
+}
+
+export async function generateDraft(
+  commitmentId: string,
+  format: DraftFormat = "email",
+): Promise<DraftResponse> {
+  return request<DraftResponse>(`/commitments/${encodeURIComponent(commitmentId)}/draft`, {
+    method: "POST",
+    body: JSON.stringify({ format }),
+  });
 }

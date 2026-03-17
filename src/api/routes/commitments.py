@@ -9,11 +9,12 @@ PATCH /commitments/{id} — mark a commitment as resolved (or re-open it)
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from src import llm_client
 from src.api.deps import get_current_user
 from src.cache_utils import (
     build_user_cache_key,
@@ -558,4 +559,140 @@ def create_commitment(
         conversation_title="",
         meeting_date=None,
         topic_labels=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /commitments/{id}/draft — generate draft email/message
+# ---------------------------------------------------------------------------
+
+
+class DraftRequest(BaseModel):
+    format: Literal["email", "message"] = Field(default="email", description="'email' or 'message'")
+
+
+class DraftResponse(BaseModel):
+    subject: str
+    body: str
+    recipient_suggestion: str
+    commitment_text: str
+    format: str
+
+
+@router.post(
+    "/{commitment_id}/draft",
+    response_model=DraftResponse,
+    summary="Generate a draft email or message from a commitment",
+)
+def draft_from_commitment(
+    commitment_id: str,
+    body: DraftRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> DraftResponse:
+    """Generate a draft email or message based on a commitment and its meeting context.
+
+    Uses linked transcript segments for context. Returns a structured draft
+    with subject, body, and suggested recipient.
+    """
+    user_id: str = current_user["sub"]
+    raw_jwt: str = current_user["_raw_jwt"]
+    db = get_client(raw_jwt)
+
+    if body.format not in ("email", "message"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="format must be 'email' or 'message'",
+        )
+
+    # --- Look up commitment ---
+    commitment_rows = (
+        db.table("commitments")
+        .select("id, text, owner, conversation_id, action_type")
+        .eq("id", commitment_id)
+        .eq("user_id", user_id)
+        .execute()
+    ).data or []
+
+    if not commitment_rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Commitment not found",
+        )
+
+    commitment = commitment_rows[0]
+    conversation_id = str(commitment.get("conversation_id") or "")
+
+    # --- Fetch conversation context ---
+    meeting_title = ""
+    meeting_date = ""
+    if conversation_id:
+        conv_rows = (
+            db.table("conversations")
+            .select("title, meeting_date")
+            .eq("id", conversation_id)
+            .eq("user_id", user_id)
+            .execute()
+        ).data or []
+        if conv_rows:
+            meeting_title = str(conv_rows[0].get("title") or "")
+            meeting_date = str(conv_rows[0].get("meeting_date") or "")
+
+    # --- Fetch linked transcript segments for context ---
+    transcript_context = ""
+    if conversation_id:
+        segment_link_rows = (
+            db.table("commitment_segment_links")
+            .select("segment_id")
+            .eq("commitment_id", commitment_id)
+            .eq("user_id", user_id)
+            .limit(10)
+            .execute()
+        ).data or []
+
+        segment_ids = [str(row["segment_id"]) for row in segment_link_rows if row.get("segment_id")]
+        if segment_ids:
+            segment_rows = (
+                db.table("transcript_segments")
+                .select("speaker_id, text")
+                .eq("user_id", user_id)
+                .in_("id", segment_ids)
+                .order("start_ms")
+                .execute()
+            ).data or []
+            transcript_context = "\n".join(
+                f"[{seg.get('speaker_id', '')}] {seg.get('text', '')}" for seg in segment_rows
+            )
+
+    # --- Generate draft via LLM ---
+    try:
+        result = llm_client.generate_commitment_draft(
+            commitment_text=str(commitment.get("text", "")),
+            owner=str(commitment.get("owner", "")),
+            meeting_title=meeting_title,
+            meeting_date=meeting_date,
+            transcript_context=transcript_context,
+            format=body.format,
+        )
+    except Exception as exc:
+        logger.error(
+            "Draft generation failed — commitment=%s user=%s error=%s",
+            commitment_id,
+            user_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Draft generation temporarily unavailable.",
+        ) from exc
+
+    logger.info(
+        "Draft generated — commitment=%s format=%s user=%s", commitment_id, body.format, user_id
+    )
+
+    return DraftResponse(
+        subject=result.subject,
+        body=result.body,
+        recipient_suggestion=result.recipient_suggestion,
+        commitment_text=str(commitment.get("text", "")),
+        format=body.format,
     )

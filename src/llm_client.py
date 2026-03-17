@@ -8,13 +8,14 @@ Rules enforced here:
 """
 
 import logging
+from collections.abc import Generator
 from enum import StrEnum
 from typing import Any, Literal
 
 import anthropic
 import instructor
 import openai
-from anthropic.types import TextBlock
+from anthropic.types import MessageParam, TextBlock
 from pydantic import BaseModel, Field
 
 from src.config import settings
@@ -166,6 +167,55 @@ Guidelines:
 - Do not speculate beyond the data given.
 - If context is sparse, write something grounding and brief — never pad.
 - Plain prose only. No headers, no bullet points, no JSON."""
+
+_DRAFT_EMAIL_SYSTEM_PROMPT = """You are a professional writing assistant. Given a commitment or follow-up from a meeting, draft a concise email to action it.
+
+You will receive:
+- The commitment/follow-up text
+- The meeting context (title, date, relevant transcript excerpts)
+- The format requested (email or message)
+
+For email format:
+- Write a clear subject line (10 words max)
+- Write a professional but concise body (3-8 sentences)
+- Reference the meeting naturally ("Following up from our meeting on...")
+- End with a clear ask or next step
+
+For message format (Slack/Teams style):
+- Skip the subject line (return empty string for subject)
+- Write 2-4 casual but clear sentences
+- Get straight to the point
+
+Guidelines:
+- Be specific — reference actual details from the transcript context
+- Do not pad or use filler phrases
+- Suggest a recipient based on the commitment owner field
+- Never include raw IDs or internal metadata"""
+
+_CHAT_SYSTEM_PROMPT = """You are Pocket Nori — a personal meeting intelligence assistant.
+The user is asking questions about their past meetings, topics, commitments, and connections.
+You have been given relevant excerpts retrieved from their meeting history as context.
+
+Guidelines:
+- Answer directly and concisely based on the provided context.
+- For each claim, cite the source by referencing the meeting title and date in parentheses.
+- If the context doesn't contain the answer, say so clearly — don't speculate.
+- Be conversational but professional. Use "you" to address the user.
+- Keep responses focused: aim for 2-5 sentences unless the question demands a longer answer.
+- Never reveal raw database IDs or internal metadata — only human-readable information."""
+
+_CATEGORY_SYSTEM_PROMPT = """Classify this meeting into exactly one category based on the title, topics discussed, and participants.
+
+Categories:
+- strategy: high-level planning, roadmap, vision, or goal-setting discussions
+- client: external client meetings, demos, presentations, or negotiations
+- 1on1: one-on-one meetings between two people (manager/report, peer check-in)
+- agency: meetings with external agencies, contractors, or vendors
+- partner: partner or partnership discussions
+- team: internal team meetings, standups, retrospectives, all-hands
+- other: anything that doesn't fit the above categories
+
+Return ONLY the category name, nothing else."""
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +528,192 @@ def generate_brief(context: str) -> str:
     if not isinstance(block, TextBlock):
         raise ValueError(f"Expected TextBlock from brief generation, got {type(block).__name__}")
     return block.text
+
+
+def stream_chat_response(
+    conversation_history: list[dict[str, str]],
+    context_results: list[dict[str, Any]],
+    user_message: str,
+) -> Generator[str]:
+    """Stream a chat response given conversation history and retrieved context.
+
+    Args:
+        conversation_history: Previous messages as [{"role": "user"|"assistant", "content": "..."}].
+        context_results: Top-K search results as dicts (same shape as answer_question).
+        user_message: The current user question. Never logged.
+
+    Yields:
+        Text chunks as they arrive from the Claude streaming API.
+
+    Note:
+        All input content is user-scoped and must never be logged.
+    """
+    # Build context block from retrieved results
+    context_block = ""
+    if context_results:
+        context_lines: list[str] = []
+        for i, ctx in enumerate(context_results, 1):
+            title = ctx.get("title", "")
+            text = ctx.get("text", "")
+            conv_title = ctx.get("conversation_title", "")
+            meeting_date = ctx.get("meeting_date", "")
+            context_lines.append(
+                f"[{i}] Source: {conv_title} ({meeting_date})\n"
+                f"    Topic/Entity: {title}\n"
+                f"    Content: {text}"
+            )
+        context_block = "\n\nRelevant context from the user's meeting history:\n\n" + "\n\n".join(
+            context_lines
+        )
+
+    # Build messages: history + current user message with context
+    messages: list[MessageParam] = []
+    for msg in conversation_history:
+        messages.append({"role": msg["role"], "content": msg["content"]})  # type: ignore[typeddict-item]
+
+    current_content = user_message
+    if context_block:
+        current_content = f"{user_message}{context_block}"
+    messages.append({"role": "user", "content": current_content})
+
+    logger.debug(
+        "LLM call — stream_chat_response model=%s history_len=%d context_items=%d",
+        _Model.EXTRACTION,
+        len(conversation_history),
+        len(context_results),
+    )
+
+    with _raw_client().messages.stream(
+        model=str(_Model.EXTRACTION),
+        max_tokens=1024,
+        system=_CHAT_SYSTEM_PROMPT,
+        messages=messages,
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
+def generate_chat_title(first_message: str) -> str:
+    """Generate a short title for a chat session from the first user message.
+
+    Args:
+        first_message: The user's first question. Never logged.
+
+    Returns:
+        A short title string (3-8 words).
+    """
+    logger.debug("LLM call — generate_chat_title model=%s", _Model.EXTRACTION)
+    response = _raw_client().messages.create(
+        model=str(_Model.EXTRACTION),
+        max_tokens=30,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"Generate a short title (3-8 words, no quotes) for a chat that starts with "
+                    f"this question: {first_message}"
+                ),
+            }
+        ],
+    )
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        return "New chat"
+    return block.text.strip().strip('"').strip("'")[:80]
+
+
+class DraftResult(BaseModel):
+    subject: str
+    body: str
+    recipient_suggestion: str
+
+
+def generate_commitment_draft(
+    commitment_text: str,
+    owner: str,
+    meeting_title: str,
+    meeting_date: str,
+    transcript_context: str,
+    format: Literal["email", "message"] = "email",
+) -> DraftResult:
+    """Generate a draft email or message from a commitment and its context.
+
+    Args:
+        commitment_text: The commitment or follow-up text.
+        owner: Who owns the commitment (used for recipient suggestion).
+        meeting_title: Title of the source meeting.
+        meeting_date: Date of the source meeting.
+        transcript_context: Relevant transcript excerpts. Never logged.
+        format: "email" or "message".
+
+    Returns:
+        DraftResult with subject, body, and recipient_suggestion.
+    """
+    parts: list[str] = [
+        f"Commitment: {commitment_text}",
+        f"Owner/Assigned to: {owner}",
+        f"Meeting: {meeting_title} ({meeting_date})",
+        f"Format: {format}",
+    ]
+    if transcript_context:
+        parts.append(f"Relevant transcript context:\n{transcript_context}")
+
+    user_content = "\n\n".join(parts)
+
+    logger.debug(
+        "LLM call — generate_commitment_draft model=%s format=%s", _Model.EXTRACTION, format
+    )
+    result: DraftResult = _instructor_client().messages.create(
+        model=str(_Model.EXTRACTION),
+        max_tokens=512,
+        system=_DRAFT_EMAIL_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_content}],
+        response_model=DraftResult,
+    )
+    return result
+
+
+def classify_meeting_category(
+    title: str,
+    topic_labels: list[str],
+    entity_names: list[str],
+) -> str | None:
+    """Classify a meeting into one of the predefined categories.
+
+    Args:
+        title: Meeting title.
+        topic_labels: Up to 5 extracted topic labels.
+        entity_names: Up to 5 extracted entity names.
+
+    Returns:
+        One of: strategy, client, 1on1, agency, partner, team, other.
+        Returns None if classification fails.
+    """
+    parts: list[str] = [f"Meeting title: {title}"]
+    if topic_labels:
+        parts.append(f"Topics discussed: {', '.join(topic_labels[:5])}")
+    if entity_names:
+        parts.append(f"Participants/entities: {', '.join(entity_names[:5])}")
+    context = "\n".join(parts)
+
+    valid_categories = {"strategy", "client", "1on1", "agency", "partner", "team", "other"}
+
+    logger.debug("LLM call — classify_meeting_category model=%s", _Model.EXTRACTION)
+    try:
+        response = _raw_client().messages.create(
+            model=str(_Model.EXTRACTION),
+            max_tokens=10,
+            system=_CATEGORY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": context}],
+        )
+        block = response.content[0]
+        if not isinstance(block, TextBlock):
+            return None
+        result = block.text.strip().lower()
+        return result if result in valid_categories else None
+    except Exception as exc:
+        logger.warning("Meeting category classification failed: %s", type(exc).__name__)
+        return None
 
 
 def generate_home_summary(

@@ -54,6 +54,7 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - [ ] Merge PR #14 and restart worker on Render
 - [ ] Run `POST /admin/backfill-embeddings` once after deploy to embed all existing meetings
 - [ ] Verify `/search/ask` returns cited answers and grouped search results include topic/meeting/entity types
+- [ ] Manual signed-in production QA of Home/Meetings/onboarding/meeting detail/Search/Topics/Today/Actions against the deployed frontend
 - [ ] Production QA of Search/Topics/Dashboard against stored clusters
 - [ ] Post-MVP roadmap definition (v2 integrations, infra scaling, evaluation framework) after MVP topic quality is acceptable
 
@@ -71,7 +72,7 @@ A working professional can ask "What did we decide about X?" and get an accurate
 
 ## Context
 
-**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A), and the current pilot UX cleanup through Wave J including onboarding redesign, Home Quick Summary, and grouped Meetings cards with topic chips. Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
+**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work is now merged and deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A), and the current pilot UX cleanup through Wave J including onboarding redesign, Home Quick Summary, and grouped Meetings cards with topic chips. Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. Partial production QA confirmed the live shell and auth redirect are up, but a full signed-in walkthrough is still pending because this environment could not complete authenticated live-browser checks. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
 
 **Backend is complete through Phase 5 + intelligent search.** 17 tables (9 core + 8 junction), all with FORCE RLS. Migration 009 adds `digest`/`digest_embedding` to conversations, `embedding` to `topic_clusters` and `entities`. Full Celery pipeline: ingest → extract (now generates meeting digest) → embed (now embeds topic clusters, entities, digest) + recurring brief scheduling/generation + per-user reclustering. FastAPI includes all prior routes plus `POST /search/ask` and `POST /admin/backfill-embeddings`. Search is multi-table vector search (topic_clusters, entities, conversations, transcript_segments) with date filters, grouped result types, and score threshold 0.30. Current gate: `pytest -q` 30 passed (search + llm_client), `mypy`, `ruff` green on PR #14. Upstash Redis free tier exhausted — worker cannot start until plan upgraded.
 

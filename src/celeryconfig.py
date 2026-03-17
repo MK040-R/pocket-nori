@@ -65,3 +65,16 @@ result_expires: int = 86400
 # Prevents a slow task from blocking faster ones and reduces duplicate work
 # after a worker crash (fewer tasks were prefetched and un-acked).
 worker_prefetch_multiplier: int = 1
+
+# Beat schedule — periodic tasks.
+beat_schedule: dict[str, Any] = {
+    "prep-upcoming-meetings": {
+        "task": "src.workers.prep.prep_upcoming_meetings",
+        "schedule": 900.0,  # every 15 minutes
+    },
+}
+
+# Auto-discover tasks in workers module.
+imports: list[str] = [
+    "src.workers.prep",
+]

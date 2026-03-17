@@ -21,8 +21,8 @@ Read these before writing any code — they are the source of truth for all deci
 | `pocket-nori-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
 | `pocket-nori-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
 | `.interface-design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
-| `spikes/PHASE_0A_SUMMARY.md` | QA summary of all 5 spikes — go/no-go decisions, bugs found and fixed | Before Phase 0 build |
-| `agent_docs/CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
+| `docs/archive/spikes/PHASE_0A_SUMMARY.md` | QA summary of all 5 spikes — go/no-go decisions, bugs found and fixed | Before Phase 0 build |
+| `CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
 | `PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
 | `POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
 | `docs/later-stages/pocket-nori-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
@@ -125,39 +125,7 @@ Brief
 
 ## Phase 0a Spikes — Status
 
-All 5 spikes are CONDITIONAL GO. See `spikes/PHASE_0A_SUMMARY.md` for full details. Human-action blockers remaining:
-
-| Spike | Blocker | Action |
-|---|---|---|
-| Spike 1 (Electron audio) | FAR-45 | Live Google Meet audio test — install app, grant Screen Recording, verify WAV output |
-| Spike 2 (Deepgram) | FAR-52/FAR-6 | Provide Deepgram API key + 3 real meeting recordings in `spikes/spike2_deepgram/recordings/` |
-| Spike 3 (LLM extraction) | FAR-53 | Provide `ANTHROPIC_API_KEY` + 5 real transcripts in `spikes/spike3_llm_extraction/transcripts/` |
-| Spike 4 (Supabase RLS) | FAR-60 | Provision Supabase project, run migration, populate `.env` |
-| Spike 5 (Celery/Redis) | FAR-67 | Provision Upstash Redis, add `UPSTASH_REDIS_URL` to `.env` |
-
-### Running spike tests
-
-```bash
-# Spike 1 (Electron)
-cd spikes/spike1_electron_audio && npm install && npm start
-
-# Spike 2 (Deepgram) — needs DEEPGRAM_API_KEY in .env and recordings present
-cd spikes/spike2_deepgram && pip install -r requirements.txt
-python test_deepgram.py && python evaluate_accuracy.py && python evaluate_diarization.py
-
-# Spike 3 (LLM extraction) — needs ANTHROPIC_API_KEY in .env
-cd spikes/spike3_llm_extraction && pip install -r requirements.txt
-python runner.py && python evaluate.py
-
-# Spike 4 (Supabase RLS) — needs Supabase credentials in .env
-cd spikes/spike4_supabase_rls && pip install -r requirements.txt
-python setup_test_users.py && pytest test_rls_isolation.py -v
-
-# Spike 5 (Celery) — unit tests run without Redis; integration needs UPSTASH_REDIS_URL
-cd spikes/spike5_celery_redis && pip install -r requirements.txt
-pytest tests/ -v -m unit                     # no credentials needed
-pytest tests/ -v --timeout=30 -m integration # needs Upstash
-```
+All 5 spikes are CONDITIONAL GO and complete. Spike code is archived at `docs/archive/spikes/`. See `docs/archive/spikes/PHASE_0A_SUMMARY.md` for the full QA summary.
 
 ---
 
@@ -176,7 +144,7 @@ Key tokens (full list in `.interface-design/system.md`):
 
 ## CI Requirement
 
-Isolation tests must run on every PR: verify User A's JWT cannot read User B's rows in any user-owned table. (Test harness exists in `spikes/spike4_supabase_rls/` — promote to `tests/` in Phase 0.)
+Isolation tests must run on every PR: verify User A's JWT cannot read User B's rows in any user-owned table. (Original test harness archived at `docs/archive/spikes/spike4_supabase_rls/`.)
 
 ## Milestone Documentation Rule
 

@@ -97,13 +97,13 @@ jobs:
 
       - name: Install spike4 dependencies
         run: |
-          pip install -r spikes/spike4_supabase_rls/requirements.txt
+          pip install -r docs/archive/spikes/spike4_supabase_rls/requirements.txt
 
       - name: Set up RLS test users and seed data
-        run: python spikes/spike4_supabase_rls/setup_test_users.py
+        run: python docs/archive/spikes/spike4_supabase_rls/setup_test_users.py
 
       - name: Verify RLS test credentials artifact exists
-        run: test -f spikes/spike4_supabase_rls/test_credentials.json
+        run: test -f docs/archive/spikes/spike4_supabase_rls/test_credentials.json
 
       - name: Run RLS isolation tests
-        run: pytest spikes/spike4_supabase_rls/test_rls_isolation.py -v
+        run: pytest docs/archive/spikes/spike4_supabase_rls/test_rls_isolation.py -v
