@@ -463,7 +463,7 @@ def list_conversations(
             .select("conversation_id, label")
             .eq("user_id", user_id)
             .in_("conversation_id", conv_ids)
-            .order("updated_at", desc=True)
+            .order("created_at", desc=True)
             .execute()
         ).data or []
         for t in topic_rows:

@@ -260,7 +260,7 @@ async def get_upcoming_briefs(
             db.table("topics")
             .select("id")
             .eq("user_id", user_id)
-            .order("updated_at", desc=True)
+            .order("created_at", desc=True)
             .limit(20)
             .execute()
         ).data or []
