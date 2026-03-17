@@ -4,13 +4,18 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { CommitmentDraftButton } from "@/components/CommitmentDraftButton";
+import { MeetingCategoryBadge } from "@/components/MeetingCategoryBadge";
 import {
   getConversation,
   getConversationConnections,
+  isApiErrorStatus,
+  updateConversationCategory,
   type ActionType,
   type ConversationConnection,
   type ConversationDetail,
 } from "@/lib/api";
+import { MEETING_CATEGORY_OPTIONS, type MeetingCategory } from "@/lib/meeting-categories";
 import { formatDueDate, formatMeetingTitle } from "@/lib/presentation";
 
 type DetailTab = "topics" | "actions" | "transcript";
@@ -154,6 +159,8 @@ export default function MeetingDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>("topics");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -206,19 +213,95 @@ export default function MeetingDetailPage() {
   return (
     <div className="space-y-4">
       <section className="card p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{formatMeetingTitle(detail.conversation.title)}</h1>
-          <span className="rounded-full border border-soft bg-bg-control px-2.5 py-1 text-xs font-medium text-ink-secondary">
-            Online
-          </span>
-        </div>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold">{formatMeetingTitle(detail.conversation.title)}</h1>
+              <span className="rounded-full border border-soft bg-bg-control px-2.5 py-1 text-xs font-medium text-ink-secondary">
+                Online
+              </span>
+              <MeetingCategoryBadge category={detail.conversation.category} />
+            </div>
 
-        <p className="mt-2 text-sm text-ink-tertiary">
-          {formatMeetingMeta(detail.conversation.meeting_date)} ·{" "}
-          {detail.conversation.duration_seconds
-            ? `${Math.round(detail.conversation.duration_seconds / 60)} min`
-            : "Duration pending"}
-        </p>
+            <p className="mt-2 text-sm text-ink-tertiary">
+              {formatMeetingMeta(detail.conversation.meeting_date)} ·{" "}
+              {detail.conversation.duration_seconds
+                ? `${Math.round(detail.conversation.duration_seconds / 60)} min`
+                : "Duration pending"}
+            </p>
+          </div>
+
+          <div className="min-w-[240px] space-y-2 rounded-2xl border border-soft bg-bg-surface-raised p-4">
+            <label
+              htmlFor="meeting-category"
+              className="text-xs font-medium uppercase tracking-[0.12em] text-ink-tertiary"
+            >
+              Meeting tag
+            </label>
+            <select
+              id="meeting-category"
+              value={detail.conversation.category ?? ""}
+              disabled={categorySaving}
+              onChange={async (event) => {
+                const nextCategory = event.target.value as MeetingCategory;
+                const previousCategory = detail.conversation.category;
+                setCategoryError(null);
+                setCategorySaving(true);
+                setDetail((current) =>
+                  current
+                    ? {
+                        ...current,
+                        conversation: {
+                          ...current.conversation,
+                          category: nextCategory,
+                        },
+                      }
+                    : current,
+                );
+
+                try {
+                  await updateConversationCategory(id, nextCategory);
+                } catch (updateError) {
+                  setDetail((current) =>
+                    current
+                      ? {
+                          ...current,
+                          conversation: {
+                            ...current.conversation,
+                            category: previousCategory,
+                          },
+                        }
+                      : current,
+                  );
+                  setCategoryError(
+                    isApiErrorStatus(updateError, [404, 405, 501])
+                      ? "Category updates will activate once the backend wave is deployed."
+                      : updateError instanceof Error
+                        ? updateError.message
+                        : "Failed to update the meeting tag",
+                  );
+                } finally {
+                  setCategorySaving(false);
+                }
+              }}
+              className="w-full rounded-xl border border-standard bg-bg-control px-3 py-2.5 text-sm text-ink-primary outline-none transition focus:border-emphasis disabled:cursor-not-allowed disabled:text-ink-muted"
+            >
+              <option value="" disabled>
+                Select a meeting type
+              </option>
+              {MEETING_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <p className="text-xs text-ink-tertiary">
+              {categorySaving ? "Saving tag..." : "Use a consistent tag to keep the meetings list scannable."}
+            </p>
+            {categoryError && <p className="text-xs text-[#b03a3a]">{categoryError}</p>}
+          </div>
+        </div>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-ink-tertiary">
           <span className="rounded border border-soft bg-bg-control px-2 py-1">
@@ -340,15 +423,21 @@ export default function MeetingDetailPage() {
 
                   {section.items.map((commitment) => (
                     <article key={commitment.id} className="rounded border border-soft p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-ink-primary">{commitment.text}</p>
-                        <span className="rounded border border-soft px-2 py-0.5 text-xs text-ink-tertiary">
-                          {commitment.status}
-                        </span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-ink-primary">{commitment.text}</p>
+                          <p className="mt-2 text-xs text-ink-tertiary">
+                            {commitment.owner || "Unassigned"} · due {formatDueDate(commitment.due_date)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="rounded border border-soft px-2 py-0.5 text-xs text-ink-tertiary">
+                            {commitment.status}
+                          </span>
+                          <CommitmentDraftButton commitmentId={commitment.id} />
+                        </div>
                       </div>
-                      <p className="mt-2 text-xs text-ink-tertiary">
-                        {commitment.owner || "Unassigned"} · due {formatDueDate(commitment.due_date)}
-                      </p>
                     </article>
                   ))}
                 </div>

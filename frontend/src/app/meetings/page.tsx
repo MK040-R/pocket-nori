@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { MeetingCategoryBadge } from "@/components/MeetingCategoryBadge";
 import { getConversations, type ConversationSummary } from "@/lib/api";
+import {
+  MEETING_CATEGORY_OPTIONS,
+  isMeetingCategory,
+  type MeetingCategory,
+} from "@/lib/meeting-categories";
 import { formatDateTime, formatMeetingTitle, formatSourceLabel } from "@/lib/presentation";
 
 function formatDuration(seconds: number | null): string {
@@ -55,9 +62,16 @@ const MEETING_GROUP_LABELS: Record<MeetingGroupKey, string> = {
 };
 
 export default function MeetingsPage() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const activeCategory = useMemo(() => {
+    const candidate = searchParams.get("category");
+    return isMeetingCategory(candidate) ? candidate : null;
+  }, [searchParams]);
 
   const groupedItems = useMemo(() => {
     const groups: Record<MeetingGroupKey, ConversationSummary[]> = {
@@ -89,7 +103,9 @@ export default function MeetingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const result = await getConversations();
+        const result = await getConversations({
+          category: activeCategory ?? undefined,
+        });
         if (mounted) {
           setItems(result);
         }
@@ -109,7 +125,18 @@ export default function MeetingsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeCategory]);
+
+  const handleCategoryChange = (category: MeetingCategory | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (category) {
+      params.set("category", category);
+    } else {
+      params.delete("category");
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
 
   return (
     <div className="space-y-6">
@@ -135,6 +162,52 @@ export default function MeetingsPage() {
         </span>
       </Link>
 
+      <section className="card p-4">
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-tertiary">
+              Meeting tags
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-ink-primary">Filter by meeting type</h2>
+          </div>
+
+          <div className="-mx-1 overflow-x-auto px-1">
+            <div className="inline-flex min-w-full gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleCategoryChange(null);
+                }}
+                className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+                  activeCategory === null
+                    ? "border-emphasis bg-accent-subtle text-accent"
+                    : "border-standard bg-bg-surface-raised text-ink-secondary hover:border-emphasis hover:text-ink-primary"
+                }`}
+              >
+                All
+              </button>
+
+              {MEETING_CATEGORY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    handleCategoryChange(option.value);
+                  }}
+                  className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+                    activeCategory === option.value
+                      ? "border-emphasis bg-accent-subtle text-accent"
+                      : `bg-bg-surface-raised text-ink-secondary hover:border-emphasis hover:text-ink-primary ${option.badgeClassName}`
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {loading && <section className="card p-4 text-sm text-ink-secondary">Loading meetings...</section>}
 
       {error && (
@@ -145,7 +218,11 @@ export default function MeetingsPage() {
 
       {!loading && !error && items.length === 0 && (
         <section className="card p-5">
-          <p className="text-sm text-ink-secondary">No meetings yet. Import past recordings to get started.</p>
+          <p className="text-sm text-ink-secondary">
+            {activeCategory
+              ? `No ${MEETING_CATEGORY_OPTIONS.find((option) => option.value === activeCategory)?.label.toLowerCase()} meetings yet.`
+              : "No meetings yet. Import past recordings to get started."}
+          </p>
         </section>
       )}
 
@@ -167,8 +244,9 @@ export default function MeetingsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="text-base font-semibold">{formatMeetingTitle(meeting.title)}</h3>
-                        {meeting.topic_labels.length > 0 && (
+                        {(meeting.category || meeting.topic_labels.length > 0) && (
                           <div className="mt-2 flex flex-wrap gap-2">
+                            <MeetingCategoryBadge category={meeting.category} />
                             {meeting.topic_labels.slice(0, 3).map((label) => (
                               <span
                                 key={`${meeting.id}-${label}`}

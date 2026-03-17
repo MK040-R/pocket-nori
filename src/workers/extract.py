@@ -301,6 +301,28 @@ def extract_from_conversation(
             type(exc).__name__,
         )
 
+    # --- Auto-classify meeting category ---
+    self.update_state(state="PROGRESS", meta={"status": "classifying_category"})
+    try:
+        conv_title = str(conv_result.data[0].get("title", "") if conv_result.data else "")
+        topic_labels = [row["label"] for row in sanitized_topic_rows[:5]]
+        entity_names = [e.name for e in entity_list.entities[:5]]
+        category = llm_client.classify_meeting_category(conv_title, topic_labels, entity_names)
+        if category:
+            db.table("conversations").update({"category": category}).eq("id", conversation_id).eq(
+                "user_id", user_id
+            ).execute()
+            logger.info(
+                "Category classified — conversation=%s category=%s", conversation_id, category
+            )
+    except Exception as exc:
+        # Category classification is non-fatal
+        logger.warning(
+            "Category classification failed — conversation=%s error=%s",
+            conversation_id,
+            type(exc).__name__,
+        )
+
     # --- Mark conversation as indexed ---
     db.table("conversations").update({"status": "indexed"}).eq("id", conversation_id).execute()
 

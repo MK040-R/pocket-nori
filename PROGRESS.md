@@ -1,7 +1,7 @@
 # Pocket Nori — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-12 (durable topic intelligence implemented locally; deploy + recluster next)
+> Last updated: 2026-03-17 (Waves B and D frontend shipped locally; backend rollout pending)
 
 ---
 
@@ -69,7 +69,70 @@ Building a software product from scratch happens in stages, like constructing a 
 | Phase 5 — Personal context dashboard                          | ✅ Complete | 2/2 plans delivered and validated                                                            |
 | Round 2 Wave H — GET /home/summary (AI daily briefing)        | ✅ Complete | New endpoint + generate_home_summary() + 6 tests, cached per user per day                   |
 | Round 2 Wave J — topic_labels on GET /conversations           | ✅ Complete | ConversationSummary gains topic_labels: list[str], up to 3 per meeting                      |
+| Milestone 1 Wave B — Chat UI + meeting tag UI                 | ✅ Complete | `/chat` shipped locally, meeting tag filter/badges/override added with backend-safe fallback |
+| Milestone 1 Wave D — Draft UI + prep push UI                  | ✅ Complete | Draft modal launched from action cards; upcoming brief banner/notifications added to Home    |
 
+
+---
+
+## ✅ Milestone Update — 2026-03-17 (Milestone 1 Wave D frontend)
+
+### What was completed in this milestone
+
+- Built the **Draft UI**:
+  - added reusable draft generation modal with email/message toggle, editable subject/body, copy-to-clipboard, retry state, and graceful handling when `POST /commitments/{id}/draft` is not live yet
+  - added `Draft` launch buttons to the main Actions list and the meeting detail Actions tab
+
+- Built the **Prep Push UI**:
+  - added upcoming brief fetch to the Home page
+  - added a prominent prep banner above Quick Summary when a brief-backed meeting is within 60 minutes
+  - added brief CTA, open-actions/related-topics badges, and optional browser-notification prompt when the meeting is within 30 minutes
+  - kept the banner fully optional so missing backend endpoints fail closed instead of breaking Home
+
+### Validation results
+
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- Wait for the matching backend Wave C endpoints to be deployed, then run signed-in QA on:
+  - `/chat`
+  - `/meetings`
+  - `/meetings/[id]`
+  - `/commitments`
+  - `/`
+
+---
+
+## ✅ Milestone Update — 2026-03-17 (Milestone 1 Wave B frontend)
+
+### What was completed in this milestone
+
+- Built the new **Chat** workspace in the frontend:
+  - added `/chat` to the main navigation
+  - added session loading, deletion, responsive sidebar behavior, and chat empty states
+  - implemented SSE streaming for `POST /chat`
+  - added citation pills that deep-link back to source meetings
+  - added graceful fallback UI when the chat backend endpoints are not live yet
+
+- Built the **Meeting Tag UI**:
+  - added category metadata/types to the frontend contract
+  - added category filter pills to `/meetings`
+  - added category badges on meeting cards
+  - added optimistic manual category override on meeting detail with rollback if the backend patch route is unavailable
+
+### Validation results
+
+- Frontend lint: `npm run lint` → **pass**
+- Frontend production build: `npm run build` → **pass**
+
+### What comes next
+
+- **Milestone 1 Wave D frontend**
+  - add draft generation UI to action surfaces
+  - add upcoming brief banner to Home
+  - add browser notification support with a no-backend/no-permission fallback path
 
 ---
 

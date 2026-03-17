@@ -1,7 +1,7 @@
 # Pocket Nori — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-12 (durable topic intelligence implemented locally; deploy + recluster next)
+> Last updated: 2026-03-17 (Waves B and D frontend shipped locally; backend rollout pending)
 
 ---
 
@@ -680,6 +680,48 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 ### Next focus
 
 - Run compact QA on Home and Meetings against the live Wave H/Wave J backend, then merge and deploy if the live data looks correct
+
+---
+
+## ✅ 2026-03-17 — Wave B frontend: Chat UI + meeting tag UI
+
+### What changed
+
+- Added the new `/chat` page and inserted `Chat` into the main navigation.
+- Built the chat session sidebar, responsive mobile/desktop layout, session deletion flow, and empty states.
+- Implemented SSE response streaming for `POST /chat`, including live delta rendering and meeting citation pills.
+- Added fallback messaging when the chat endpoints are not live yet so the page fails softly instead of breaking.
+- Added meeting category metadata to the frontend contract and wired category filter pills into `/meetings`.
+- Added category badges on meeting cards and an optimistic category override control on meeting detail.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Finish Wave D on the frontend: draft generation UI on action cards plus the upcoming pre-meeting brief banner on Home
+
+---
+
+## ✅ 2026-03-17 — Wave D frontend: Draft UI + prep push UI
+
+### What changed
+
+- Added a reusable draft modal with email/message toggle, editable output, copy-to-clipboard, retry handling, and soft failure messaging when the draft endpoint is not available yet.
+- Added `Draft` launch buttons to action cards on `/commitments` and inside the meeting detail Actions tab.
+- Added upcoming brief loading to the Home page and rendered a prep banner above `Quick Summary` when a brief-backed meeting is within 60 minutes.
+- Added optional browser-notification prompting inside the banner for meetings within 30 minutes, with local de-duplication so the same brief is not notified repeatedly.
+
+### Validation
+
+- `cd frontend && npm run lint` → **pass**
+- `cd frontend && npm run build` → **pass**
+
+### Next focus
+
+- Wait for the matching backend routes to land, then run signed-in QA across Chat, Home, Meetings, Meeting Detail, and Actions against live data
 
 ---
 

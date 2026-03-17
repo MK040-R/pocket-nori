@@ -27,6 +27,9 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
+_VALID_CATEGORIES = {"strategy", "client", "1on1", "agency", "partner", "team", "other"}
+
+
 class ConversationSummary(BaseModel):
     id: str
     title: str
@@ -37,6 +40,7 @@ class ConversationSummary(BaseModel):
     latest_brief_id: str | None = None
     latest_brief_generated_at: str | None = None
     topic_labels: list[str] = []
+    category: str | None = None
 
 
 class TopicOut(BaseModel):
@@ -417,25 +421,37 @@ def _compute_and_store_connections(
 def list_conversations(
     limit: int = 50,
     offset: int = 0,
+    category: str | None = None,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[ConversationSummary]:
     """Return a paginated list of conversations, newest first.
 
     Each item includes the conversation's current processing status
     (``processing`` until AI extraction completes, then ``indexed``).
+    Optional ``category`` filter accepts one of: strategy, client, 1on1,
+    agency, partner, team, other.
     """
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
 
-    result = (
+    if category and category not in _VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"category must be one of: {', '.join(sorted(_VALID_CATEGORIES))}",
+        )
+
+    query = (
         db.table("conversations")
-        .select("id, title, source, meeting_date, duration_seconds, status")
+        .select("id, title, source, meeting_date, duration_seconds, status, category")
         .eq("user_id", user_id)
         .order("meeting_date", desc=True)
         .range(offset, offset + limit - 1)
-        .execute()
     )
+    if category:
+        query = query.eq("category", category)
+
+    result = query.execute()
     rows = result.data or []
 
     # Fetch up to 3 topic labels per conversation in a single query.
@@ -469,6 +485,7 @@ def list_conversations(
             latest_brief_id=None,
             latest_brief_generated_at=None,
             topic_labels=labels_by_conv.get(str(row["id"]), []),
+            category=row.get("category"),
         )
         for row in rows
     ]
@@ -501,7 +518,7 @@ def get_conversation(
     # --- Conversation ---
     conv_result = (
         db.table("conversations")
-        .select("id, title, source, meeting_date, duration_seconds, status")
+        .select("id, title, source, meeting_date, duration_seconds, status, category")
         .eq("id", conversation_id)
         .eq("user_id", user_id)
         .execute()
@@ -598,6 +615,7 @@ def get_conversation(
                 if latest_brief and latest_brief.get("generated_at")
                 else None
             ),
+            category=conv.get("category"),
         ),
         topics=[
             TopicOut(
@@ -640,6 +658,81 @@ def get_conversation(
             for s in (segments_result.data or [])
         ],
         connections=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# PATCH /conversations/{id} — update category
+# ---------------------------------------------------------------------------
+
+
+class ConversationPatch(BaseModel):
+    category: str
+
+
+@router.patch(
+    "/{conversation_id}",
+    response_model=ConversationSummary,
+    summary="Update conversation metadata (category)",
+)
+def update_conversation(
+    conversation_id: str,
+    body: ConversationPatch,
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> ConversationSummary:
+    """Update a conversation's category. Accepts one of the valid category values."""
+    user_id: str = current_user["sub"]
+    raw_jwt: str = current_user["_raw_jwt"]
+    db = get_client(raw_jwt)
+
+    if body.category not in _VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"category must be one of: {', '.join(sorted(_VALID_CATEGORIES))}",
+        )
+
+    existing = (
+        db.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    update_result = (
+        db.table("conversations")
+        .update({"category": body.category})
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not update_result.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update conversation",
+        )
+
+    updated = update_result.data[0]
+    logger.info(
+        "Conversation %s category updated to %s — user=%s",
+        conversation_id,
+        body.category,
+        user_id,
+    )
+
+    return ConversationSummary(
+        id=str(updated["id"]),
+        title=str(updated.get("title", "")),
+        source=str(updated.get("source", "")),
+        meeting_date=str(updated.get("meeting_date", "")),
+        duration_seconds=updated.get("duration_seconds"),
+        status=str(updated.get("status", "processing")),
+        category=updated.get("category"),
     )
 
 

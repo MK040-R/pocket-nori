@@ -1,4 +1,5 @@
 const IMPORT_PREFIX_RE = /^(Transcript|Notes)\s+[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\s+/i;
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 export function formatDate(value: string | null | undefined, fallback = "Unknown"): string {
   if (!value) {
@@ -58,4 +59,47 @@ export function formatMeetingTitle(value: string | null | undefined): string {
     return "Imported meeting";
   }
   return title || "Untitled meeting";
+}
+
+export function formatRelativeTime(value: string | number | Date | null | undefined): string {
+  if (!value) {
+    return "Just now";
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return typeof value === "string" ? value : "Just now";
+  }
+
+  const diffMs = parsed.getTime() - Date.now();
+  const diffMinutes = Math.round(diffMs / 60000);
+  const absMinutes = Math.abs(diffMinutes);
+
+  if (absMinutes < 1) {
+    return "Just now";
+  }
+  if (absMinutes < 60) {
+    return RELATIVE_TIME_FORMATTER.format(diffMinutes, "minute");
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  const absHours = Math.abs(diffHours);
+  if (absHours < 24) {
+    return RELATIVE_TIME_FORMATTER.format(diffHours, "hour");
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  const absDays = Math.abs(diffDays);
+  if (absDays < 7) {
+    return RELATIVE_TIME_FORMATTER.format(diffDays, "day");
+  }
+  if (absDays < 28) {
+    return RELATIVE_TIME_FORMATTER.format(Math.round(diffDays / 7), "week");
+  }
+
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: parsed.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+  });
 }

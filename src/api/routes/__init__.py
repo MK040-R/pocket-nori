@@ -8,6 +8,7 @@ from src.api.routes.admin import router as admin_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.briefs import router as briefs_router
 from src.api.routes.calendar import router as calendar_router
+from src.api.routes.chat import router as chat_router
 from src.api.routes.commitments import router as commitments_router
 from src.api.routes.conversations import router as conversations_router
 from src.api.routes.entities import router as entities_router
@@ -31,4 +32,5 @@ router.include_router(entities_router, prefix="/entities", tags=["entities"])
 router.include_router(index_stats_router, prefix="/index", tags=["index"])
 router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])
 router.include_router(home_router, prefix="/home", tags=["home"])
+router.include_router(chat_router, prefix="/chat", tags=["chat"])
 router.include_router(admin_router, prefix="/admin", tags=["admin"])
