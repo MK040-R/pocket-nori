@@ -102,7 +102,7 @@ export function CommitmentDraftButton({
         }));
       } catch (loadError) {
         setError(
-          isApiErrorStatus(loadError, [404, 405, 501])
+          isApiErrorStatus(loadError, [404, 405, 501, 503])
             ? "Draft generation is not available yet for this workspace."
             : loadError instanceof Error
               ? loadError.message

@@ -131,6 +131,30 @@ def test_list_sessions_empty() -> None:
 
 
 @pytest.mark.unit
+def test_list_sessions_returns_503_when_chat_tables_are_missing() -> None:
+    """Missing chat tables should surface a clean 503 instead of a raw 500."""
+    _override_auth()
+    try:
+        db = MagicMock()
+        sessions_table = MagicMock()
+        query = MagicMock()
+        query.eq.return_value = query
+        query.order.return_value = query
+        query.range.return_value = query
+        query.execute.side_effect = RuntimeError('relation "chat_sessions" does not exist')
+        sessions_table.select.return_value = query
+        db.table.side_effect = lambda name: sessions_table
+
+        with patch("src.api.routes.chat.get_client", return_value=db):
+            response = client.get("/chat/sessions")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Chat is not available yet."
+    finally:
+        _clear_auth()
+
+
+@pytest.mark.unit
 def test_list_sessions_unauthenticated() -> None:
     """No auth → 401."""
     _clear_auth()

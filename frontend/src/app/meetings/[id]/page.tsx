@@ -274,7 +274,7 @@ export default function MeetingDetailPage() {
                       : current,
                   );
                   setCategoryError(
-                    isApiErrorStatus(updateError, [404, 405, 501])
+                    isApiErrorStatus(updateError, [404, 405, 501, 503])
                       ? "Category updates will activate once the backend wave is deployed."
                       : updateError instanceof Error
                         ? updateError.message
