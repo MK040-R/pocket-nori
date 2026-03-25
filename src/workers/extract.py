@@ -933,8 +933,8 @@ def extract_from_conversation(
     bind=True,
     max_retries=1,
     default_retry_delay=60,
-    soft_time_limit=900,
-    time_limit=1200,
+    soft_time_limit=3000,
+    time_limit=3300,
 )
 def rebuild_topic_nodes_for_user(
     self: Any,
@@ -1037,8 +1037,8 @@ def rebuild_topic_nodes_for_user(
     bind=True,
     max_retries=1,
     default_retry_delay=60,
-    soft_time_limit=900,
-    time_limit=1200,
+    soft_time_limit=3000,
+    time_limit=3300,
 )
 def rebuild_entity_nodes_for_user(
     self: Any,
@@ -1123,8 +1123,8 @@ def rebuild_entity_nodes_for_user(
     bind=True,
     max_retries=1,
     default_retry_delay=60,
-    soft_time_limit=1200,
-    time_limit=1500,
+    soft_time_limit=3000,
+    time_limit=3300,
 )
 def backfill_knowledge_graph_for_user(
     self: Any,
@@ -1194,8 +1194,8 @@ def backfill_knowledge_graph_for_user(
     bind=True,
     max_retries=1,
     default_retry_delay=60,
-    soft_time_limit=1200,
-    time_limit=1500,
+    soft_time_limit=3000,
+    time_limit=3300,
 )
 def backfill_segment_links_for_user(
     self: Any,

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   BASE_URL,
+  ask as askSearch,
   deleteChatSession,
   getChatMessages,
   getChatSessions,
@@ -366,6 +367,7 @@ export default function ChatPage() {
 
     const controller = new AbortController();
     streamAbortRef.current = controller;
+    let resolvedSessionId = requestedSessionId;
 
     try {
       const response = await fetch(`${BASE_URL}/chat`, {
@@ -403,7 +405,6 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       const reader = response.body.getReader();
       let buffer = "";
-      let resolvedSessionId = requestedSessionId;
 
       const handleParsedEvent = (payload: ParsedSseEvent) => {
         if (payload.event === "session") {
@@ -491,10 +492,39 @@ export default function ChatPage() {
         return;
       }
 
-      setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
-      setComposerError(
-        sendError instanceof Error ? sendError.message : "Failed to send your message",
-      );
+      try {
+        const fallback = await askSearch(messageText);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: fallback.answer,
+                  citations: fallback.citations.map((citation) => ({
+                    result_id: citation.result_id,
+                    result_type: citation.result_type,
+                    title: citation.conversation_title,
+                    conversation_id: citation.conversation_id,
+                    conversation_title: citation.conversation_title,
+                    meeting_date: citation.meeting_date,
+                  })),
+                }
+              : message,
+          ),
+        );
+        setComposerError(
+          "Streaming chat failed. Showing a fallback answer from search instead.",
+        );
+        if (resolvedSessionId) {
+          await refreshSessions(resolvedSessionId);
+        }
+        return;
+      } catch {
+        setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+        setComposerError(
+          sendError instanceof Error ? sendError.message : "Failed to send your message",
+        );
+      }
     } finally {
       setSending(false);
       streamAbortRef.current = null;
