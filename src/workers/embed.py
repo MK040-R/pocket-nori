@@ -120,10 +120,7 @@ def refresh_topic_node_embeddings(
     for batch_start in range(0, len(topic_nodes), _EMBED_BATCH_SIZE):
         batch = topic_nodes[batch_start : batch_start + _EMBED_BATCH_SIZE]
         texts = [
-            (
-                f"{node[TOPIC_NODE_LABEL_COLUMN]}. "
-                f"{node.get(TOPIC_NODE_SUMMARY_COLUMN, '')}"
-            ).strip()
+            (f"{node[TOPIC_NODE_LABEL_COLUMN]}. {node.get(TOPIC_NODE_SUMMARY_COLUMN, '')}").strip()
             for node in batch
         ]
         vectors = llm_client.embed_texts(texts)

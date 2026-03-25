@@ -593,9 +593,7 @@ class TestExtractHappyPath:
         assert inserted_link_rows["commitment_segment_links"] == [
             {
                 "user_id": "user-1",
-                "commitment_id": inserted_link_rows["commitment_segment_links"][0][
-                    "commitment_id"
-                ],
+                "commitment_id": inserted_link_rows["commitment_segment_links"][0]["commitment_id"],
                 "segment_id": segments[0]["id"],
                 "match_score": 1.0,
                 "match_origin": "llm_quote",

@@ -43,7 +43,12 @@ class TestAdminJobStatus:
             response = client.get("/admin/jobs/job-123")
 
         assert response.status_code == 200
-        assert response.json() == {"job_id": "job-123", "status": "pending", "detail": None, "result": None}
+        assert response.json() == {
+            "job_id": "job-123",
+            "status": "pending",
+            "detail": None,
+            "result": None,
+        }
 
     def test_returns_progress_job_status(self) -> None:
         fake_result = MagicMock()

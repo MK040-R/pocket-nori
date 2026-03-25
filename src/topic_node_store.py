@@ -206,9 +206,7 @@ def load_topic_node_label_map(
         .execute()
     ).data or []
     return {
-        str(row["id"]): str(row.get(TOPIC_NODE_LABEL_COLUMN) or "")
-        for row in rows
-        if row.get("id")
+        str(row["id"]): str(row.get(TOPIC_NODE_LABEL_COLUMN) or "") for row in rows if row.get("id")
     }
 
 
@@ -253,7 +251,7 @@ def search_topic_node_rows(
         WHERE tn.user_id = %s
           AND tn.embedding IS NOT NULL
           AND 1 - (tn.embedding <=> %s::vector) >= %s
-          {' '.join(date_clauses)}
+          {" ".join(date_clauses)}
         ORDER BY tn.id, c.meeting_date DESC, score DESC
         LIMIT %s
     """

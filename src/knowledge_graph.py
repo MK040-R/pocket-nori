@@ -436,9 +436,7 @@ def _build_relation_context(
         lines.extend(f"- {label} [topic_node]" for label in sorted(topic_labels.values()))
     if entity_labels:
         lines.append("Entities:")
-        lines.extend(
-            f"- {label} [entity_node]" for label in sorted(entity_labels.values())
-        )
+        lines.extend(f"- {label} [entity_node]" for label in sorted(entity_labels.values()))
     if commitments:
         lines.append("Commitments:")
         for row in commitments:
@@ -979,12 +977,8 @@ def get_neighbors(
     ).data or []
     rows = source_edges + target_edges
     refs = [
-        (str(row.get("source_type") or ""), str(row.get("source_id") or ""))
-        for row in rows
-    ] + [
-        (str(row.get("target_type") or ""), str(row.get("target_id") or ""))
-        for row in rows
-    ]
+        (str(row.get("source_type") or ""), str(row.get("source_id") or "")) for row in rows
+    ] + [(str(row.get("target_type") or ""), str(row.get("target_id") or "")) for row in rows]
     labels = _hydrate_labels(db, user_id, refs)
     evidence_rows = (
         db.table("knowledge_edge_evidence")
@@ -1056,12 +1050,8 @@ def get_subgraph_for_conversation(
         .execute()
     ).data or []
     refs = [
-        (str(row.get("source_type") or ""), str(row.get("source_id") or ""))
-        for row in edge_rows
-    ] + [
-        (str(row.get("target_type") or ""), str(row.get("target_id") or ""))
-        for row in edge_rows
-    ]
+        (str(row.get("source_type") or ""), str(row.get("source_id") or "")) for row in edge_rows
+    ] + [(str(row.get("target_type") or ""), str(row.get("target_id") or "")) for row in edge_rows]
     labels = _hydrate_labels(db, user_id, refs)
     nodes = [
         {"type": ref_type, "id": ref_id, "label": labels.get((ref_type, ref_id), "")}

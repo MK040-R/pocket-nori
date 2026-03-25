@@ -36,7 +36,9 @@ def _make_chain(data: list[dict[str, Any]]) -> MagicMock:
     return chain
 
 
-def _make_db(index_row: dict[str, Any], entity_rows: list[dict[str, Any]] | None = None) -> MagicMock:
+def _make_db(
+    index_row: dict[str, Any], entity_rows: list[dict[str, Any]] | None = None
+) -> MagicMock:
     user_index_table = _make_chain([index_row])
     entities_table = _make_chain(entity_rows or [])
 

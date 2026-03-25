@@ -296,10 +296,7 @@ def ingest_recording(
 
     # --- Step 5: Update user_index conversation_count + last_updated ---
     existing_index = (
-        db.table("user_index")
-        .select("conversation_count")
-        .eq("user_id", user_id)
-        .execute()
+        db.table("user_index").select("conversation_count").eq("user_id", user_id).execute()
     )
     if existing_index.data:
         current_conversation_count = int(existing_index.data[0].get("conversation_count") or 0)

@@ -202,10 +202,14 @@ def _match_candidates_to_segments(
             score = _text_overlap_score(candidate, prepared["segment"].get("text"))
             if score < min_overlap_score:
                 continue
-            if best_overlap is None or score > best_score or (
-                score == best_score
-                and _segment_sort_key(cast(dict[str, Any], prepared["segment"]))
-                < _segment_sort_key(cast(dict[str, Any], best_overlap["segment"]))
+            if (
+                best_overlap is None
+                or score > best_score
+                or (
+                    score == best_score
+                    and _segment_sort_key(cast(dict[str, Any], prepared["segment"]))
+                    < _segment_sort_key(cast(dict[str, Any], best_overlap["segment"]))
+                )
             ):
                 best_overlap = prepared
                 best_score = score

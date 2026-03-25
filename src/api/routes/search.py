@@ -461,9 +461,7 @@ def search(
     try:
         topics = _search_topic_nodes(user_id, query_vector, body.limit, date_from, date_to)
     except Exception as exc:
-        logger.warning(
-            "Topic node search failed — user=%s error=%s", user_id, type(exc).__name__
-        )
+        logger.warning("Topic node search failed — user=%s error=%s", user_id, type(exc).__name__)
 
     try:
         entities = _search_entities(user_id, query_vector, body.limit, date_from, date_to)

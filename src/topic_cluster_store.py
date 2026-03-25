@@ -883,11 +883,7 @@ def upsert_topic_arc_for_cluster(
             if topic_id and segment_id:
                 topic_to_segment_ids.setdefault(topic_id, []).append(segment_id)
                 raw_score = row.get("match_score")
-                match_score = (
-                    float(raw_score)
-                    if isinstance(raw_score, int | float)
-                    else 0.0
-                )
+                match_score = float(raw_score) if isinstance(raw_score, int | float) else 0.0
                 topic_segment_match_scores[(topic_id, segment_id)] = match_score
 
     segment_map: dict[str, dict[str, Any]] = {}

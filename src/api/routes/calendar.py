@@ -75,6 +75,8 @@ class TodayBriefing(BaseModel):
     open_commitments: list[OpenCommitment]
     recent_activity: list[RecentActivity]
     recent_connections: list[RecentConnection]
+
+
 def _get_google_tokens(db: Any, user_id: str) -> tuple[str, str]:
     rows = (
         db.table("user_index")
@@ -140,6 +142,8 @@ async def _load_calendar_events_with_refresh(
         time_max=time_max,
     )
     return refreshed_access_token, events
+
+
 def _load_recent_activity(db: Any, user_id: str, limit: int = 8) -> list[RecentActivity]:
     rows = (
         db.table("conversations")

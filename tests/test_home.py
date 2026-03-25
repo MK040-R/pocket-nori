@@ -111,8 +111,16 @@ def test_home_summary_returns_200_with_summary() -> None:
                 {"id": "c2", "status": "open", "user_id": _FAKE_USER["sub"]},
             ],
             topics=[
-                {"label": "Roadmap planning", "user_id": _FAKE_USER["sub"], "created_at": "2026-03-01"},
-                {"label": "Hiring pipeline", "user_id": _FAKE_USER["sub"], "created_at": "2026-03-02"},
+                {
+                    "label": "Roadmap planning",
+                    "user_id": _FAKE_USER["sub"],
+                    "created_at": "2026-03-01",
+                },
+                {
+                    "label": "Hiring pipeline",
+                    "user_id": _FAKE_USER["sub"],
+                    "created_at": "2026-03-02",
+                },
             ],
         )
         with (
@@ -268,7 +276,10 @@ def test_home_dashboard_returns_aggregated_payload() -> None:
         body = response.json()
         assert body["today"]["upcoming_meetings"][0]["title"] == "Product Review"
         assert body["stats"]["conversation_count"] == 9
-        assert body["summary"]["summary"] == "You have a product review coming up and 2 open actions in flight."
+        assert (
+            body["summary"]["summary"]
+            == "You have a product review coming up and 2 open actions in flight."
+        )
         assert body["prep_push"]["brief_id"] == "brief-1"
         assert body["actions"]["commitment"][0]["conversation_title"] == "Weekly product sync"
         assert body["actions"]["follow_up"][0]["text"] == "Follow up with design"

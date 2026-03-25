@@ -88,9 +88,7 @@ def _build_topic_labels_by_conversation(
         return {}
 
     topic_node_map = {
-        str(row["id"]): str(row.get("label") or "")
-        for row in topic_node_rows
-        if row.get("id")
+        str(row["id"]): str(row.get("label") or "") for row in topic_node_rows if row.get("id")
     }
     conversation_labels: dict[str, list[str]] = {}
     for row in topic_rows:
@@ -545,10 +543,7 @@ def create_commitment(
 
     created = insert_result.data[0]
     existing_index = (
-        db.table("user_index")
-        .select("commitment_count")
-        .eq("user_id", user_id)
-        .execute()
+        db.table("user_index").select("commitment_count").eq("user_id", user_id).execute()
     )
     if existing_index.data:
         current_commitment_count = int(existing_index.data[0].get("commitment_count") or 0)

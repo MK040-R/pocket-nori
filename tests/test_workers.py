@@ -322,9 +322,7 @@ class TestSyncCalendarArtifactsUnit:
                 "calendar_event_id": None,
             }
         ]
-        conversations_table.update.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            MagicMock()
-        )
+        conversations_table.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock()
 
         def _table_router(name: str) -> MagicMock:
             if name == "user_index":

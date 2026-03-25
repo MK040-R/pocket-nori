@@ -248,9 +248,7 @@ def _build_stored_entity_node(
         name=str(node_row.get("canonical_name") or snapshot.canonical_name),
         entity_type=str(node_row.get("entity_type") or snapshot.entity_type),
         mention_count=int(node_row.get("mention_count") or snapshot.mention_count),
-        first_mentioned_at=str(
-            node_row.get("first_mentioned_at") or snapshot.first_mentioned_at
-        ),
+        first_mentioned_at=str(node_row.get("first_mentioned_at") or snapshot.first_mentioned_at),
         last_mentioned_at=str(node_row.get("last_mentioned_at") or snapshot.last_mentioned_at),
         conversation_ids=conversation_ids,
         entity_ids=entity_ids,
@@ -354,11 +352,7 @@ def load_entity_node_name_map(
         .in_("id", node_ids)
         .execute()
     ).data or []
-    return {
-        str(row["id"]): str(row.get("canonical_name") or "")
-        for row in rows
-        if row.get("id")
-    }
+    return {str(row["id"]): str(row.get("canonical_name") or "") for row in rows if row.get("id")}
 
 
 def _find_lexical_entity_node_id(
@@ -426,16 +420,10 @@ def _candidate_entity_nodes(
         node_tokens = set(_tokens(node_name))
         overlap = len(token_list & node_tokens)
         brand_match = int(
-            entity_type in _BRAND_LIKE_TYPES
-            and compact
-            and compact == _compact_key(node_name)
+            entity_type in _BRAND_LIKE_TYPES and compact and compact == _compact_key(node_name)
         )
         substring_match = int(
-            bool(normalized)
-            and (
-                normalized in node_normalized
-                or node_normalized in normalized
-            )
+            bool(normalized) and (normalized in node_normalized or node_normalized in normalized)
         )
         if overlap == 0 and brand_match == 0 and substring_match == 0:
             continue
@@ -444,8 +432,7 @@ def _candidate_entity_nodes(
                 brand_match,
                 overlap,
                 substring_match,
-                _parse_datetime(node.get("last_mentioned_at"))
-                or datetime.min.replace(tzinfo=UTC),
+                _parse_datetime(node.get("last_mentioned_at")) or datetime.min.replace(tzinfo=UTC),
                 node,
             )
         )
@@ -895,7 +882,7 @@ def search_entity_node_rows(
         WHERE en.user_id = %s
           AND en.embedding IS NOT NULL
           AND 1 - (en.embedding <=> %s::vector) >= %s
-          {' '.join(date_clauses)}
+          {" ".join(date_clauses)}
         ORDER BY en.id, c.meeting_date DESC, score DESC
         LIMIT %s
     """

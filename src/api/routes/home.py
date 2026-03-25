@@ -147,11 +147,7 @@ def _build_home_actions(
     all_rows = commitment_rows + follow_up_rows
 
     conversation_ids = sorted(
-        {
-            str(row.get("conversation_id") or "")
-            for row in all_rows
-            if row.get("conversation_id")
-        }
+        {str(row.get("conversation_id") or "") for row in all_rows if row.get("conversation_id")}
     )
     conversation_titles: dict[str, str] = {}
     if conversation_ids:
@@ -174,11 +170,7 @@ def _build_home_actions(
                 id=str(row.get("id") or ""),
                 text=str(row.get("text") or ""),
                 owner=str(row.get("owner") or ""),
-                due_date=(
-                    str(row.get("due_date"))
-                    if row.get("due_date") is not None
-                    else None
-                ),
+                due_date=(str(row.get("due_date")) if row.get("due_date") is not None else None),
                 conversation_title=conversation_titles.get(
                     str(row.get("conversation_id") or ""),
                     "",
