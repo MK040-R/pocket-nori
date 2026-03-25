@@ -134,6 +134,8 @@ A single speaker utterance within a Conversation — the atomic unit of a transc
 **Topic**
 A subject that recurs or persists across Conversations, identified and labeled by Pocket Nori's intelligence layer. Topics are not user-created — they emerge from the content of indexed Conversations. A Topic has: a label (e.g., "Q2 launch timeline"), the date it was first mentioned, the date it was last mentioned, a status (open or resolved), and a list of linked Conversations. The same real-world subject discussed under different names (e.g., "feature X" and "the reporting feature") may be unified into a single Topic if the system identifies them as semantically equivalent.
 
+The system identifies topics through a cost-optimized 5-stage pipeline: heuristic transcript segmentation, deterministic entity extraction, two-tier candidate identification (deterministic scoring followed by targeted AI validation), rule-based filtering, and hybrid resolution against the existing topic graph. See `docs/specs/Topic_intelligence.md` for the full specification.
+
 **Topic Arc**
 A view over a Topic's linked Conversations, ordered chronologically. The Topic Arc is the output of Pocket Nori's topical search capability — not a list of excerpts, but a synthesized narrative: what was proposed, what changed, what was decided, and what remains open. Each claim in a Topic Arc is traceable to a specific Conversation and timestamp.
 
@@ -144,7 +146,7 @@ A detected relationship between two or more Conversations or Topics. A Connectio
 A statement, extracted from a Conversation, in which the user indicates a future action. Commitments have: the extracted text, the user to whom it is attributed, a due date (if mentioned explicitly), the source Conversation, and a status (open or resolved). Example: "I will send the proposal by Friday" extracted from a client call on Tuesday. Commitments are surfaced in pre-meeting briefings and the personal context dashboard.
 
 **Entity**
-A named person, project, company, or product referenced across Conversations. Entities are extracted automatically and used to enrich Topic Arcs and Connections — for example, linking a customer name mentioned in a sales call to a product feature discussed in a sprint review. Entities are not exposed directly as a user-facing concept; they are an internal enrichment layer.
+A deterministic fact extracted from transcript text — a named person, project, company, product, date, deadline, monetary value, artifact, or project code. Entities are extracted automatically using NLP pattern matching before any AI processing, and serve as a primary signal for topic resolution and cross-meeting connection detection — for example, linking a customer name mentioned in a sales call to a product feature discussed in a sprint review. Entities are not exposed directly as a user-facing concept; they are an internal enrichment layer.
 
 **Brief**
 A generated pre-meeting artifact composed from relevant Topic Arcs, open Commitments, flagged Connections, and calendar context for an upcoming meeting. A Brief belongs to the user who generated it. It is private by default. The user may choose to share it with other meeting attendees — this is an explicit action, and the only mechanism by which Pocket Nori content crosses user boundaries.
@@ -168,6 +170,8 @@ Index (per user)
 Brief
 └── composed from → Topic Arcs + Commitments + Connections + Calendar event
 ```
+
+The topic intelligence pipeline introduces intermediate representations (`DiscussionBlock`, `BlockCandidacy`, `CandidateTopic`) that are transient processing artifacts, not persisted entities. The canonical stored entity is `TopicNode`, which accumulates aliases, entities, keywords, and graph relationships over time.
 
 ### 5.3 Design Principles of the Model
 

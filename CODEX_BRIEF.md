@@ -38,7 +38,7 @@ Both agents update `PROGRESS.md` only to record their own completed waves.
 Everything below is live and deployed:
 
 - **Meetings import:** Google Drive transcript picker → Deepgram transcription → Claude extraction → indexed in Supabase with pgvector
-- **Topics & topic clusters:** Durable topic intelligence with canonical labels, cross-meeting clustering, reclustering endpoint
+- **Topics & topic intelligence:** 5-stage topic intelligence pipeline (segmentation, entity extraction, two-tier candidate identification, filtering, hybrid resolution) producing canonical `TopicNode` graph entities with accumulated aliases, entities, keywords, and graph relationships. Topic endpoint response payloads may include additional fields (`type`, `priority_level`, `entities`, `all_keywords`, `related_topic_ids`, `derived_from_id`) as additive, non-breaking changes
 - **Commitments & follow-ups:** AI-extracted + manual creation, `action_type` classification, resolve/reopen
 - **Entities:** People, projects, companies extracted from transcripts with mention counts
 - **Connections:** Cross-meeting link detection (shared topics, entities, commitment threads)

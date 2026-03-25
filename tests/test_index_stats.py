@@ -1,5 +1,6 @@
 """Unit tests for dashboard index stats."""
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -111,32 +112,27 @@ class TestIndexStats:
             "last_updated_at": "2026-03-12T10:00:00+00:00",
         }
 
-    def test_falls_back_to_grouped_entities_when_entity_count_is_missing(self) -> None:
+    def test_falls_back_to_entity_nodes_when_entity_count_is_missing(self) -> None:
         db = _make_db(
             {
                 "conversation_count": 7,
                 "topic_count": 0,
                 "commitment_count": 5,
                 "last_updated": "2026-03-12T10:00:00+00:00",
-            },
-            entity_rows=[
-                {"name": "Opus", "type": "product", "mentions": 3, "conversation_id": "conv-1"},
-                {"name": "Opus", "type": "company", "mentions": 2, "conversation_id": "conv-2"},
-                {"name": "N8", "type": "product", "mentions": 1, "conversation_id": "conv-3"},
-                {"name": "N8N", "type": "product", "mentions": 4, "conversation_id": "conv-4"},
-                {
-                    "name": "Nabil Mansouri",
-                    "type": "person",
-                    "mentions": 2,
-                    "conversation_id": "conv-5",
-                },
-                {"name": "Nabil", "type": "person", "mentions": 1, "conversation_id": "conv-6"},
-            ],
+            }
         )
 
         with (
             patch("src.api.routes.index_stats.get_client", return_value=db),
             patch("src.api.routes.index_stats.load_topic_clusters", return_value=_CLUSTERS),
+            patch(
+                "src.api.routes.index_stats.load_entity_nodes",
+                return_value=[
+                    SimpleNamespace(id="entity-node-1"),
+                    SimpleNamespace(id="entity-node-2"),
+                    SimpleNamespace(id="entity-node-3"),
+                ],
+            ),
         ):
             response = client.get("/index/stats")
 

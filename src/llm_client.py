@@ -36,6 +36,11 @@ class TopicResult(BaseModel):
     summary: str = Field(description="1-2 sentence summary of what was discussed")
     status: Literal["open", "resolved"]
     key_quotes: list[str] = Field(default_factory=list, max_length=2)
+    evidence_quotes: list[str] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Short verbatim transcript substrings that best anchor this topic to specific moments",
+    )
     is_background: bool = Field(
         default=False,
         description="True only for background, introductory, administrative, or low-signal topics that should not be surfaced",
@@ -46,6 +51,17 @@ class TopicList(BaseModel):
     topics: list[TopicResult]
 
 
+class BriefMentionResult(BaseModel):
+    label: str = Field(description="Short canonical topic label for the brief mention")
+    summary: str = Field(description="One sentence summary of the short decision or approval")
+    status: Literal["open", "resolved"]
+    evidence_quote: str = Field(description="Exact quote anchoring the brief mention")
+
+
+class BriefMentionList(BaseModel):
+    mentions: list[BriefMentionResult]
+
+
 class CommitmentResult(BaseModel):
     text: str = Field(description="The commitment statement")
     owner: str = Field(description="Name of the person who made the commitment")
@@ -53,6 +69,11 @@ class CommitmentResult(BaseModel):
         default=None, description="ISO date YYYY-MM-DD if explicitly stated, else null"
     )
     status: Literal["open", "resolved"] = "open"
+    evidence_quotes: list[str] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Short verbatim transcript substrings that anchor the action to a specific utterance",
+    )
     action_type: Literal["commitment", "follow_up"] = Field(
         default="commitment",
         description=(
@@ -76,6 +97,34 @@ class EntityList(BaseModel):
     entities: list[EntityResult]
 
 
+class RelationResult(BaseModel):
+    source_label: str = Field(description="Canonical topic/entity label or commitment text snippet")
+    source_type: Literal["topic_node", "entity_node", "commitment"]
+    target_label: str = Field(description="Canonical topic/entity label or commitment text snippet")
+    target_type: Literal["topic_node", "entity_node", "commitment"]
+    relation_type: Literal[
+        "works_on",
+        "owns",
+        "reports_to",
+        "manages",
+        "uses",
+        "depends_on",
+        "decided",
+        "blocked_by",
+        "client_of",
+        "partner_of",
+    ]
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_quote: str | None = Field(
+        default=None,
+        description="Short verbatim quote copied from the provided evidence snippets when possible",
+    )
+
+
+class RelationList(BaseModel):
+    relations: list[RelationResult]
+
+
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
@@ -87,6 +136,7 @@ For each topic:
 - Write a 1-2 sentence summary of the substance of the discussion, not just a restatement of the label
 - Determine if the topic is "open" (unresolved, needs follow-up) or "resolved" (concluded, decided)
 - Include up to 2 verbatim quotes that best represent the topic
+- Include up to 3 short verbatim evidence quotes copied exactly from the transcript so the topic can be linked back to precise segments
 - Mark is_background=true only when the discussion is introductory, administrative, purely contextual, or not important enough to surface as a user-facing topic
 
 Guidelines:
@@ -113,12 +163,29 @@ For each action:
 - Extract a due date only if explicitly mentioned (ISO format YYYY-MM-DD); leave null if not stated
 - Set status to "open" unless the transcript explicitly confirms completion
 - Set action_type to "commitment" if the owner is doing the work themselves, or "follow_up" if the owner is waiting on/tracking someone else
+- Include up to 3 short verbatim evidence quotes copied exactly from the transcript so the action can be linked back to precise segments
 
 Guidelines:
 - Only extract actions with a clear owner — exclude vague "we should" statements
 - Exclude observations, summaries, decisions, and status updates that are not forward-looking actions
 - Do not fabricate due dates
 - Accuracy over quantity"""
+
+_BRIEF_MENTION_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract only short but meaningful work decisions or approvals that could be missed by broader topic extraction.
+
+You will receive short meeting excerpts from a strategy or client meeting.
+
+Return an item only when:
+- it represents a real decision, approval, commitment to proceed, rejection, or blocking issue
+- it is material enough that a professional would want it preserved in their personal context graph
+- it is grounded in a clear verbatim quote from the excerpt
+
+Do not return:
+- greetings, filler, logistics, recap-only statements, or vague discussion fragments
+- broad topics already fully captured without a concrete decision or approval
+- items without a clear evidence quote
+
+Use stable initiative-level labels rather than copying the quote verbatim."""
 
 _ENTITY_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract named entities from a meeting transcript.
 
@@ -136,6 +203,28 @@ Guidelines:
 - Only extract entities with proper names — exclude generic references ("the backend", "the client")
 - If referred to by multiple names, count them together under the canonical name
 - Accuracy over quantity"""
+
+_RELATION_SYSTEM_PROMPT = """You are an expert meeting analyst. Extract only explicit or strongly grounded relationships from structured meeting context.
+
+Allowed relation types:
+- works_on
+- owns
+- reports_to
+- manages
+- uses
+- depends_on
+- decided
+- blocked_by
+- client_of
+- partner_of
+
+Rules:
+- Use only the provided labels exactly; do not invent new labels
+- Return a relation only when the meeting context clearly supports it
+- Prefer omission over weak inference
+- Use topic_node for workstreams/topics, entity_node for people/companies/products/projects, and commitment for action items
+- Include a short verbatim evidence quote only when one is clearly present in the provided evidence snippets
+- Do not emit duplicate or symmetric restatements of the same relationship"""
 
 _DIGEST_SYSTEM_PROMPT = """You are a personal meeting intelligence assistant.
 Given the structured data extracted from a completed meeting — topics, commitments, and entities — write a concise 3-5 sentence digest.
@@ -318,6 +407,50 @@ Answer only YES or NO."""
     if not isinstance(block, TextBlock):
         raise ValueError(f"Expected TextBlock from merge check, got {type(block).__name__}")
     return block.text.strip().upper() == "YES"
+
+
+def check_entity_merge(
+    name_a: str,
+    type_a: str,
+    name_b: str,
+    type_b: str,
+) -> bool:
+    """Return True when two entity mentions represent the same concrete entity."""
+    prompt = f"""Two entities were extracted from different meetings for the same user.
+
+Entity A name: "{name_a}"
+Entity A type: "{type_a}"
+
+Entity B name: "{name_b}"
+Entity B type: "{type_b}"
+
+Do these refer to the same exact real-world entity?
+Answer YES only when they clearly name the same person, company, product, or project.
+Answer NO for broad business-area overlap, adjacent tools, similar initiatives, teams versus products, or any uncertain case.
+For people, a short first-name-only mention should match a full name only when it is clearly the same person.
+For companies/products, answer NO when one could plausibly be a related brand, customer, feature, or department rather than the same entity.
+Answer only YES or NO."""
+
+    logger.debug("LLM entity merge check — model=%s", _Model.MERGE)
+    response = _raw_client().messages.create(
+        model=str(_Model.MERGE),
+        max_tokens=8,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        raise ValueError(f"Expected TextBlock from entity merge check, got {type(block).__name__}")
+    return block.text.strip().upper() == "YES"
+
+
+def extract_relations(structured_context: str) -> RelationList:
+    """Extract bounded typed relations from structured meeting context."""
+    return _extract(_RELATION_SYSTEM_PROMPT, structured_context, RelationList)
+
+
+def extract_brief_mentions(snippet_context: str) -> BriefMentionList:
+    """Extract short, citation-backed decisions or approvals from brief snippets."""
+    return _extract(_BRIEF_MENTION_SYSTEM_PROMPT, snippet_context, BriefMentionList)
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:

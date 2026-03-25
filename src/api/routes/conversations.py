@@ -17,6 +17,11 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.api.schema_guards import feature_unavailable, is_missing_schema_feature
 from src.database import get_client
+from src.knowledge_graph import materialize_connections_for_conversation
+from src.topic_node_store import (
+    TOPIC_NODE_FOREIGN_KEY_COLUMN,
+    load_topic_node_label_map,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -205,237 +210,13 @@ def _compute_and_store_connections(
     source_conversation_id: str,
     source_title: str,
 ) -> list[ConversationConnection]:
-    source_topics_result = (
-        db.table("topics")
-        .select("id, label")
-        .eq("user_id", user_id)
-        .eq("conversation_id", source_conversation_id)
-        .execute()
+    rows = materialize_connections_for_conversation(
+        db,
+        user_id,
+        source_conversation_id,
+        source_title,
     )
-    source_entities_result = (
-        db.table("entities")
-        .select("id, name")
-        .eq("user_id", user_id)
-        .eq("conversation_id", source_conversation_id)
-        .execute()
-    )
-    source_commitments_result = (
-        db.table("commitments")
-        .select("id, owner, text")
-        .eq("user_id", user_id)
-        .eq("conversation_id", source_conversation_id)
-        .execute()
-    )
-
-    source_topics = source_topics_result.data or []
-    source_entities = source_entities_result.data or []
-    source_commitments = source_commitments_result.data or []
-
-    source_topic_labels = {
-        _normalize_phrase(str(row.get("label", ""))): str(row.get("label", ""))
-        for row in source_topics
-        if row.get("label")
-    }
-    source_entity_names = {
-        _normalize_phrase(str(row.get("name", ""))): str(row.get("name", ""))
-        for row in source_entities
-        if row.get("name")
-    }
-    source_commitment_sigs = {
-        _commitment_signature(row.get("owner"), row.get("text")): str(row.get("text", ""))
-        for row in source_commitments
-        if _commitment_signature(row.get("owner"), row.get("text"))
-    }
-
-    all_other_topics = (
-        db.table("topics")
-        .select("id, conversation_id, label")
-        .eq("user_id", user_id)
-        .neq("conversation_id", source_conversation_id)
-        .execute()
-    ).data or []
-    all_other_entities = (
-        db.table("entities")
-        .select("id, conversation_id, name")
-        .eq("user_id", user_id)
-        .neq("conversation_id", source_conversation_id)
-        .execute()
-    ).data or []
-    all_other_commitments = (
-        db.table("commitments")
-        .select("id, conversation_id, owner, text")
-        .eq("user_id", user_id)
-        .neq("conversation_id", source_conversation_id)
-        .execute()
-    ).data or []
-
-    candidate_map: dict[str, dict[str, Any]] = {}
-
-    for row in all_other_topics:
-        normalized = _normalize_phrase(str(row.get("label", "")))
-        if not normalized or normalized not in source_topic_labels:
-            continue
-        conversation_id = str(row.get("conversation_id", ""))
-        if not conversation_id:
-            continue
-        candidate = candidate_map.setdefault(conversation_id, _new_candidate_signals())
-        topic_id = str(row.get("id", ""))
-        if topic_id:
-            candidate["topic_ids"].add(topic_id)
-        candidate["shared_topics"].add(source_topic_labels[normalized])
-
-    for row in all_other_entities:
-        normalized = _normalize_phrase(str(row.get("name", "")))
-        if not normalized or normalized not in source_entity_names:
-            continue
-        conversation_id = str(row.get("conversation_id", ""))
-        if not conversation_id:
-            continue
-        candidate = candidate_map.setdefault(conversation_id, _new_candidate_signals())
-        candidate["shared_entities"].add(source_entity_names[normalized])
-
-    for row in all_other_commitments:
-        signature = _commitment_signature(row.get("owner"), row.get("text"))
-        if not signature or signature not in source_commitment_sigs:
-            continue
-        conversation_id = str(row.get("conversation_id", ""))
-        if not conversation_id:
-            continue
-        candidate = candidate_map.setdefault(conversation_id, _new_candidate_signals())
-        candidate["shared_commitments"].add(source_commitment_sigs[signature])
-
-    if not candidate_map:
-        existing_links = (
-            db.table("connection_linked_items")
-            .select("connection_id")
-            .eq("user_id", user_id)
-            .eq("linked_id", source_conversation_id)
-            .execute()
-        ).data or []
-        existing_connection_ids = sorted(
-            {
-                str(row.get("connection_id", ""))
-                for row in existing_links
-                if row.get("connection_id")
-            }
-        )
-        if existing_connection_ids:
-            (
-                db.table("connections")
-                .delete()
-                .eq("user_id", user_id)
-                .in_("id", existing_connection_ids)
-                .execute()
-            )
-        return []
-
-    candidate_ids = sorted(candidate_map.keys())
-    candidate_conversations = (
-        db.table("conversations")
-        .select("id, title, meeting_date")
-        .eq("user_id", user_id)
-        .in_("id", candidate_ids)
-        .execute()
-    ).data or []
-    conversation_meta = {str(row["id"]): row for row in candidate_conversations}
-
-    existing_links = (
-        db.table("connection_linked_items")
-        .select("connection_id")
-        .eq("user_id", user_id)
-        .eq("linked_id", source_conversation_id)
-        .execute()
-    ).data or []
-    existing_connection_ids = sorted(
-        {str(row.get("connection_id", "")) for row in existing_links if row.get("connection_id")}
-    )
-    if existing_connection_ids:
-        (
-            db.table("connections")
-            .delete()
-            .eq("user_id", user_id)
-            .in_("id", existing_connection_ids)
-            .execute()
-        )
-
-    ranked_candidates = sorted(
-        candidate_map.items(),
-        key=lambda item: (
-            len(item[1]["shared_topics"]) * 3
-            + len(item[1]["shared_entities"]) * 2
-            + len(item[1]["shared_commitments"]),
-            item[0],
-        ),
-        reverse=True,
-    )[:25]
-
-    output: list[ConversationConnection] = []
-    for conversation_id, signals in ranked_candidates:
-        meta = conversation_meta.get(conversation_id)
-        if not meta:
-            continue
-
-        shared_topics = sorted(str(value) for value in signals["shared_topics"])
-        shared_entities = sorted(str(value) for value in signals["shared_entities"])
-        shared_commitments = sorted(str(value) for value in signals["shared_commitments"])
-        topic_ids = sorted(str(value) for value in signals["topic_ids"])
-
-        if shared_topics and shared_entities:
-            label = "Shared topics and entities"
-        elif shared_topics:
-            label = "Shared topic thread"
-        elif shared_entities:
-            label = "Shared entities"
-        else:
-            label = "Commitment thread overlap"
-
-        summary = (
-            f"{source_title} and {meta.get('title', 'this meeting')} are connected through "
-            f"{_describe_shared(shared_topics, shared_entities, shared_commitments)}."
-        )
-        linked_type = "topic" if topic_ids else "conversation"
-
-        created_connection = (
-            db.table("connections")
-            .insert(
-                {
-                    "user_id": user_id,
-                    "label": label,
-                    "linked_type": linked_type,
-                    "summary": summary,
-                }
-            )
-            .execute()
-        )
-        if not created_connection.data:
-            continue
-
-        connection_id = str(created_connection.data[0]["id"])
-        linked_ids = [source_conversation_id, conversation_id, *topic_ids]
-        deduped_linked_ids = sorted(set(linked_ids))
-        db.table("connection_linked_items").insert(
-            [
-                {"connection_id": connection_id, "linked_id": linked_id, "user_id": user_id}
-                for linked_id in deduped_linked_ids
-            ]
-        ).execute()
-
-        output.append(
-            ConversationConnection(
-                id=connection_id,
-                linked_type=linked_type,
-                label=label,
-                summary=summary,
-                connected_conversation_id=conversation_id,
-                connected_conversation_title=str(meta.get("title") or "Untitled meeting"),
-                connected_meeting_date=meta.get("meeting_date"),
-                shared_topics=shared_topics,
-                shared_entities=shared_entities,
-                shared_commitments=shared_commitments,
-            )
-        )
-
-    return output
+    return [ConversationConnection.model_validate(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -589,30 +370,21 @@ def get_conversation(
     # --- Topics ---
     topics_result = (
         db.table("topics")
-        .select("id, cluster_id, label, summary, status, key_quotes")
+        .select(f"id, {TOPIC_NODE_FOREIGN_KEY_COLUMN}, label, summary, status, key_quotes")
         .eq("conversation_id", conversation_id)
         .eq("user_id", user_id)
         .order("created_at")
         .execute()
     )
     topic_rows = topics_result.data or []
-    cluster_ids = sorted(
-        {str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id") is not None}
+    topic_node_ids = sorted(
+        {
+            str(row[TOPIC_NODE_FOREIGN_KEY_COLUMN])
+            for row in topic_rows
+            if row.get(TOPIC_NODE_FOREIGN_KEY_COLUMN) is not None
+        }
     )
-    cluster_rows: list[dict[str, Any]] = []
-    if cluster_ids:
-        cluster_rows = (
-            db.table("topic_clusters")
-            .select("id, canonical_label")
-            .eq("user_id", user_id)
-            .in_("id", cluster_ids)
-            .execute()
-        ).data or []
-    cluster_label_by_id = {
-        str(row["id"]): str(row.get("canonical_label") or "")
-        for row in cluster_rows
-        if row.get("id")
-    }
+    topic_node_label_by_id = load_topic_node_label_map(db, user_id, topic_node_ids)
 
     # --- Commitments ---
     commitments_result = (
@@ -675,8 +447,10 @@ def get_conversation(
         ),
         topics=[
             TopicOut(
-                id=str(t.get("cluster_id") or t["id"]),
-                label=cluster_label_by_id.get(str(t.get("cluster_id") or ""), t["label"]),
+                id=str(t.get(TOPIC_NODE_FOREIGN_KEY_COLUMN) or t["id"]),
+                label=topic_node_label_by_id.get(
+                    str(t.get(TOPIC_NODE_FOREIGN_KEY_COLUMN) or ""), t["label"]
+                ),
                 summary=t["summary"],
                 status=t["status"],
                 key_quotes=t.get("key_quotes") or [],

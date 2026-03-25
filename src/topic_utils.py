@@ -101,6 +101,14 @@ _GENERIC_CLUSTER_TOKENS = _STOPWORDS | {
     "tracking",
 }
 
+_DEICTIC_TOKENS = {
+    "that",
+    "this",
+    "thing",
+    "stuff",
+    "work",
+}
+
 _MIN_TOKEN_LENGTH = 3
 
 
@@ -276,6 +284,9 @@ def is_semantic_merge_candidate(
             summary_tokens(left_summary),
             summary_tokens(right_summary),
         )
+        deictic_tokens = (topic_tokens(left_label) | topic_tokens(right_label)) & _DEICTIC_TOKENS
+        if deictic_tokens and len(summary_overlap) >= 1:
+            return True
         return len(summary_overlap) >= 2
 
     summary_overlap = _token_overlap(summary_tokens(left_summary), summary_tokens(right_summary))

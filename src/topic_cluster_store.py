@@ -169,7 +169,7 @@ def _load_cluster_rows(
     query = (
         db.table("topic_clusters")
         .select(
-            "id, canonical_label, canonical_summary, status, first_mentioned_at, "
+            "id, canonical_label, canonical_summary, mention_count, status, first_mentioned_at, "
             "last_mentioned_at, created_at, updated_at"
         )
         .eq("user_id", user_id)
@@ -388,6 +388,7 @@ def _insert_cluster_with_id(
                 "user_id": user_id,
                 "canonical_label": cluster.label,
                 "canonical_summary": cluster.summary,
+                "mention_count": len(cluster.topic_ids),
                 "status": cluster.status,
                 "first_mentioned_at": cluster.first_mentioned_at,
                 "last_mentioned_at": cluster.last_mentioned_at,
@@ -475,6 +476,7 @@ def _create_cluster(
                 "user_id": user_id,
                 "canonical_label": label,
                 "canonical_summary": summary,
+                "mention_count": 1,
                 "status": status,
                 "first_mentioned_at": mentioned_at,
                 "last_mentioned_at": mentioned_at,
@@ -616,6 +618,7 @@ def refresh_cluster_metadata(
             {
                 "canonical_label": snapshot.canonical_label,
                 "canonical_summary": snapshot.canonical_summary,
+                "mention_count": len(member_rows),
                 "status": snapshot.status,
                 "first_mentioned_at": snapshot.first_mentioned_at,
                 "last_mentioned_at": snapshot.last_mentioned_at,
@@ -865,10 +868,11 @@ def upsert_topic_arc_for_cluster(
         raise RuntimeError(f"Topic cluster {cluster_id} not found")
 
     topic_to_segment_ids: dict[str, list[str]] = {}
+    topic_segment_match_scores: dict[tuple[str, str], float] = {}
     if cluster.topic_ids:
         link_rows = (
             db.table("topic_segment_links")
-            .select("topic_id, segment_id")
+            .select("topic_id, segment_id, match_score")
             .eq("user_id", user_id)
             .in_("topic_id", cluster.topic_ids)
             .execute()
@@ -878,6 +882,13 @@ def upsert_topic_arc_for_cluster(
             segment_id = str(row.get("segment_id") or "")
             if topic_id and segment_id:
                 topic_to_segment_ids.setdefault(topic_id, []).append(segment_id)
+                raw_score = row.get("match_score")
+                match_score = (
+                    float(raw_score)
+                    if isinstance(raw_score, int | float)
+                    else 0.0
+                )
+                topic_segment_match_scores[(topic_id, segment_id)] = match_score
 
     segment_map: dict[str, dict[str, Any]] = {}
     all_segment_ids = sorted(
@@ -900,7 +911,11 @@ def upsert_topic_arc_for_cluster(
         segment_ids = topic_to_segment_ids.get(current_topic_id, [])
         sorted_segments = sorted(
             (segment_map[segment_id] for segment_id in segment_ids if segment_id in segment_map),
-            key=lambda row: row.get("start_ms") or 0,
+            key=lambda row: (
+                topic_segment_match_scores.get((current_topic_id, str(row.get("id") or "")), 0.0),
+                -(row.get("start_ms") or 0),
+            ),
+            reverse=True,
         )
         primary_segment = sorted_segments[0] if sorted_segments else None
 

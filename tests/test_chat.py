@@ -1,6 +1,6 @@
 """Unit tests for chat endpoints (POST /chat, GET /chat/sessions, etc.)."""
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -189,7 +189,7 @@ def test_get_session_messages_returns_200() -> None:
                 "created_at": "2026-03-17T10:00:01Z",
             },
         ]
-        db = _make_db(sessions=sessions, messages=messages)
+        db = _make_db(sessions=sessions, messages=cast(list[dict[str, Any]], messages))
         with patch("src.api.routes.chat.get_client", return_value=db):
             response = client.get("/chat/sessions/s1/messages")
 

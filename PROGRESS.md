@@ -1,7 +1,7 @@
 # Pocket Nori — Build Progress
 
 > This document is written for non-technical readers. It is updated automatically after every completed task.
-> Last updated: 2026-03-17 (Waves B and D frontend shipped locally; backend rollout pending)
+> Last updated: 2026-03-25 (local intelligence stack complete through Entity Nodes, Knowledge Graph, and advanced resolution; operational rollout pending)
 
 ---
 
@@ -24,7 +24,7 @@ Building a software product from scratch happens in stages, like constructing a 
 | **Phase 2 — Full Product**          | Interior design, finishing, furniture | The complete dashboard — topic timelines, pre-meeting briefs, commitment tracker, cross-meeting connections                                         |
 
 
-**Phases 0, 1, 2, 3, 4, and 5 are complete.** Current execution focus is **MVP topic intelligence cleanup**, with the stored cluster model implemented locally and awaiting deployment + per-user backfill.
+**Phases 0, 1, 2, 3, 4, and 5 are complete.** The local backend now also includes the deterministic topic spine, canonical entity nodes, typed knowledge edges with evidence, graph-backed connection materialization, graph APIs, and advanced write-time enrichment. Current execution focus is **operational rollout**: switch production workers to Render Redis, deploy backend + worker together, apply migrations `014`, `015`, `017`, and `018`, run per-user rebuild/backfill, and complete signed-in production QA before the physical `topic_nodes` cutover.
 
 ---
 
@@ -71,7 +71,136 @@ Building a software product from scratch happens in stages, like constructing a 
 | Round 2 Wave J — topic_labels on GET /conversations           | ✅ Complete | ConversationSummary gains topic_labels: list[str], up to 3 per meeting                      |
 | Milestone 1 Wave B — Chat UI + meeting tag UI                 | ✅ Complete | `/chat` shipped locally, meeting tag filter/badges/override added with backend-safe fallback |
 | Milestone 1 Wave D — Draft UI + prep push UI                  | ✅ Complete | Draft modal launched from action cards; upcoming brief banner/notifications added to Home    |
+| Topic intelligence pipeline specification                      | ✅ Complete | 5-stage pipeline + complete Pydantic schema finalized                                       |
+| Milestone 1 closeout implementation                           | ✅ Complete | TopicNode bridge, deterministic provenance, backfill endpoint, and rebuild-time embedding refresh are implemented locally |
+| Milestone 2 — Entity Nodes                                    | ✅ Complete | Canonical `entity_nodes`, rebuild/backfill, and node-backed entity search/browse implemented locally |
+| Milestone 3 — Knowledge Graph + Graph API                     | ✅ Complete | `knowledge_edges` + evidence, graph-backed connections materializer, and `/graph/*` routes implemented locally |
+| Milestone 4 — Advanced Resolution                             | ✅ Complete | Embedding-assisted entity candidate generation, bounded relation extraction, and citation-backed brief mention detection implemented locally |
 
+
+---
+
+## ✅ Milestone Update — 2026-03-25 (Entity Nodes + Knowledge Graph + Advanced Resolution)
+
+### What was completed
+
+- Added **Entity Nodes**:
+  - canonical `entity_nodes` storage with per-user RLS and `entity_node_id` on mention rows
+  - deterministic lexical-first entity resolution with bounded LLM merge checks for ambiguous cases
+  - per-user entity-node rebuild/backfill flow and node-backed entity search/browse
+- Added **Knowledge Graph**:
+  - `knowledge_edges` and `knowledge_edge_evidence` for typed, explainable graph relationships
+  - deterministic graph edges for co-mentioned entities, topic/entity context, and commitment ownership
+  - bounded explicit relation extraction over structured meeting context instead of raw transcript-only prompting
+  - graph-backed connection materialization that preserves the existing `connections` read model
+- Added **Graph APIs**:
+  - `GET /graph/neighbors/{node_type}/{node_id}`
+  - `GET /graph/subgraph?conversation_id={id}`
+  - `GET /graph/path?from_id={id}&to_id={id}`
+- Added **rollout helpers**:
+  - `GET /admin/jobs/{job_id}` to poll rebuild/backfill task status
+  - `scripts/run_rollout_backfill.py` to drive the rollout sequence from a bearer-authenticated terminal session
+- Added **advanced write-time enrichment**:
+  - embedding-assisted entity candidate generation with lexical confirmation and bounded merge judgment
+  - citation-backed brief mention detection for `strategy` and `client` meetings
+  - conservative deictic merge handling for recent conversational references
+- Added rollout migrations:
+  - `017_entity_nodes.sql`
+  - `018_knowledge_edges.sql`
+
+### Validation results
+
+- Backend lint: `ruff check src tests` → **pass**
+- Backend typecheck: `mypy src tests` → **pass**
+- Backend tests: `pytest -q` → **202 passed, 7 skipped**
+- Frontend lint: `npm run lint` → **pass**
+- Frontend build: blocked in this environment because `next/font` could not resolve `fonts.googleapis.com`
+- Targeted graph/entity pipeline tests → **pass**
+  - `tests/test_extract.py`
+  - `tests/test_topic_utils.py`
+  - `tests/test_entities.py`
+  - `tests/test_search.py`
+  - `tests/test_connections.py`
+  - `tests/test_index_stats.py`
+  - `tests/test_llm_client.py`
+  - `tests/test_graph.py`
+
+### What comes next
+
+- Provision **Render Redis** and point the existing `UPSTASH_REDIS_URL` env var at it
+- Deploy backend + worker together
+- Apply migrations in rollout order:
+  - `014_topic_node_bridge.sql`
+  - `015_provenance_links.sql`
+  - `017_entity_nodes.sql`
+  - `018_knowledge_edges.sql`
+- Run per-user rollout flows:
+  - `/topics/recluster`
+  - `/admin/backfill-segment-links`
+  - `/admin/rebuild-entity-nodes`
+  - `/admin/backfill-knowledge-graph`
+- Run signed-in QA on Search, Ask, Topics, Meetings, Home, Dashboard, Entities, and Graph-backed connection surfaces
+- Defer `016_topic_node_cutover.sql` until runtime no longer depends on the legacy storage names
+
+## ✅ Milestone Update — 2026-03-25 (Milestone 1 Closeout Implementation)
+
+### What was completed
+
+- Added a **TopicNode bridge layer** so runtime reads and writes speak in canonical topic-node terms while physical storage remains bridge-backed
+- Replaced the old “link everything to all transcript segments” behavior with **deterministic provenance matching** for topics, commitments, and entities
+- Added **per-user repair/rebuild paths**:
+  - `/topics/recluster` rebuilds canonical topic nodes and arcs
+  - `/admin/backfill-segment-links` repairs stored citations for existing indexed meetings
+- Updated the rebuild flow so the **final stabilized topic-node set is re-embedded**, keeping search aligned after historical rebuilds
+- Added the bridge/provenance/cutover migrations:
+  - `014_topic_node_bridge.sql`
+  - `015_provenance_links.sql`
+  - `016_topic_node_cutover.sql` (prepared but intentionally deferred)
+
+### Validation results
+
+- Backend lint: `ruff check src tests` → **pass**
+- Backend tests covering the closeout surface → **pass**
+  - `tests/test_extract.py`
+  - `tests/test_search.py`
+  - `tests/test_chat.py`
+  - `tests/test_topics.py`
+  - `tests/test_index_stats.py`
+  - `tests/test_commitments.py`
+  - `tests/test_workers.py`
+  - `tests/test_briefs.py`
+  - `tests/test_topic_cluster_store.py`
+- Frontend lint: `npm run lint` → **pass**
+- Frontend build: blocked in this environment because `next/font` could not resolve `fonts.googleapis.com`
+
+### What comes next
+
+- Provision **Render Redis** and point the existing `UPSTASH_REDIS_URL` env var at that broker URL
+- Deploy backend + worker together
+- Apply migrations `014` then `015`
+- Run per-user closeout flow:
+  - `/topics/recluster`
+  - `/admin/backfill-segment-links`
+  - signed-in QA on Search, Topics, Dashboard, Meetings, and Home
+- Defer `016_topic_node_cutover.sql` until runtime no longer depends on the legacy storage names
+
+---
+
+## ✅ Milestone Update — 2026-03-24 (Topic Intelligence Pipeline Specification)
+
+### What was completed
+
+- **Topic intelligence pipeline spec finalized** (`docs/specs/Topic_intelligence.md`): 5-stage architecture — segmentation, spaCy NER entity extraction, two-tier candidate identification (deterministic + Haiku), rule-based filtering, hybrid resolution (semantic + BM25 + entity overlap + Sonnet for ambiguous)
+- **Pydantic schema spec finalized** (`docs/specs/Pydantic_schema.md`): Complete model definitions — DiscussionBlock, Entity, MeetingContext, BlockCandidacy, CandidateTopic, MergeCandidate, ResolutionDecision, TopicNode
+- Cost target: $0.05–0.20 per meeting, 70–80% filtering before any LLM call
+- Non-determinism mitigations: temperature=0, structured output, entity anchors, alias accumulation, idempotency target >90%
+- All root documentation updated to reflect the finalized pipeline specification
+
+### What comes next
+
+- Implement the 5-stage pipeline in `src/workers/`
+- Deploy + per-user topic backfill
+- Production QA on topic extraction quality
 
 ---
 

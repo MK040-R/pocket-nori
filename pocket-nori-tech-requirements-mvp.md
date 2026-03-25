@@ -191,9 +191,12 @@ User logs in → Google OAuth → Drive API enumerates past Meet recordings
 
 **Important clarification on "ZDR":** Anthropic's standard API does not use data for model training (no-training policy). This is **not** the same as a formal Zero Data Retention agreement. A formal ZDR/DPA requires a signed enterprise agreement. For Phase 1 internal testing with no external users, the standard API is acceptable. Before any external user onboards, a formal DPA is required with all inference and embedding providers.
 
-- `claude-sonnet-4-6` — all extraction tasks (topics, commitments, entities): fast and cost-effective
+- `claude-sonnet-4-6` — all extraction tasks (commitments, entities, Stage 5 ambiguous topic resolution): fast and cost-effective
+- `claude-haiku-4-5-20251001` — Stage 3 Tier 2 topic validation/enrichment: cheapest model for structured validation (~$0.005–0.01 per meeting)
 - `claude-opus-4-6` — Brief generation only: best reasoning quality; use sparingly
 - **Monthly spend alert: set a $100/month alert on the Anthropic API dashboard before starting.** API costs can surprise you during active testing.
+
+**Topic intelligence pipeline cost target:** $0.05–0.20 per meeting. 70–80% of filtering is deterministic (no LLM cost). Temperature=0 for all pipeline LLM calls.
 
 ### ZDR applies to embeddings too
 The same no-training policy applies to embedding providers. Both Anthropic's and OpenAI's embedding APIs confirm no training on API data by default.
@@ -226,6 +229,8 @@ class TopicList(BaseModel):
     importance_score: float
     segment_ids: list[str]       # Links to source TranscriptSegments
 ```
+
+For the complete topic intelligence pipeline models (`DiscussionBlock`, `BlockCandidacy`, `CandidateTopic`, `MergeCandidate`, `ResolutionDecision`, `TopicNode`), see `docs/specs/Pydantic_schema.md`.
 
 ---
 
@@ -305,12 +310,17 @@ Combined with vector similarity for hybrid ranking. No Elasticsearch needed for 
 
 Note: PostgreSQL's full-text search uses `ts_rank_cd` scoring — similar in spirit to BM25 but not identical. The hybrid formula combines normalized vector score and normalized lexical score.
 
-### Topic Clustering (async, post-meeting)
-After each meeting, a Celery job:
-1. Extracts candidate topics from the new transcript via LLM
-2. Embeds each topic
-3. Finds similar topic embeddings in the user's existing index
-4. Merges clear duplicates, creates new Topic entities, updates Topic Arc timelines
+### Topic Intelligence Pipeline (async, post-meeting)
+After each meeting, a Celery job runs the 5-stage topic intelligence pipeline:
+1. **Segmentation** (no LLM, $0) — heuristic block detection using transition phrases, silence gaps, speaker shifts → `DiscussionBlock`
+2. **Entity extraction** (no LLM, $0) — spaCy NER + pattern matching → deterministic `Entity` objects (people, companies, dates, deadlines, artifacts)
+3. **Candidate topic identification** (two-tier):
+   - Tier 1 (deterministic, ~$0): entity density, multi-speaker signals, decision language, KeyBERT keyphrases, executive boost → `BlockCandidacy` score (threshold ≥ 0.3 passes to Tier 2)
+   - Tier 2 (Haiku LLM, ~$0.01): validation, enrichment, entity correction on ~40–60% of blocks → `CandidateTopic`
+4. **Filtering** (rule-based, $0) — work/personal classification, seniority-based priority promotion, qualification gate (2-of-4 criteria)
+5. **Resolution** (hybrid + Sonnet for ambiguous) — semantic embedding + BM25 + entity overlap + participant overlap → auto-merge (>0.85), LLM judge (0.55–0.85), create new (<0.55) → `ResolutionDecision`
+
+Full specification: `docs/specs/Topic_intelligence.md`. Complete Pydantic models: `docs/specs/Pydantic_schema.md`.
 
 ---
 
@@ -331,7 +341,7 @@ Fields: `conversation_id`, `speaker_id`, `start_ts` (seconds), `end_ts`, `text`,
 **Why this is required from Phase 0:** Without utterance-level storage, you cannot attribute commitments accurately, cannot provide citations in briefs, and cannot defend against hallucination ("show me where in the transcript this came from"). Adding this later requires a schema migration. Build it now.
 
 **Topic**
-A subject that recurs across Conversations, identified by Pocket Nori. Has: label, first_mentioned, last_mentioned, status (open/resolved), linked Conversations. Links to source TranscriptSegments.
+A subject that recurs across Conversations, identified by the 5-stage topic intelligence pipeline. Has: label, type, priority_level, first_mentioned, last_mentioned, status (active/resolved/stale), linked Conversations, accumulated aliases and keywords. Links to source TranscriptSegments. The canonical stored representation is `TopicNode` — see `docs/specs/Pydantic_schema.md`.
 
 **Topic Arc**
 A timeline view over a Topic's linked Conversations — a synthesized narrative of how the topic evolved. Every claim traceable to a TranscriptSegment.
@@ -343,7 +353,7 @@ A detected relationship between two or more Conversations or Topics. Created whe
 A statement in which the user indicates a future action. Fields: extracted text, assignee, due date (if mentioned), source Conversation, source TranscriptSegments, status (open/resolved).
 
 **Entity**
-A named person, project, company, or product referenced across Conversations. Internal enrichment layer — not directly user-facing.
+A deterministic fact extracted from transcript text — a named person, company, product, date, deadline, monetary value, artifact, or project code. Extracted automatically via spaCy NER + pattern matching (Stage 2 of the topic intelligence pipeline, no LLM cost). Entity overlap across conversations is a primary signal for topic resolution and cross-meeting connection detection. Internal enrichment layer — not directly user-facing.
 
 **Brief**
 A generated pre-meeting artifact composed from relevant Topic Arcs, open Commitments, flagged Connections, and calendar context. Private by default. User can share explicitly.
@@ -367,6 +377,25 @@ Index (per user)
 Brief
 └── composed from → Topic Arcs + Commitments + Connections + Calendar event
 ```
+
+### Pipeline Intermediate Models
+
+The topic intelligence pipeline introduces transient processing models (not persisted as DB tables):
+- `DiscussionBlock` — contiguous transcript segments from heuristic segmentation
+- `MeetingContext` — calendar metadata pre-computed per meeting
+- `BlockCandidacy` — deterministic pre-LLM scoring with signals breakdown
+- `CandidateTopic` — LLM-enriched topic extraction output
+- `MergeCandidate` — scored merge candidate with multi-signal breakdown
+- `ResolutionDecision` — final merge/link/create decision
+
+The canonical stored entity is `TopicNode` (replaces `topic_clusters`), which accumulates aliases, entities, keywords, decisions, commitments, and graph relationships over time. See `docs/specs/Pydantic_schema.md`.
+
+### New Dependencies (Topic Intelligence Pipeline)
+
+| Category | Choice | Purpose |
+|---|---|---|
+| NLP (entity extraction) | spaCy `en_core_web_lg` | Deterministic NER for Stage 2; no LLM cost |
+| Keyphrase extraction | KeyBERT | Stage 3 Tier 1 candidacy scoring; local, fast |
 
 ---
 

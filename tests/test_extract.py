@@ -50,6 +50,22 @@ def _make_db_mock(
     return db
 
 
+@pytest.fixture(autouse=True)
+def _patch_entity_nodes_and_graph() -> Any:
+    with (
+        patch("src.workers.extract.load_entity_cluster_registry", return_value=[]),
+        patch("src.workers.extract.assign_cluster_for_entity", return_value="entity-node-1"),
+        patch("src.workers.extract.refresh_entity_clusters_metadata", return_value=[]),
+        patch("src.workers.extract.load_entity_clusters", return_value=[]),
+        patch(
+            "src.workers.extract.materialize_conversation_graph",
+            return_value={"edge_count": 0, "evidence_count": 0},
+        ),
+        patch("src.workers.extract.materialize_connections_for_conversation", return_value=[]),
+    ):
+        yield
+
+
 def _make_full_db_mock(
     segments: list[dict[str, Any]],
     user_id: str = "user-1",
@@ -475,6 +491,261 @@ class TestExtractHappyPath:
             if "user_id" in row:
                 assert row["user_id"] == expected_user_id, f"Row inserted with wrong user_id: {row}"
 
+    def test_links_topics_commitments_and_entities_to_targeted_segments(
+        self,
+        eager_extract: Any,
+    ) -> None:
+        from src.llm_client import (
+            CommitmentList,
+            CommitmentResult,
+            EntityList,
+            EntityResult,
+            TopicList,
+            TopicResult,
+        )
+
+        segments = [
+            _make_segment("Alice will send the Q3 plan tomorrow."),
+            _make_segment("We agreed the roadmap depends on the pricing review."),
+        ]
+        inserted_link_rows: dict[str, list[dict[str, Any]]] = {
+            "topic_segment_links": [],
+            "commitment_segment_links": [],
+            "entity_segment_links": [],
+        }
+
+        with (
+            patch("src.workers.extract.get_client") as mock_get_client,
+            patch(
+                "src.workers.extract.llm_client.extract_topics",
+                return_value=TopicList(
+                    topics=[
+                        TopicResult(
+                            label="Pricing review",
+                            summary="Roadmap dependency discussion.",
+                            status="open",
+                            key_quotes=[],
+                            evidence_quotes=["roadmap depends on the pricing review"],
+                        )
+                    ]
+                ),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_commitments",
+                return_value=CommitmentList(
+                    commitments=[
+                        CommitmentResult(
+                            text="Alice will send the Q3 plan tomorrow.",
+                            owner="Alice",
+                            due_date=None,
+                            status="open",
+                            evidence_quotes=["Alice will send the Q3 plan tomorrow"],
+                        )
+                    ]
+                ),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_entities",
+                return_value=EntityList(
+                    entities=[EntityResult(name="Alice", type="person", mentions=1)]
+                ),
+            ),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.assign_cluster_for_topic", return_value="cluster-1"),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
+        ):
+            db = _make_full_db_mock(segments=segments)
+            original_side_effect = db.table.side_effect
+
+            def table_router_with_capture(table_name: str) -> MagicMock:
+                table = cast(MagicMock, original_side_effect(table_name))
+                if table_name in inserted_link_rows:
+
+                    def capture_insert(data: Any) -> MagicMock:
+                        rows = cast(list[dict[str, Any]], data)
+                        inserted_link_rows[table_name].extend(rows)
+                        result = MagicMock()
+                        result.execute.return_value.data = [{"id": str(uuid.uuid4())}]
+                        return result
+
+                    table.insert.side_effect = capture_insert
+                return table
+
+            db.table.side_effect = table_router_with_capture
+            mock_get_client.return_value = db
+
+            extract_from_conversation.delay(
+                conversation_id="conv-1",
+                user_id="user-1",
+                user_jwt="jwt",
+            ).get()
+
+        assert inserted_link_rows["topic_segment_links"] == [
+            {
+                "user_id": "user-1",
+                "topic_id": inserted_link_rows["topic_segment_links"][0]["topic_id"],
+                "segment_id": segments[1]["id"],
+                "match_score": 1.0,
+                "match_origin": "llm_quote",
+            }
+        ]
+        assert inserted_link_rows["commitment_segment_links"] == [
+            {
+                "user_id": "user-1",
+                "commitment_id": inserted_link_rows["commitment_segment_links"][0][
+                    "commitment_id"
+                ],
+                "segment_id": segments[0]["id"],
+                "match_score": 1.0,
+                "match_origin": "llm_quote",
+            }
+        ]
+        assert inserted_link_rows["entity_segment_links"] == [
+            {
+                "user_id": "user-1",
+                "entity_id": inserted_link_rows["entity_segment_links"][0]["entity_id"],
+                "segment_id": segments[0]["id"],
+                "match_score": 1.0,
+                "match_origin": "exact_substring",
+            }
+        ]
+
+    def test_weak_topic_evidence_creates_no_segment_links(self, eager_extract: Any) -> None:
+        from src.llm_client import CommitmentList, EntityList, TopicList, TopicResult
+
+        segments = [_make_segment("We reviewed the roadmap without concrete pricing details.")]
+
+        with (
+            patch("src.workers.extract.get_client") as mock_get_client,
+            patch(
+                "src.workers.extract.llm_client.extract_topics",
+                return_value=TopicList(
+                    topics=[
+                        TopicResult(
+                            label="Pricing review",
+                            summary="Possible future follow-up.",
+                            status="open",
+                            key_quotes=[],
+                            evidence_quotes=["a completely unrelated quote"],
+                        )
+                    ]
+                ),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_commitments",
+                return_value=CommitmentList(commitments=[]),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_entities",
+                return_value=EntityList(entities=[]),
+            ),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.assign_cluster_for_topic", return_value="cluster-1"),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
+        ):
+            db = _make_full_db_mock(segments=segments)
+            original_side_effect = db.table.side_effect
+            topic_segment_table = MagicMock()
+            topic_segment_table.insert.side_effect = AssertionError(
+                "topic_segment_links should not be inserted for weak evidence"
+            )
+            topic_segment_table.eq.return_value = topic_segment_table
+
+            def table_router_with_guard(table_name: str) -> MagicMock:
+                if table_name == "topic_segment_links":
+                    return topic_segment_table
+                return cast(MagicMock, original_side_effect(table_name))
+
+            db.table.side_effect = table_router_with_guard
+            mock_get_client.return_value = db
+
+            extract_from_conversation.delay(
+                conversation_id="conv-1",
+                user_id="user-1",
+                user_jwt="jwt",
+            ).get()
+
+    def test_strategy_brief_mentions_are_added_when_citation_backed(
+        self,
+        eager_extract: Any,
+    ) -> None:
+        from src.llm_client import (
+            BriefMentionList,
+            BriefMentionResult,
+            CommitmentList,
+            EntityList,
+            TopicList,
+        )
+
+        segments = [_make_segment("Approved. We will move forward with the enterprise rollout.")]
+        inserted_topics: list[dict[str, Any]] = []
+
+        with (
+            patch("src.workers.extract.get_client") as mock_get_client,
+            patch(
+                "src.workers.extract.llm_client.extract_topics",
+                return_value=TopicList(topics=[]),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_commitments",
+                return_value=CommitmentList(commitments=[]),
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_entities",
+                return_value=EntityList(entities=[]),
+            ),
+            patch(
+                "src.workers.extract.llm_client.classify_meeting_category",
+                return_value="strategy",
+            ),
+            patch(
+                "src.workers.extract.llm_client.extract_brief_mentions",
+                return_value=BriefMentionList(
+                    mentions=[
+                        BriefMentionResult(
+                            label="Enterprise rollout approval",
+                            summary="Leadership approved moving forward with the rollout.",
+                            status="resolved",
+                            evidence_quote="We will move forward with the enterprise rollout",
+                        )
+                    ]
+                ),
+            ),
+            patch("src.workers.extract.load_cluster_registry", return_value=[]),
+            patch("src.workers.extract.assign_cluster_for_topic", return_value="cluster-1"),
+            patch("src.workers.extract.refresh_clusters_metadata", return_value=[]),
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
+        ):
+            db = _make_full_db_mock(segments=segments)
+            original_side_effect = db.table.side_effect
+
+            def table_router_with_capture(table_name: str) -> MagicMock:
+                table = cast(MagicMock, original_side_effect(table_name))
+                if table_name == "topics":
+
+                    def capture_insert(data: Any) -> MagicMock:
+                        inserted_topics.append(cast(dict[str, Any], data))
+                        result = MagicMock()
+                        result.execute.return_value.data = [{"id": str(uuid.uuid4())}]
+                        return result
+
+                    table.insert.side_effect = capture_insert
+                return table
+
+            db.table.side_effect = table_router_with_capture
+            mock_get_client.return_value = db
+
+            result = extract_from_conversation.delay(
+                conversation_id="conv-1",
+                user_id="user-1",
+                user_jwt="jwt",
+            ).get()
+
+        assert result["topic_count"] == 1
+        assert inserted_topics[0]["label"] == "Enterprise rollout approval"
+
 
 @pytest.mark.unit
 class TestExtractCalendarSyncDispatch:
@@ -545,6 +816,7 @@ class TestReclusterTopics:
                 "src.workers.extract.stabilize_reclustered_cluster_ids",
                 return_value={"cluster-1"},
             ) as mock_stabilize,
+            patch("src.workers.extract.refresh_topic_node_embeddings", return_value=1),
             patch("src.workers.extract.upsert_topic_arcs_for_clusters") as mock_upsert_arcs,
             patch("src.workers.extract.bump_user_cache_version"),
         ):
@@ -600,6 +872,7 @@ class TestReclusterTopics:
                 "src.workers.extract.stabilize_reclustered_cluster_ids",
                 return_value={"cluster-merged", "cluster-lexical"},
             ) as mock_stabilize,
+            patch("src.workers.extract.refresh_topic_node_embeddings", return_value=2),
             patch("src.workers.extract.upsert_topic_arcs_for_clusters") as mock_upsert_arcs,
             patch("src.workers.extract.bump_user_cache_version"),
         ):
@@ -614,6 +887,57 @@ class TestReclusterTopics:
         }
         mock_stabilize.assert_called_once_with(ANY, "user-1", ["previous-cluster"])
         mock_upsert_arcs.assert_called_once_with(
+            ANY,
+            "user-1",
+            {"cluster-lexical", "cluster-merged"},
+        )
+
+    def test_reclusters_existing_topics_refreshes_embeddings_for_final_node_set(
+        self,
+        eager_extract: Any,
+    ) -> None:
+        final_clusters = [
+            SimpleNamespace(id="cluster-merged"),
+            SimpleNamespace(id="cluster-lexical"),
+        ]
+        with (
+            patch("src.workers.extract.get_client", return_value=MagicMock()),
+            patch("src.workers.extract.load_topic_clusters", return_value=["previous-cluster"]),
+            patch("src.workers.extract.purge_placeholder_topics", return_value=0),
+            patch(
+                "src.workers.extract.load_recluster_source_rows",
+                return_value=[{"id": "topic-1", "label": "Crawl strategy"}],
+            ),
+            patch("src.workers.extract.clear_user_topic_clusters"),
+            patch(
+                "src.workers.extract.assign_clusters_to_existing_topics",
+                return_value={"cluster-lexical"},
+            ),
+            patch(
+                "src.workers.extract.refresh_clusters_metadata",
+                side_effect=[
+                    [SimpleNamespace(id="cluster-lexical")],
+                    final_clusters,
+                ],
+            ),
+            patch(
+                "src.workers.extract.merge_recent_topic_rows_semantically",
+                return_value=(set(), 0),
+            ),
+            patch(
+                "src.workers.extract.stabilize_reclustered_cluster_ids",
+                return_value={"cluster-merged", "cluster-lexical"},
+            ),
+            patch(
+                "src.workers.extract.refresh_topic_node_embeddings",
+                return_value=2,
+            ) as mock_refresh_embeddings,
+            patch("src.workers.extract.upsert_topic_arcs_for_clusters"),
+            patch("src.workers.extract.bump_user_cache_version"),
+        ):
+            recluster_topics_for_user.delay(user_id="user-1", user_jwt="jwt").get()
+
+        mock_refresh_embeddings.assert_called_once_with(
             ANY,
             "user-1",
             {"cluster-lexical", "cluster-merged"},

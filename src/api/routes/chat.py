@@ -26,6 +26,7 @@ from src import llm_client
 from src.api.deps import get_current_user
 from src.api.schema_guards import feature_unavailable, is_missing_schema_feature
 from src.database import get_client, get_direct_connection
+from src.topic_node_store import search_topic_node_rows
 
 logger = logging.getLogger(__name__)
 
@@ -105,36 +106,16 @@ def _retrieve_context(
     results: list[dict[str, Any]] = []
     try:
         with conn.cursor() as cur:
-            # Search topic clusters
-            cur.execute(
-                """
-                SELECT DISTINCT ON (tc.id)
-                    tc.id::text AS result_id, 'topic' AS result_type,
-                    tc.canonical_label AS title,
-                    coalesce(tc.canonical_summary, '') AS text,
-                    c.id::text AS conversation_id,
-                    c.title AS conversation_title,
-                    c.meeting_date::text AS meeting_date,
-                    1 - (tc.embedding <=> %s::vector) AS score
-                FROM topic_clusters tc
-                JOIN topics t ON t.cluster_id = tc.id AND t.user_id = %s
-                JOIN conversations c ON c.id = t.conversation_id AND c.user_id = %s
-                WHERE tc.user_id = %s AND tc.embedding IS NOT NULL
-                  AND 1 - (tc.embedding <=> %s::vector) >= %s
-                ORDER BY tc.id, score DESC
-                LIMIT %s
-                """,
-                [
-                    vector_literal,
+            # Search canonical topic nodes via the bridge abstraction.
+            results.extend(
+                search_topic_node_rows(
                     user_id,
-                    user_id,
-                    user_id,
-                    vector_literal,
-                    _SCORE_THRESHOLD,
+                    query_vector,
                     limit,
-                ],
+                    score_threshold=_SCORE_THRESHOLD,
+                    conn=conn,
+                )
             )
-            results.extend(dict(row) for row in cur.fetchall())
 
             # Search meeting digests
             cur.execute(

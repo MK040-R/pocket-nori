@@ -15,6 +15,7 @@ from src.calendar_sync import sync_conversation_calendar_links
 from src.celery_app import celery_app as celery_app
 from src.database import get_client
 from src.drive_client import refresh_access_token_sync
+from src.topic_node_store import TOPIC_NODE_FOREIGN_KEY_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -233,8 +234,12 @@ def sync_calendar_artifacts(
         ]
         if conversation_times:
             self.update_state(state="PROGRESS", meta={"status": "loading_calendar"})
-            link_window_start = min(conversation_times) - timedelta(hours=_CALENDAR_LINK_PADDING_HOURS)
-            link_window_end = max(conversation_times) + timedelta(hours=_CALENDAR_LINK_PADDING_HOURS)
+            link_window_start = min(conversation_times) - timedelta(
+                hours=_CALENDAR_LINK_PADDING_HOURS
+            )
+            link_window_end = max(conversation_times) + timedelta(
+                hours=_CALENDAR_LINK_PADDING_HOURS
+            )
             sync_events = list_calendar_events_sync(
                 access_token,
                 time_min=link_window_start,
@@ -358,22 +363,26 @@ def generate_brief(
 
     topic_rows = (
         db.table("topics")
-        .select("id, label, cluster_id")
+        .select(f"id, label, {TOPIC_NODE_FOREIGN_KEY_COLUMN}")
         .eq("user_id", user_id)
         .eq("conversation_id", conversation_id)
         .execute()
     ).data or []
 
-    cluster_ids = [str(row["cluster_id"]) for row in topic_rows if row.get("cluster_id")]
+    topic_node_ids = [
+        str(row[TOPIC_NODE_FOREIGN_KEY_COLUMN])
+        for row in topic_rows
+        if row.get(TOPIC_NODE_FOREIGN_KEY_COLUMN)
+    ]
     topic_labels = [str(row["label"]) for row in topic_rows if row.get("label")]
 
     topic_arcs: list[dict[str, Any]]
-    if cluster_ids:
+    if topic_node_ids:
         topic_arcs = (
             db.table("topic_arcs")
-            .select("id, topic_id, cluster_id, summary, trend, created_at")
+            .select(f"id, topic_id, {TOPIC_NODE_FOREIGN_KEY_COLUMN}, summary, trend, created_at")
             .eq("user_id", user_id)
-            .in_("cluster_id", cluster_ids)
+            .in_(TOPIC_NODE_FOREIGN_KEY_COLUMN, topic_node_ids)
             .order("created_at", desc=True)
             .limit(8)
             .execute()
@@ -382,12 +391,12 @@ def generate_brief(
         topic_arcs = []
 
     related_topics: list[dict[str, Any]]
-    if cluster_ids:
+    if topic_node_ids:
         related_topics = (
             db.table("topics")
             .select("conversation_id")
             .eq("user_id", user_id)
-            .in_("cluster_id", cluster_ids)
+            .in_(TOPIC_NODE_FOREIGN_KEY_COLUMN, topic_node_ids)
             .execute()
         ).data or []
     elif topic_labels:

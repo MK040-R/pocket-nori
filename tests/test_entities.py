@@ -1,5 +1,6 @@
 """Unit tests for the entities directory route."""
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -26,13 +27,8 @@ def _clear_auth() -> None:
     app.dependency_overrides.pop(get_current_user, None)
 
 
-def _make_db(rows: list[dict[str, Any]]) -> MagicMock:
-    entities_table = MagicMock()
-    entities_table.select.return_value.eq.return_value.order.return_value.execute.return_value.data = rows
-
-    db = MagicMock()
-    db.table.return_value = entities_table
-    return db
+def _make_db() -> MagicMock:
+    return MagicMock()
 
 
 @pytest.mark.unit
@@ -44,30 +40,27 @@ class TestEntitiesList:
         _clear_auth()
 
     def test_groups_duplicate_entities(self) -> None:
-        db = _make_db(
-            [
-                {
-                    "name": "OpenAI",
-                    "type": "company",
-                    "mentions": 3,
-                    "conversation_id": "conv-1",
-                },
-                {
-                    "name": "openai",
-                    "type": "company",
-                    "mentions": 2,
-                    "conversation_id": "conv-2",
-                },
-                {
-                    "name": "Murali Krishna Yamsani",
-                    "type": "person",
-                    "mentions": 4,
-                    "conversation_id": "conv-2",
-                },
-            ]
-        )
-
-        with patch("src.api.routes.entities.get_client", return_value=db):
+        db = _make_db()
+        with (
+            patch("src.api.routes.entities.get_client", return_value=db),
+            patch(
+                "src.api.routes.entities.load_entity_nodes",
+                return_value=[
+                    SimpleNamespace(
+                        name="OpenAI",
+                        entity_type="company",
+                        mention_count=5,
+                        conversation_ids=["conv-1", "conv-2"],
+                    ),
+                    SimpleNamespace(
+                        name="Murali Krishna Yamsani",
+                        entity_type="person",
+                        mention_count=4,
+                        conversation_ids=["conv-2"],
+                    ),
+                ],
+            ),
+        ):
             response = client.get("/entities")
 
         assert response.status_code == 200
@@ -81,43 +74,34 @@ class TestEntitiesList:
         assert payload[1]["name"] == "Murali Krishna Yamsani"
 
     def test_merges_brand_aliases_and_company_product_variants(self) -> None:
-        db = _make_db(
-            [
-                {
-                    "name": "Opus",
-                    "type": "product",
-                    "mentions": 4,
-                    "conversation_id": "conv-1",
-                },
-                {
-                    "name": "Opus",
-                    "type": "company",
-                    "mentions": 3,
-                    "conversation_id": "conv-2",
-                },
-                {
-                    "name": "N8",
-                    "type": "product",
-                    "mentions": 2,
-                    "conversation_id": "conv-1",
-                },
-                {
-                    "name": "N8N",
-                    "type": "product",
-                    "mentions": 1,
-                    "conversation_id": "conv-3",
-                },
-            ]
-        )
-
-        with patch("src.api.routes.entities.get_client", return_value=db):
+        db = _make_db()
+        with (
+            patch("src.api.routes.entities.get_client", return_value=db),
+            patch(
+                "src.api.routes.entities.load_entity_nodes",
+                return_value=[
+                    SimpleNamespace(
+                        name="Opus",
+                        entity_type="company",
+                        mention_count=7,
+                        conversation_ids=["conv-1", "conv-2"],
+                    ),
+                    SimpleNamespace(
+                        name="N8N",
+                        entity_type="product",
+                        mention_count=3,
+                        conversation_ids=["conv-1", "conv-3"],
+                    ),
+                ],
+            ),
+        ):
             response = client.get("/entities")
 
         assert response.status_code == 200
         assert response.json() == [
             {
                 "name": "Opus",
-                "type": "company/product",
+                "type": "company",
                 "mentions": 7,
                 "conversation_count": 2,
             },
@@ -130,30 +114,27 @@ class TestEntitiesList:
         ]
 
     def test_merges_unambiguous_short_form_people(self) -> None:
-        db = _make_db(
-            [
-                {
-                    "name": "Nabil Mansouri",
-                    "type": "person",
-                    "mentions": 4,
-                    "conversation_id": "conv-1",
-                },
-                {
-                    "name": "Nabil",
-                    "type": "person",
-                    "mentions": 1,
-                    "conversation_id": "conv-2",
-                },
-                {
-                    "name": "Murali Krishna Yamsani",
-                    "type": "person",
-                    "mentions": 2,
-                    "conversation_id": "conv-3",
-                },
-            ]
-        )
-
-        with patch("src.api.routes.entities.get_client", return_value=db):
+        db = _make_db()
+        with (
+            patch("src.api.routes.entities.get_client", return_value=db),
+            patch(
+                "src.api.routes.entities.load_entity_nodes",
+                return_value=[
+                    SimpleNamespace(
+                        name="Nabil Mansouri",
+                        entity_type="person",
+                        mention_count=5,
+                        conversation_ids=["conv-1", "conv-2"],
+                    ),
+                    SimpleNamespace(
+                        name="Murali Krishna Yamsani",
+                        entity_type="person",
+                        mention_count=2,
+                        conversation_ids=["conv-3"],
+                    ),
+                ],
+            ),
+        ):
             response = client.get("/entities")
 
         assert response.status_code == 200
@@ -165,15 +146,21 @@ class TestEntitiesList:
         }
 
     def test_applies_limit_and_offset(self) -> None:
-        db = _make_db(
-            [
-                {"name": "A", "type": "company", "mentions": 5, "conversation_id": "conv-1"},
-                {"name": "B", "type": "company", "mentions": 4, "conversation_id": "conv-1"},
-                {"name": "C", "type": "company", "mentions": 3, "conversation_id": "conv-1"},
-            ]
-        )
-
-        with patch("src.api.routes.entities.get_client", return_value=db):
+        db = _make_db()
+        with (
+            patch("src.api.routes.entities.get_client", return_value=db),
+            patch(
+                "src.api.routes.entities.load_entity_nodes",
+                return_value=[
+                    SimpleNamespace(
+                        name="B",
+                        entity_type="company",
+                        mention_count=4,
+                        conversation_ids=["conv-1"],
+                    )
+                ],
+            ),
+        ):
             response = client.get("/entities?limit=1&offset=1")
 
         assert response.status_code == 200

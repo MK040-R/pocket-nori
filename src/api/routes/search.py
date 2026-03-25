@@ -9,8 +9,8 @@ POST /search
 How it works:
   1. Embed the query string via OpenAI text-embedding-3-small (the only LLM cost per query)
   2. Run cosine similarity search against THREE pre-stored embedding tables:
-       a. topic_clusters.embedding  — semantic understanding of recurring topics
-       b. entities.embedding        — people, projects, companies, products
+       a. topic nodes             — semantic understanding of recurring topics
+       b. entities.embedding      — people, projects, companies, products
        c. conversations.digest_embedding — LLM-generated meeting digest
   3. Also run segment-level vector search as supporting evidence
   4. Merge all results, rank by similarity score, return top limit
@@ -38,6 +38,8 @@ from pydantic import BaseModel, Field, model_validator
 from src import llm_client
 from src.api.deps import get_current_user
 from src.database import get_direct_connection
+from src.entity_node_store import search_entity_node_rows
+from src.topic_node_store import search_topic_node_rows
 
 logger = logging.getLogger(__name__)
 
@@ -137,56 +139,25 @@ def _date_clauses(date_from: str | None, date_to: str | None) -> tuple[str, list
     return (" ".join(clauses), params)
 
 
-def _search_topic_clusters(
+def _search_topic_nodes(
     user_id: str,
     query_vector: list[float],
     limit: int,
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[SearchResult]:
-    """Vector search against topic_clusters.embedding."""
-    vector_literal = _build_vector_literal(query_vector)
-    date_sql, date_params = _date_clauses(date_from, date_to)
-
-    sql = f"""
-        SELECT DISTINCT ON (tc.id)
-            tc.id                   AS result_id,
-            tc.canonical_label      AS title,
-            coalesce(tc.canonical_summary, '') AS text,
-            c.id                    AS conversation_id,
-            c.title                 AS conversation_title,
-            c.meeting_date          AS meeting_date,
-            1 - (tc.embedding <=> %s::vector) AS score
-        FROM topic_clusters tc
-        JOIN topics t
-          ON t.cluster_id = tc.id
-         AND t.user_id = %s
-        JOIN conversations c
-          ON c.id = t.conversation_id
-         AND c.user_id = %s
-        WHERE tc.user_id = %s
-          AND tc.embedding IS NOT NULL
-          AND 1 - (tc.embedding <=> %s::vector) >= %s
-          {date_sql}
-        ORDER BY tc.id, c.meeting_date DESC, score DESC
-        LIMIT %s
-    """
-    params: list[Any] = [
-        vector_literal,
-        user_id,
-        user_id,
-        user_id,
-        vector_literal,
-        _SCORE_THRESHOLD,
-    ]
-    params.extend(date_params)
-    params.append(limit)
-
+    """Vector search against the canonical topic node abstraction."""
     conn = get_direct_connection()
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+        rows = search_topic_node_rows(
+            user_id,
+            query_vector,
+            limit,
+            date_from=date_from,
+            date_to=date_to,
+            score_threshold=_SCORE_THRESHOLD,
+            conn=conn,
+        )
     finally:
         conn.close()
 
@@ -212,39 +183,18 @@ def _search_entities(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> list[SearchResult]:
-    """Vector search against entities.embedding."""
-    vector_literal = _build_vector_literal(query_vector)
-    date_sql, date_params = _date_clauses(date_from, date_to)
-
-    sql = f"""
-        SELECT
-            e.id                    AS result_id,
-            e.name                  AS title,
-            e.type                  AS text,
-            e.conversation_id,
-            c.title                 AS conversation_title,
-            c.meeting_date          AS meeting_date,
-            1 - (e.embedding <=> %s::vector) AS score
-        FROM entities e
-        JOIN conversations c
-          ON c.id = e.conversation_id
-         AND c.user_id = %s
-        WHERE e.user_id = %s
-          AND e.embedding IS NOT NULL
-          AND 1 - (e.embedding <=> %s::vector) >= %s
-          {date_sql}
-        ORDER BY score DESC, c.meeting_date DESC
-        LIMIT %s
-    """
-    params: list[Any] = [vector_literal, user_id, user_id, vector_literal, _SCORE_THRESHOLD]
-    params.extend(date_params)
-    params.append(limit)
-
+    """Vector search against canonical entity nodes."""
     conn = get_direct_connection()
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+        rows = search_entity_node_rows(
+            user_id,
+            query_vector,
+            limit,
+            date_from=date_from,
+            date_to=date_to,
+            score_threshold=_SCORE_THRESHOLD,
+            conn=conn,
+        )
     finally:
         conn.close()
 
@@ -419,7 +369,7 @@ def ask(
         vectors = llm_client.embed_texts([body.q])
         query_vector = vectors[0]
 
-        topics = _search_topic_clusters(
+        topics = _search_topic_nodes(
             user_id, query_vector, _ASK_CONTEXT_LIMIT, body.date_from, body.date_to
         )
         entities = _search_entities(
@@ -476,7 +426,7 @@ def search(
 ) -> list[SearchResult]:
     """Embed the query and run cosine similarity search against pre-stored intelligence.
 
-    Searches across topic clusters, entities, meeting digests, and transcript segments.
+    Searches across topic nodes, entities, meeting digests, and transcript segments.
     All embeddings were computed at ingest time — zero LLM tokens consumed per query.
 
     Returns up to ``limit`` results ranked by relevance. Results below the similarity
@@ -509,10 +459,10 @@ def search(
     segments: list[SearchResult] = []
 
     try:
-        topics = _search_topic_clusters(user_id, query_vector, body.limit, date_from, date_to)
+        topics = _search_topic_nodes(user_id, query_vector, body.limit, date_from, date_to)
     except Exception as exc:
         logger.warning(
-            "Topic cluster search failed — user=%s error=%s", user_id, type(exc).__name__
+            "Topic node search failed — user=%s error=%s", user_id, type(exc).__name__
         )
 
     try:

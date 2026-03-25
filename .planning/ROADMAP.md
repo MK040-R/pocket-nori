@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work is also now merged and deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest multi-table vector search + conversational Q&A), and the current pilot UX cleanup through Wave J. Partial production QA confirmed the deployed shell and auth redirect are live; next is a manual signed-in QA pass, then Upstash upgrade/backfill work and broader post-MVP hardening.
+The backend intelligence pipeline and the five user-surface execution phases are complete. Stabilization work is also now merged and deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, conservative entity normalization, intelligent search (embed-at-ingest multi-table vector search + conversational Q&A), and the current pilot UX cleanup through Wave J. The local backend now also includes the deterministic TopicNode spine, deterministic provenance, canonical Entity Nodes, typed Knowledge Graph edges with evidence, graph APIs, and advanced write-time enrichment. Next is operational rollout: Render Redis cutover, backend/worker deploy, migrations `014`, `015`, `017`, and `018`, per-user rebuild/backfill, then signed-in production QA. Physical `topic_nodes` cutover via `016` remains deferred.
 
 ## Phases
 
@@ -120,18 +120,23 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 - [x] Visual refresh — deployed `Insightful Dashboard` styling (light workspace, dark navigation rail, stronger card hierarchy)
 - [x] Read-path latency reduction — deployed user-scoped caching and frontend overfetch reduction on the slowest views
 - [x] Pilot UX polish waves C-J — shipped Home/Actions naming cleanup, profile menu and entity management, meeting-detail simplification, persistent global search, persistent Meetings import access, onboarding wizard redesign, Home Quick Summary, and grouped Meetings cards with topic chips
-- [ ] Topic intelligence cleanup — current active workstream
-  - Deployed and verified live:
-    - stored `topic_clusters` canonical layer with `topics.cluster_id` and `topic_arcs.cluster_id`
-    - background-topic filtering during extraction
-    - ingestion-time lexical-first + bounded LLM semantic merge through `src/llm_client.py`
-    - per-user `POST /topics/recluster` worker path for historical backfill
-    - cluster-backed `/topics`, topic detail, topic arc, dashboard counts, and search/topic linking
-    - bounded `lexical-all + semantic-recent` recluster mode to stay within worker limits
-    - stable topic-cluster IDs across future recluster runs where lineage is concrete
-  - Remaining follow-up:
-    - decide whether already-broken historical topic URLs need alias/redirect support
-    - deploy and verify conservative entity normalization (`/entities`, dashboard `entity_count`)
+- [ ] Intelligence stack operational rollout — current active workstream
+  - Implemented locally and verified:
+    - TopicNode bridge abstraction over current canonical topic storage
+    - deterministic segment provenance for topics, commitments, and entities
+    - per-user `POST /topics/recluster` rebuild flow with final topic-node embedding refresh
+    - per-user `POST /admin/backfill-segment-links` citation repair flow
+    - canonical `entity_nodes` with extraction-time assignment, rebuild/backfill, and node-backed entity search/browse
+    - `knowledge_edges` + `knowledge_edge_evidence`, graph-backed connection materialization, and `/graph/*` APIs
+    - advanced write-time enrichment for embedding-assisted entity candidate generation, bounded relation extraction, and brief mention detection
+    - prepared `016_topic_node_cutover.sql`, intentionally deferred
+  - Remaining rollout steps:
+    - provision Render Redis and point the existing `UPSTASH_REDIS_URL` env var at it
+    - deploy backend + worker together
+    - apply migrations `014_topic_node_bridge.sql`, `015_provenance_links.sql`, `017_entity_nodes.sql`, and `018_knowledge_edges.sql`
+    - run `/topics/recluster`, `/admin/backfill-segment-links`, `/admin/rebuild-entity-nodes`, and `/admin/backfill-knowledge-graph` per pilot user
+    - run signed-in QA on Search, Ask, Topics, Entities, Dashboard, Home, Meetings, and graph-backed connection surfaces
+    - defer physical `topic_nodes` cutover until runtime no longer depends on legacy storage names
 
 ## Quality Gate
 
@@ -199,3 +204,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
   - `/auth/login` redirects to Google account chooser ✅
   - unauthenticated protected routes show session-expired state ✅
   - full signed-in walkthrough blocked by environment/tooling limits ⚠️
+- 2026-03-25 local intelligence-stack validation:
+  - `ruff check src tests` ✅
+  - `mypy src tests` ✅
+  - `pytest -q` ✅ (202 passed, 7 skipped)
+  - `frontend: npm run lint` ✅
+  - `frontend: npm run build` blocked by sandbox DNS lookup failure for `fonts.googleapis.com` ⚠️

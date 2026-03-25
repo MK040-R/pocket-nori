@@ -117,3 +117,12 @@ def test_semantic_merge_candidate_accepts_shared_initiative_context() -> None:
         "Discussed the PLG crawl rollout, batch planning, and consultant onboarding.",
         "Reviewed consultant crawl expansion, rollout sequence, and PLG ownership.",
     )
+
+
+def test_semantic_merge_candidate_accepts_deictic_reference_with_summary_overlap() -> None:
+    assert is_semantic_merge_candidate(
+        "that rollout thing",
+        "Enterprise rollout approval",
+        "We discussed the enterprise rollout and leadership sign-off.",
+        "Leadership approved the enterprise rollout for the next phase.",
+    )

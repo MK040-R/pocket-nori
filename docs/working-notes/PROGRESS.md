@@ -842,3 +842,30 @@ All 326 Linear issues have been created across 5 projects. The board is now comp
 - Apply migration `013_dashboard_read_path.sql`
 - Validate Home load time in a real networked build/runtime environment
 - Decide whether to backfill `entity_count` eagerly for all production users or rely on fallback until fresh writes land
+
+---
+
+## ✅ 2026-03-25 — Entity nodes, knowledge graph, and advanced resolution implemented locally
+
+### What changed
+
+- Added canonical `entity_nodes` storage plus extraction-time `entity_node_id` assignment, rebuild/backfill support, and node-backed entity browse/search behavior.
+- Added `knowledge_edges` and `knowledge_edge_evidence`, deterministic graph edge materialization, graph-backed connection materialization, and new `/graph/neighbors`, `/graph/subgraph`, and `/graph/path` APIs.
+- Added advanced write-time enrichment: embedding-assisted candidate generation for entities, bounded explicit relation extraction over structured meeting context, and citation-backed brief mention detection for `strategy` and `client` meetings.
+- Added rollout helpers: `GET /admin/jobs/{job_id}` for maintenance-task polling and `scripts/run_rollout_backfill.py` for bearer-authenticated terminal execution.
+- Kept physical `topic_nodes` cutover deferred; runtime still uses the TopicNode bridge over the legacy canonical topic table.
+
+### Validation
+
+- `./.venv/bin/python -m ruff check src tests` → **pass**
+- `./.venv/bin/python -m mypy src tests` → **pass**
+- `./.venv/bin/python -m pytest -q` → **202 passed, 7 skipped**
+- `npm run lint` in `frontend/` → **pass**
+- `npm run build` in `frontend/` → blocked because `next/font` could not resolve `fonts.googleapis.com` in this sandbox
+
+### Next focus
+
+- Provision Render Redis and deploy API + worker together
+- Apply migrations `014`, `015`, `017`, and `018`
+- Run per-user rebuild/backfill: topics, segment links, entity nodes, knowledge graph
+- Finish signed-in production QA on Search, Topics, Entities, Dashboard, Meetings, and graph-backed connections

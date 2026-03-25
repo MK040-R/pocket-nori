@@ -20,11 +20,121 @@ from supabase import Client
 from src import llm_client
 from src.celery_app import celery_app
 from src.database import get_client
+from src.entity_node_store import (
+    ENTITY_NODE_FOREIGN_KEY_COLUMN,
+    ENTITY_NODE_NAME_COLUMN,
+    ENTITY_NODE_TABLE,
+    ENTITY_NODE_TYPE_COLUMN,
+)
+from src.topic_node_store import (
+    TOPIC_NODE_FOREIGN_KEY_COLUMN,
+    TOPIC_NODE_LABEL_COLUMN,
+    TOPIC_NODE_SUMMARY_COLUMN,
+    TOPIC_NODE_TABLE,
+)
 
 logger = logging.getLogger(__name__)
 
 # OpenAI rate limit: 2048 inputs per batch for text-embedding-3-small
 _EMBED_BATCH_SIZE = 100
+
+
+def refresh_entity_node_embeddings(
+    db: Client,
+    user_id: str,
+    entity_node_ids: list[str] | set[str],
+    *,
+    only_missing: bool = False,
+) -> int:
+    """Refresh embeddings for the provided canonical entity nodes."""
+    node_ids = sorted({node_id for node_id in entity_node_ids if node_id})
+    if not node_ids:
+        return 0
+
+    query = (
+        db.table(ENTITY_NODE_TABLE)
+        .select(f"id, {ENTITY_NODE_NAME_COLUMN}, {ENTITY_NODE_TYPE_COLUMN}")
+        .in_("id", node_ids)
+        .eq("user_id", user_id)
+    )
+    if only_missing:
+        query = query.is_("embedding", "null")
+
+    entity_nodes = query.execute().data or []
+    if not entity_nodes:
+        return 0
+
+    total_embedded = 0
+    for batch_start in range(0, len(entity_nodes), _EMBED_BATCH_SIZE):
+        batch = entity_nodes[batch_start : batch_start + _EMBED_BATCH_SIZE]
+        texts = [
+            f"{node[ENTITY_NODE_NAME_COLUMN]} ({node[ENTITY_NODE_TYPE_COLUMN]})".strip()
+            for node in batch
+        ]
+        vectors = llm_client.embed_texts(texts)
+
+        for entity_node, vector in zip(batch, vectors, strict=True):
+            (
+                db.table(ENTITY_NODE_TABLE)
+                .update({"embedding": vector})
+                .eq("id", entity_node["id"])
+                .eq("user_id", user_id)
+                .execute()
+            )
+        total_embedded += len(batch)
+
+    return total_embedded
+
+
+def refresh_topic_node_embeddings(
+    db: Client,
+    user_id: str,
+    topic_node_ids: list[str] | set[str],
+    *,
+    only_missing: bool = False,
+) -> int:
+    """Refresh embeddings for the provided canonical topic nodes.
+
+    When ``only_missing`` is true, only rows with ``embedding IS NULL`` are
+    embedded. Otherwise all provided nodes are re-embedded from current label
+    and summary metadata.
+    """
+    node_ids = sorted({node_id for node_id in topic_node_ids if node_id})
+    if not node_ids:
+        return 0
+
+    query = (
+        db.table(TOPIC_NODE_TABLE)
+        .select(f"id, {TOPIC_NODE_LABEL_COLUMN}, {TOPIC_NODE_SUMMARY_COLUMN}")
+        .in_("id", node_ids)
+        .eq("user_id", user_id)
+    )
+    if only_missing:
+        query = query.is_("embedding", "null")
+
+    topic_nodes = query.execute().data or []
+    if not topic_nodes:
+        return 0
+
+    total_embedded = 0
+    for batch_start in range(0, len(topic_nodes), _EMBED_BATCH_SIZE):
+        batch = topic_nodes[batch_start : batch_start + _EMBED_BATCH_SIZE]
+        texts = [
+            (
+                f"{node[TOPIC_NODE_LABEL_COLUMN]}. "
+                f"{node.get(TOPIC_NODE_SUMMARY_COLUMN, '')}"
+            ).strip()
+            for node in batch
+        ]
+        vectors = llm_client.embed_texts(texts)
+
+        for topic_node, vector in zip(batch, vectors, strict=True):
+            db.table(TOPIC_NODE_TABLE).update({"embedding": vector}).eq("id", topic_node["id"]).eq(
+                "user_id", user_id
+            ).execute()
+        total_embedded += len(batch)
+
+    return total_embedded
 
 
 # ---------------------------------------------------------------------------
@@ -125,13 +235,17 @@ def embed_conversation(
         user_id,
     )
 
-    # --- Embed topic clusters linked to this conversation ---
+    # --- Embed canonical topic nodes linked to this conversation ---
     self.update_state(state="PROGRESS", meta={"status": "embedding_topics"})
-    _embed_topic_clusters(db, conversation_id, user_id)
+    _embed_topic_nodes(db, conversation_id, user_id)
 
     # --- Embed entities for this conversation ---
     self.update_state(state="PROGRESS", meta={"status": "embedding_entities"})
     _embed_entities(db, conversation_id, user_id)
+
+    # --- Embed canonical entity nodes linked to this conversation ---
+    self.update_state(state="PROGRESS", meta={"status": "embedding_entity_nodes"})
+    _embed_entity_nodes(db, conversation_id, user_id)
 
     # --- Embed conversation digest ---
     self.update_state(state="PROGRESS", meta={"status": "embedding_digest"})
@@ -140,50 +254,42 @@ def embed_conversation(
     return {"conversation_id": conversation_id, "segment_count": total_embedded}
 
 
-def _embed_topic_clusters(db: Client, conversation_id: str, user_id: str) -> None:
-    """Embed topic_clusters linked to this conversation that have no embedding yet.
+def _embed_topic_nodes(db: Client, conversation_id: str, user_id: str) -> None:
+    """Embed topic nodes linked to this conversation that have no embedding yet.
 
-    Only embeds clusters with embedding IS NULL to avoid re-embedding clusters
+    Only embeds rows with embedding IS NULL to avoid re-embedding topic nodes
     already processed by a prior conversation in the same batch.
     """
     topics_result = (
         db.table("topics")
-        .select("cluster_id")
+        .select(TOPIC_NODE_FOREIGN_KEY_COLUMN)
         .eq("conversation_id", conversation_id)
         .eq("user_id", user_id)
         .execute()
     )
-    cluster_ids = list(
-        {row["cluster_id"] for row in (topics_result.data or []) if row.get("cluster_id")}
+    topic_node_ids = list(
+        {
+            row[TOPIC_NODE_FOREIGN_KEY_COLUMN]
+            for row in (topics_result.data or [])
+            if row.get(TOPIC_NODE_FOREIGN_KEY_COLUMN)
+        }
     )
-    if not cluster_ids:
+    if not topic_node_ids:
         return
 
-    # Load clusters without embeddings
-    clusters_result = (
-        db.table("topic_clusters")
-        .select("id, canonical_label, canonical_summary")
-        .in_("id", cluster_ids)
-        .eq("user_id", user_id)
-        .is_("embedding", "null")
-        .execute()
+    embedded_count = refresh_topic_node_embeddings(
+        db,
+        user_id,
+        topic_node_ids,
+        only_missing=True,
     )
-    clusters = clusters_result.data or []
-    if not clusters:
+    if not embedded_count:
         return
-
-    texts = [f"{c['canonical_label']}. {c.get('canonical_summary', '')}".strip() for c in clusters]
-    vectors = llm_client.embed_texts(texts)
-
-    for cluster, vector in zip(clusters, vectors, strict=True):
-        db.table("topic_clusters").update({"embedding": vector}).eq("id", cluster["id"]).eq(
-            "user_id", user_id
-        ).execute()
 
     logger.info(
-        "Topic cluster embeddings stored — conversation=%s clusters=%d",
+        "Topic node embeddings stored — conversation=%s topic_nodes=%d",
         conversation_id,
-        len(clusters),
+        embedded_count,
     )
 
 
@@ -213,6 +319,41 @@ def _embed_entities(db: Client, conversation_id: str, user_id: str) -> None:
         "Entity embeddings stored — conversation=%s entities=%d",
         conversation_id,
         len(entities),
+    )
+
+
+def _embed_entity_nodes(db: Client, conversation_id: str, user_id: str) -> None:
+    """Embed canonical entity nodes linked to this conversation that have no embedding yet."""
+    entities_result = (
+        db.table("entities")
+        .select(ENTITY_NODE_FOREIGN_KEY_COLUMN)
+        .eq("conversation_id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    entity_node_ids = list(
+        {
+            row[ENTITY_NODE_FOREIGN_KEY_COLUMN]
+            for row in (entities_result.data or [])
+            if row.get(ENTITY_NODE_FOREIGN_KEY_COLUMN)
+        }
+    )
+    if not entity_node_ids:
+        return
+
+    embedded_count = refresh_entity_node_embeddings(
+        db,
+        user_id,
+        entity_node_ids,
+        only_missing=True,
+    )
+    if not embedded_count:
+        return
+
+    logger.info(
+        "Entity node embeddings stored — conversation=%s entity_nodes=%d",
+        conversation_id,
+        embedded_count,
     )
 
 

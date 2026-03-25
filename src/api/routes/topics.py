@@ -1,10 +1,10 @@
 """
 Topics routes.
 
-GET  /topics             — list stored canonical topic clusters
-GET  /topics/{id}        — single topic cluster with source conversations
+GET  /topics             — list stored canonical topic nodes
+GET  /topics/{id}        — single topic node with source conversations
 GET  /topics/{id}/arc    — topic arc timeline with citation metadata
-POST /topics/recluster   — enqueue a per-user cluster rebuild
+POST /topics/recluster   — enqueue a per-user topic-node rebuild
 """
 
 from __future__ import annotations
@@ -19,14 +19,14 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
-from src.topic_cluster_store import (
-    StoredTopicCluster,
-    load_topic_cluster,
-    load_topic_clusters,
-    resolve_topic_cluster_id,
-    upsert_topic_arc_for_cluster,
+from src.topic_node_store import (
+    StoredTopicNode,
+    load_topic_node,
+    load_topic_nodes,
+    resolve_topic_node_id,
+    upsert_topic_arc_for_node,
 )
-from src.workers.extract import recluster_topics_for_user
+from src.workers.extract import rebuild_topic_nodes_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,13 @@ router = APIRouter()
 _TOPICS_CACHE_TTL_SECONDS = 120
 _TOPIC_DETAIL_CACHE_TTL_SECONDS = 120
 _TOPIC_ARC_CACHE_TTL_SECONDS = 120
+
+# Backward-compatible aliases for older tests/call sites during the bridge.
+load_topic_cluster = load_topic_node
+load_topic_clusters = load_topic_nodes
+resolve_topic_cluster_id = resolve_topic_node_id
+recluster_topics_for_user = rebuild_topic_nodes_for_user
+upsert_topic_arc_for_cluster = upsert_topic_arc_for_node
 
 
 class TopicSummary(BaseModel):
@@ -100,11 +107,11 @@ def _parse_iso_timestamp(value: str | None) -> datetime | None:
     return parsed
 
 
-def _load_topic_cluster_or_404(db: Any, user_id: str, topic_id: str) -> StoredTopicCluster:
-    cluster = load_topic_cluster(db, user_id, topic_id)
-    if cluster is None:
+def _load_topic_node_or_404(db: Any, user_id: str, topic_id: str) -> StoredTopicNode:
+    topic_node = load_topic_cluster(db, user_id, topic_id)
+    if topic_node is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-    return cluster
+    return topic_node
 
 
 @router.get(
@@ -134,7 +141,7 @@ def list_topics(
     if cached is not None:
         return [TopicSummary.model_validate(item) for item in cached]
 
-    clusters = load_topic_clusters(
+    topic_nodes = load_topic_clusters(
         db,
         user_id,
         min_conversations=min_conversations,
@@ -143,12 +150,12 @@ def list_topics(
     )
     payload = [
         TopicSummary(
-            id=cluster.id,
-            label=cluster.label,
-            conversation_count=len(cluster.conversation_ids),
-            latest_date=cluster.last_mentioned_at,
+            id=topic_node.id,
+            label=topic_node.label,
+            conversation_count=len(topic_node.conversation_ids),
+            latest_date=topic_node.last_mentioned_at,
         )
-        for cluster in clusters
+        for topic_node in topic_nodes
     ]
     set_cached_json(
         cache_key,
@@ -162,7 +169,7 @@ def list_topics(
     "/recluster",
     response_model=TopicReclusterAccepted,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Queue a per-user topic cluster rebuild",
+    summary="Queue a per-user topic node rebuild",
 )
 def recluster_topics(
     current_user: dict[str, Any] = Depends(get_current_user),
@@ -170,14 +177,14 @@ def recluster_topics(
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     task = recluster_topics_for_user.delay(user_id=user_id, user_jwt=raw_jwt)
-    logger.info("Queued topic recluster — user=%s job=%s", user_id, task.id)
+    logger.info("Queued topic node rebuild — user=%s job=%s", user_id, task.id)
     return TopicReclusterAccepted(job_id=task.id, status="queued")
 
 
 @router.get(
     "/{topic_id}",
     response_model=TopicDetail,
-    summary="Get a single canonical topic with its source conversations",
+    summary="Get a single canonical topic node with its source conversations",
 )
 def get_topic(
     topic_id: str,
@@ -186,21 +193,21 @@ def get_topic(
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
-    resolved_cluster_id = resolve_topic_cluster_id(db, user_id, topic_id) or topic_id
+    resolved_topic_node_id = resolve_topic_cluster_id(db, user_id, topic_id) or topic_id
     cache_key = build_user_cache_key(
         user_id,
         "topic_detail",
-        {"topic_id": resolved_cluster_id},
+        {"topic_id": resolved_topic_node_id},
     )
     cached = get_cached_json(cache_key)
     if cached is not None:
         return TopicDetail.model_validate(cached)
 
-    cluster = _load_topic_cluster_or_404(db, user_id, topic_id)
+    topic_node = _load_topic_node_or_404(db, user_id, topic_id)
     conversations: list[TopicConversation] = []
     seen_conversations: set[str] = set()
     for row in sorted(
-        cluster.rows,
+        topic_node.rows,
         key=lambda candidate: (
             _parse_iso_timestamp(str(candidate.get("meeting_date") or ""))
             or datetime.min.replace(tzinfo=UTC)
@@ -220,10 +227,10 @@ def get_topic(
         )
 
     payload = TopicDetail(
-        id=cluster.id,
-        label=cluster.label,
-        summary=cluster.summary,
-        key_quotes=cluster.key_quotes,
+        id=topic_node.id,
+        label=topic_node.label,
+        summary=topic_node.summary,
+        key_quotes=topic_node.key_quotes,
         conversations=conversations,
     )
     set_cached_json(cache_key, payload.model_dump(mode="json"), _TOPIC_DETAIL_CACHE_TTL_SECONDS)
@@ -242,23 +249,23 @@ def get_topic_arc(
     user_id: str = current_user["sub"]
     raw_jwt: str = current_user["_raw_jwt"]
     db = get_client(raw_jwt)
-    resolved_cluster_id = resolve_topic_cluster_id(db, user_id, topic_id)
-    if not resolved_cluster_id:
+    resolved_topic_node_id = resolve_topic_cluster_id(db, user_id, topic_id)
+    if not resolved_topic_node_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
 
     cache_key = build_user_cache_key(
         user_id,
         "topic_arc",
-        {"topic_id": resolved_cluster_id},
+        {"topic_id": resolved_topic_node_id},
     )
     cached = get_cached_json(cache_key)
     if cached is not None:
         return TopicArcDetail.model_validate(cached)
 
-    arc_payload = upsert_topic_arc_for_cluster(db, user_id, resolved_cluster_id)
+    arc_payload = upsert_topic_arc_for_cluster(db, user_id, resolved_topic_node_id)
     logger.info(
-        "Topic arc computed — cluster_id=%s user=%s points=%d",
-        resolved_cluster_id,
+        "Topic arc computed — topic_node_id=%s user=%s points=%d",
+        resolved_topic_node_id,
         user_id,
         len(arc_payload["arc_points"]),
     )

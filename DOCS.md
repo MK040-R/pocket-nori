@@ -6,6 +6,14 @@ This file is the entry point for understanding the Pocket Nori documentation sui
 
 ## Document Registry
 
+### `docs/specs/POCKET_NORI_MASTER_SPEC.md` — Master Handoff Spec
+**Audience:** New engineers, staff engineers, AI coding agents with zero prior context
+**Purpose:** The single-file onboarding and execution handoff for Pocket Nori. Consolidates business context, active product direction, current repo reality, implementation architecture, topic intelligence, deployment, privacy constraints, and engineering working rules into one standalone document.
+**When to read:** First, when handing Pocket Nori to any developer with no context. This is the canonical handoff layer above the rest of the doc suite.
+**Does NOT replace:** The underlying source documents. The PRD, tech requirements, UI spec, later-stage architecture, topic pipeline spec, and repo docs still exist for provenance and maintenance.
+
+---
+
 ### `pocket-nori-prd.md` — Product Requirements Document
 **Audience:** Everyone (product, engineering, design)
 **Purpose:** Defines what Pocket Nori does and why. Covers user experience, intelligence capabilities, privacy principles, the conceptual data model, and the phased roadmap.
@@ -79,6 +87,20 @@ This file is the entry point for understanding the Pocket Nori documentation sui
 
 ---
 
+### `docs/specs/Topic_intelligence.md` — Topic Intelligence Pipeline Specification
+**Audience:** Engineers building the topic extraction pipeline
+**Purpose:** Definitive 5-stage pipeline specification: segmentation, entity extraction (spaCy NER), two-tier candidate identification (deterministic + Haiku), rule-based filtering, hybrid resolution (embedding + BM25 + entity overlap + Sonnet for ambiguous). Supersedes all prior topic intelligence documents.
+**When to read:** Before any topic extraction, clustering, resolution, or entity extraction work.
+
+---
+
+### `docs/specs/Pydantic_schema.md` — Pipeline Data Models
+**Audience:** Engineers building or consuming topic pipeline output
+**Purpose:** Complete Pydantic model definitions for all 5 stages: DiscussionBlock, Entity, MeetingContext, BlockCandidacy, CandidateTopic, MergeCandidate, ResolutionDecision, TopicNode.
+**When to read:** Before writing or modifying pipeline model code in `src/models/`.
+
+---
+
 ### `CLAUDE.md` — Claude Code Instructions
 **Audience:** Claude Code (AI coding assistant)
 **Purpose:** Mirrors the decisions in the above docs in a format optimized for Claude Code sessions. Contains spike run commands and current phase status.
@@ -129,7 +151,10 @@ When a decision changes, all affected documents must be updated in the same sess
 | Tech stack version | Tech requirements + UI spec (Section 8) |
 | Design token | Design system only (UI spec references tokens by name, not value) |
 | OAuth scopes | Tech requirements (Section 6) only |
+| Topic intelligence pipeline | `docs/specs/Topic_intelligence.md` + `docs/specs/Pydantic_schema.md` + Tech requirements (Sections 5, 9, 10) + PRD (Section 5) + UI spec (Topic object model) |
 | Milestone completion / phase closure | `PROGRESS.md` + `.planning/ROADMAP.md` + `.planning/STATE.md` + `.planning/PROJECT.md` + assistant instruction file (`AGENTS.md` / `CLAUDE.md`) if status text changed |
+
+**Master handoff sync rule:** If any of the above updates change the active product story, implementation reality, or onboarding guidance, update `docs/specs/POCKET_NORI_MASTER_SPEC.md` in the same session.
 
 **Rule:** If you change one document without updating the others in this table, the documentation suite is out of sync. Future engineers and AI assistants will receive conflicting instructions. Update all affected docs before closing the session.
 
@@ -150,4 +175,7 @@ pocket-nori-ui-spec.md                 ← screens, components, API surface, pha
 
 All decisions → Linear (tasks)  ← sprint execution, issue tracking
 All decisions → CLAUDE.md / AGENTS.md  ← AI assistant context
+
+docs/specs/Topic_intelligence.md + Pydantic_schema.md  ← topic pipeline spec + data models
+    ↑ referenced by tech requirements (Sections 5, 9, 10)
 ```

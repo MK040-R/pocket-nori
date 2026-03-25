@@ -1,4 +1,4 @@
-"""Entities route — minimal MVP directory for named entities mentioned across meetings."""
+"""Entities route — canonical entity node directory."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
-from src.entity_utils import group_entity_rows
+from src.entity_node_store import load_entity_nodes
 
 router = APIRouter()
 _ENTITIES_CACHE_TTL_SECONDS = 120
@@ -23,7 +23,7 @@ class EntitySummary(BaseModel):
     conversation_count: int
 
 
-@router.get("", response_model=list[EntitySummary], summary="List grouped entities")
+@router.get("", response_model=list[EntitySummary], summary="List canonical entity nodes")
 def list_entities(
     limit: int = 100,
     offset: int = 0,
@@ -41,27 +41,24 @@ def list_entities(
     if cached is not None:
         return [EntitySummary.model_validate(row) for row in cached]
 
-    rows = (
-        db.table("entities")
-        .select("name, type, mentions, conversation_id")
-        .eq("user_id", user_id)
-        .order("mentions", desc=True)
-        .execute()
-    ).data or []
-
     summaries = [
         EntitySummary(
-            name=summary.name,
-            type=summary.type,
-            mentions=summary.mentions,
-            conversation_count=summary.conversation_count,
+            name=node.name,
+            type=node.entity_type,
+            mentions=node.mention_count,
+            conversation_count=len(node.conversation_ids),
         )
-        for summary in group_entity_rows(rows)
+        for node in load_entity_nodes(
+            db,
+            user_id,
+            min_conversations=1,
+            limit=limit,
+            offset=offset,
+        )
     ]
-    visible = summaries[offset : offset + limit]
     set_cached_json(
         cache_key,
-        [summary.model_dump(mode="json") for summary in visible],
+        [summary.model_dump(mode="json") for summary in summaries],
         _ENTITIES_CACHE_TTL_SECONDS,
     )
-    return visible
+    return summaries

@@ -14,13 +14,16 @@ from src.api.deps import get_current_user
 from src.api.schema_guards import is_missing_schema_feature
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
-from src.entity_utils import group_entity_rows
-from src.topic_cluster_store import load_topic_clusters
+from src.entity_node_store import load_entity_nodes
+from src.topic_node_store import load_topic_nodes
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 _INDEX_STATS_CACHE_TTL_SECONDS = 60
+
+# Backward-compatible alias during the topic-node bridge.
+load_topic_clusters = load_topic_nodes
 
 
 class IndexStats(BaseModel):
@@ -32,19 +35,11 @@ class IndexStats(BaseModel):
 
 
 def _compute_fallback_stats(db: Any, user_id: str, index_row: dict[str, Any]) -> IndexStats:
-    entity_rows = (
-        db.table("entities")
-        .select("name, type, mentions, conversation_id")
-        .eq("user_id", user_id)
-        .execute()
-        .data
-        or []
-    )
     return IndexStats(
         conversation_count=int(index_row.get("conversation_count") or 0),
         topic_count=len(load_topic_clusters(db, user_id, min_conversations=1)),
         commitment_count=int(index_row.get("commitment_count") or 0),
-        entity_count=len(group_entity_rows(entity_rows)),
+        entity_count=len(load_entity_nodes(db, user_id, min_conversations=1)),
         last_updated_at=index_row.get("last_updated"),
     )
 

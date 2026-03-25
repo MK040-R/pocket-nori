@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.llm_client import AnswerResult, TopicResult, check_topic_merge
+from src.llm_client import AnswerResult, TopicResult, check_entity_merge, check_topic_merge
 
 
 def _mock_response(text: str) -> SimpleNamespace:
@@ -60,6 +60,28 @@ def test_check_topic_merge_returns_false_on_no() -> None:
             )
             is False
         )
+
+
+@pytest.mark.unit
+def test_check_entity_merge_returns_true_on_yes() -> None:
+    mock_client = SimpleNamespace(
+        messages=SimpleNamespace(create=lambda **_: _mock_response("YES"))
+    )
+    with (
+        patch("src.llm_client._raw_client", return_value=mock_client),
+        patch("src.llm_client.TextBlock", SimpleNamespace),
+    ):
+        assert check_entity_merge("Nabil", "person", "Nabil Mansouri", "person") is True
+
+
+@pytest.mark.unit
+def test_check_entity_merge_returns_false_on_no() -> None:
+    mock_client = SimpleNamespace(messages=SimpleNamespace(create=lambda **_: _mock_response("NO")))
+    with (
+        patch("src.llm_client._raw_client", return_value=mock_client),
+        patch("src.llm_client.TextBlock", SimpleNamespace),
+    ):
+        assert check_entity_merge("Acme", "company", "Acme Analytics", "product") is False
 
 
 # ---------------------------------------------------------------------------

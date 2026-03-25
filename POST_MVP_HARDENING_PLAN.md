@@ -1,6 +1,6 @@
 # Pocket Nori Post-MVP Hardening Plan (10-User Pilot)
 
-**Status:** Deferred until MVP topic-intelligence cleanup is complete
+**Status:** Deferred until the local intelligence stack is deployed, backfilled, and production-QA'd
 **Date:** 2026-03-11
 **Scope:** Move from MVP-complete build to a controlled pilot-ready product for ~10 users (internal + one external company)
 
@@ -12,7 +12,12 @@ MVP execution phases are complete (Phases 1-5). This document is the single hand
 
 Use this file as the first reference in any new Codex session for post-MVP work.
 
-**Current note (2026-03-12):** Do not treat this as the active execution plan yet. Pocket Nori is still in MVP cleanup mode for topic quality, topic merging, and pilot-critical UX/data quality. Resume this hardening plan only after the topic-intelligence workstream is accepted.
+**Current note (2026-03-25):** Do not treat this as the active execution plan yet. Pocket Nori now has the local deterministic topic spine, Entity Nodes, Knowledge Graph, and advanced resolution implemented, but operational rollout is still pending. Resume this hardening plan only after migrations `014`, `015`, `017`, and `018` are deployed, per-user rebuild/backfill is complete, and signed-in production QA passes.
+
+**Topic pipeline prerequisites (must complete before H-06 rollout gate):**
+- Annotation validation: 20–30 manually annotated transcripts, human-evaluated precision/recall
+- Idempotency testing: same 5 transcripts processed 3x each; identical graph >90%
+- Cost validation: actual per-meeting cost within $0.05–0.20 target
 
 ---
 
@@ -90,6 +95,7 @@ Primary goal: collect product + performance feedback without introducing avoidab
 - Configure and verify backup policy for database/storage.
 - Perform one restore drill and document exact recovery steps + timing.
 - Validate idempotency and retry safety for ingestion/extraction/brief scheduling paths.
+- Validate idempotency and determinism of the topic intelligence pipeline (>90% reproducibility target).
 
 **Acceptance Criteria**
 - Backup + restore drill evidence documented.
@@ -147,6 +153,8 @@ Primary goal: collect product + performance feedback without introducing avoidab
   - import success rate
   - brief generation success/on-time rate
   - search latency and error rate
+  - topic extraction precision (evaluated against annotated samples)
+  - pipeline cost per meeting
   - weekly active usage and qualitative feedback
 - Run staged rollout (small batch first, then full 10 users).
 

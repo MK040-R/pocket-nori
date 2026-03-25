@@ -47,15 +47,23 @@ A working professional can ask "What did we decide about X?" and get an accurate
 - ✓ Onboarding wizard redesign: `/onboarding` now uses Welcome / Import / Processing steps with skip paths into `/meetings`, and `/meetings` shows a friendly no-meetings prompt after skip — 2026-03-16
 - ✓ Home quick summary card: `/` now renders an optional Quick Summary card from `GET /home/summary`, with skeleton loading and silent hide on empty/error — 2026-03-16
 - ✓ Meetings list enrichment: `/meetings` now groups cards into Today / This week / Earlier and shows up to 3 topic chips per meeting from `topic_labels` — 2026-03-16
+- ✓ Deterministic TopicNode spine: TopicNode bridge semantics, deterministic provenance, rebuild-time topic-node embedding refresh, and segment-link backfill flow — 2026-03-25
+- ✓ Canonical Entity Nodes: `entity_nodes`, mention-to-node assignment, rebuild/backfill, and node-backed entity search/browse — 2026-03-25
+- ✓ Knowledge Graph: `knowledge_edges` + `knowledge_edge_evidence`, graph-backed connections materializer, and `/graph/*` APIs — 2026-03-25
+- ✓ Advanced write-time enrichment: embedding-assisted entity candidate generation, bounded relation extraction, citation-backed brief mention detection — 2026-03-25
 
 ### Active
 
-- [ ] **URGENT**: Upgrade Upstash Redis to Pay As You Go (free tier 500k req/month exhausted — worker crashes)
-- [ ] Merge PR #14 and restart worker on Render
-- [ ] Run `POST /admin/backfill-embeddings` once after deploy to embed all existing meetings
-- [ ] Verify `/search/ask` returns cited answers and grouped search results include topic/meeting/entity types
-- [ ] Manual signed-in production QA of Home/Meetings/onboarding/meeting detail/Search/Topics/Today/Actions against the deployed frontend
-- [ ] Production QA of Search/Topics/Dashboard against stored clusters
+- [ ] Provision Render Redis and point its URL at the existing `UPSTASH_REDIS_URL` env var
+- [ ] Deploy backend + worker together on the operational rollout commit
+- [ ] Apply `014_topic_node_bridge.sql`, `015_provenance_links.sql`, `017_entity_nodes.sql`, and `018_knowledge_edges.sql`
+- [ ] Run `/topics/recluster` per pilot user
+- [ ] Run `/admin/backfill-segment-links` per pilot user
+- [ ] Run `/admin/rebuild-entity-nodes` per pilot user
+- [ ] Run `/admin/backfill-knowledge-graph` per pilot user
+- [ ] Verify `/search/ask`, Search, Topics, Entities, Dashboard, Home, Meetings, and graph-backed connections after rebuild/backfill
+- [ ] Manual signed-in production QA against the deployed frontend
+- [ ] Defer `016_topic_node_cutover.sql` until runtime no longer depends on legacy storage names
 - [ ] Post-MVP roadmap definition (v2 integrations, infra scaling, evaluation framework) after MVP topic quality is acceptable
 
 ### Out of Scope
@@ -72,17 +80,18 @@ A working professional can ask "What did we decide about X?" and get an accurate
 
 ## Context
 
-**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. Follow-up stabilization work is now merged and deployed: `Insightful Dashboard` visual refresh, read-path latency reduction, durable stored topic clusters, conservative entity normalization, intelligent search (embed-at-ingest, multi-table vector search, conversational Q&A), and the current pilot UX cleanup through Wave J including onboarding redesign, Home Quick Summary, and grouped Meetings cards with topic chips. Search now understands meetings at ingest time and answers questions with citations at near-zero per-query cost. Partial production QA confirmed the live shell and auth redirect are up, but a full signed-in walkthrough is still pending because this environment could not complete authenticated live-browser checks. PR #14 is open; Upstash Redis free tier hit — worker upgrade required before ingest can resume.
+**Current state (March 2026):** Phase 0a spikes complete (all CONDITIONAL GO), Phase 0 foundation complete, and execution Phases 1–5 complete. The local backend now extends that foundation with the deterministic TopicNode spine, deterministic segment provenance, canonical Entity Nodes, typed Knowledge Graph edges with evidence, graph APIs, and advanced write-time enrichment. Production rollout now depends on Render Redis cutover, backend/worker deploy, migrations `014`, `015`, `017`, and `018`, per-user rebuild/backfill, and signed-in production QA. Physical `topic_nodes` cutover via migration `016` is intentionally deferred.
 
-**Backend is complete through Phase 5 + intelligent search.** 17 tables (9 core + 8 junction), all with FORCE RLS. Migration 009 adds `digest`/`digest_embedding` to conversations, `embedding` to `topic_clusters` and `entities`. Full Celery pipeline: ingest → extract (now generates meeting digest) → embed (now embeds topic clusters, entities, digest) + recurring brief scheduling/generation + per-user reclustering. FastAPI includes all prior routes plus `POST /search/ask` and `POST /admin/backfill-embeddings`. Search is multi-table vector search (topic_clusters, entities, conversations, transcript_segments) with date filters, grouped result types, and score threshold 0.30. Current gate: `pytest -q` 30 passed (search + llm_client), `mypy`, `ruff` green on PR #14. Upstash Redis free tier exhausted — worker cannot start until plan upgraded.
+**Backend is implemented through the current intelligence stack.** Canonical topic identity is bridged through TopicNode semantics; canonical entity identity is persisted in `entity_nodes`; graph relationships are persisted in `knowledge_edges` with `knowledge_edge_evidence`; compatibility `connections` remain materialized for existing read surfaces. Full Celery pipeline now covers ingest → extract → topic/entity node assignment → embed → graph materialization → recurring brief scheduling/generation, plus per-user rebuild/backfill flows. FastAPI now includes `POST /topics/recluster`, `POST /admin/backfill-segment-links`, `POST /admin/rebuild-entity-nodes`, `POST /admin/backfill-knowledge-graph`, and `GET /graph/*` routes. Search is node-backed across topics, entities, conversations, and transcript segments with date filters, grouped result types, and score threshold 0.30. Local validation is green (`ruff`, `mypy`, `pytest`); production rollout still depends on the broker/deploy/backfill sequence above.
 
-**Tech environment:** Python 3.13 + FastAPI + Pydantic v2, Supabase PostgreSQL 16 + pgvector, Upstash Redis (Celery broker + cache), Celery 5.4.0, Claude via instructor, OpenAI embeddings, Deepgram Nova-3.
+**Tech environment:** Python 3.13 + FastAPI + Pydantic v2, Supabase PostgreSQL 16 + pgvector, Redis-compatible broker/cache via `UPSTASH_REDIS_URL` (Render Redis for rollout/pilot operations), Celery 5.4.0, Claude via instructor, OpenAI embeddings, Deepgram Nova-3.
 
 **Known concerns from codebase map:**
 - `process_transcript` in `src/workers/tasks.py` remains a legacy placeholder; `generate_brief` is now implemented for Phase 4
 - No pagination on list endpoints (acceptable for MVP user count)
-- No pgvector ANN index yet (ivfflat/hnsw) — full scan acceptable for MVP
-- Stored topic clusters are now deployed and production-verified; remaining stabilization risk is conservative entity canonicalization and whether historical already-broken topic links need redirect aliases
+- Physical `topic_nodes` cutover is deferred; runtime still bridges over legacy canonical topic storage names internally
+- Frontend production build in this sandbox is blocked by `next/font` resolving Google Fonts; deploy-time verification must still run in network-enabled infrastructure
+- Production rollout still requires real-user rebuild/backfill and signed-in QA for the new entity-node and graph surfaces
 
 **User:** Murali, non-technical founder. Building for internal testing first (solo + first engineer hire), ~50 meetings indexed, before any external users. No DPA required for MVP phase.
 
@@ -104,11 +113,11 @@ A working professional can ask "What did we decide about X?" and get an accurate
 | Retro-import over manual upload | Gives user weeks of indexed history on day one vs. per-meeting effort | ✓ Good |
 | pgvector over Pinecone | One fewer service, handles MVP volumes (<10M vectors) | — Pending |
 | Supabase over raw Postgres | Managed RLS + Auth + Storage in one service for MVP speed | ✓ Good |
-| Upstash Redis for both broker + cache | Free tier, serverless, eliminates dedicated Redis instance | ✓ Good |
+| Render Redis for operational rollout (via existing `UPSTASH_REDIS_URL`) | Upstash free tier is exhausted; keep config churn low while restoring worker reliability | ✓ Adopted |
 | OpenAI text-embedding-3-small over Anthropic embeddings | Stability + cost at 1536 dims | — Pending |
 | No Electron for MVP | De-risk intelligence layer validation before platform investment | ✓ Good |
 | instructor + Pydantic for LLM extraction | Typed output, no hallucinated keys, easy to validate | ✓ Good |
 | Google Drive as transcript source (not Google Meet API) | Meet API lacks diarization; Drive has full recordings | ✓ Good |
 
 ---
-*Last updated: 2026-03-16 after Wave I onboarding wizard redesign shipped locally*
+*Last updated: 2026-03-25 after the local intelligence stack was completed through Entity Nodes, Knowledge Graph, and advanced resolution*

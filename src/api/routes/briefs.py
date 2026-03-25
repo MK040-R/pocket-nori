@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from src.api.deps import get_current_user
 from src.cache_utils import build_user_cache_key, get_cached_json, set_cached_json
 from src.database import get_client
+from src.topic_node_store import TOPIC_NODE_FOREIGN_KEY_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +281,9 @@ async def get_upcoming_briefs(
         if brief_row:
             brief_id = str(brief_row.get("id", ""))
             conversation_id_value = brief_row.get("conversation_id")
-            conversation_id = str(conversation_id_value) if conversation_id_value is not None else None
+            conversation_id = (
+                str(conversation_id_value) if conversation_id_value is not None else None
+            )
             content = str(brief_row.get("content", ""))
             preview = content[:220].strip()
             if len(content) > 220:
@@ -410,7 +413,7 @@ def get_brief(
     if topic_arc_ids:
         topic_arc_rows = (
             db.table("topic_arcs")
-            .select("id, topic_id, cluster_id, summary, trend")
+            .select(f"id, topic_id, {TOPIC_NODE_FOREIGN_KEY_COLUMN}, summary, trend")
             .eq("user_id", user_id)
             .in_("id", topic_arc_ids)
             .execute()
@@ -455,7 +458,7 @@ def get_brief(
         topic_arcs=[
             BriefTopicArcOut(
                 id=str(row.get("id", "")),
-                topic_id=str(row.get("cluster_id") or row.get("topic_id", "")),
+                topic_id=str(row.get(TOPIC_NODE_FOREIGN_KEY_COLUMN) or row.get("topic_id", "")),
                 summary=str(row.get("summary", "")),
                 trend=str(row.get("trend", "")),
             )

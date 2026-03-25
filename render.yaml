@@ -40,7 +40,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: UPSTASH_REDIS_URL
-        sync: false
+        sync: false   # legacy env var name; set this to the Render Redis connection URL for operational rollout
       - key: DEEPGRAM_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID
@@ -80,7 +80,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: UPSTASH_REDIS_URL
-        sync: false
+        sync: false   # legacy env var name; set this to the Render Redis connection URL for operational rollout
       - key: DEEPGRAM_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID

@@ -33,17 +33,23 @@ The atomic unit of the system. One Google Meet session = one Conversation.
 ---
 
 #### Topic
-A recurring subject identified across one or more Conversations. Never user-created.
+A recurring subject identified across one or more Conversations by the 5-stage topic intelligence pipeline. Never user-created. The frontend Topic object is derived from the backend `TopicNode` graph entity — see `docs/specs/Pydantic_schema.md`.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | |
 | `label` | string | Canonical label after deduplication (e.g., "Reporting Feature") |
 | `aliases` | string[] | Variations the system unified ("reporting feature", "custom reports") |
+| `type` | enum | `discussion` / `decision` / `status_update` / `brainstorm` / `action_planning` |
+| `priority_level` | enum | `critical` / `high` / `normal` / `low` |
 | `first_mentioned_at` | timestamp | |
 | `last_mentioned_at` | timestamp | |
-| `status` | enum | `open` / `resolved` |
+| `status` | enum | `active` / `resolved` / `stale` |
 | `conversation_ids` | UUID[] | All Conversations where this topic appeared |
+| `entities` | Entity[] | People, projects, companies associated with this topic |
+| `all_keywords` | string[] | Accumulated keywords from all mentions |
+| `derived_from_id` | UUID / null | Parent topic if this was forked from another topic |
+| `related_topic_ids` | UUID[] | Related topic links |
 
 **Key constraint:** Topics are system-extracted, never user-created. They render in three places: (1) as clickable cards on the Search landing page (the browsable Topic directory), (2) as tags within Meeting Detail linking to their Arc, and (3) as the organizing unit of Topic Arc results.
 
