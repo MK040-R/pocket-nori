@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { GlobalSearchForm } from "@/components/app-frame/GlobalSearchForm";
 import { SessionControls } from "@/components/app-frame/SessionControls";
 import { SidebarNav } from "@/components/app-frame/SidebarNav";
+import { DEMO_MODE } from "@/lib/api";
 
 type AppFrameProps = {
   children: React.ReactNode;
@@ -31,6 +32,12 @@ export function AppFrame({ children }: AppFrameProps) {
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
+          {DEMO_MODE && (
+            <div className="border-b border-standard bg-accent-subtle px-6 py-2 text-sm text-ink-secondary">
+              <span className="font-semibold text-accent">Demo mode</span> — exploring a fictional
+              workspace with sample meetings. Sign-in and the live backend are disabled.
+            </div>
+          )}
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-standard bg-bg-surface-raised px-6 py-4">
             <Suspense fallback={<SearchFormFallback />}>
               <GlobalSearchForm />
