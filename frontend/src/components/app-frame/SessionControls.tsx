@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { BASE_URL, getSession, logout, subscribeToAuth, type Session } from "@/lib/api";
+import { BASE_URL, DEMO_MODE, getSession, logout, subscribeToAuth, type Session } from "@/lib/api";
 
 function deriveDisplayName(email: string): string {
   const localPart = email.split("@")[0] ?? email;
@@ -225,6 +225,7 @@ export function SessionControls() {
                 </button>
                 <button
                   type="button"
+                  disabled={DEMO_MODE}
                   onClick={async () => {
                     try {
                       await logout();
@@ -234,7 +235,7 @@ export function SessionControls() {
                       router.refresh();
                     }
                   }}
-                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-ink-primary transition hover:bg-bg-control"
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-ink-primary transition hover:bg-bg-control disabled:cursor-not-allowed disabled:text-ink-muted"
                 >
                   Sign out
                 </button>

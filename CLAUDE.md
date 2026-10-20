@@ -16,19 +16,18 @@ Read these before writing any code — they are the source of truth for all deci
 
 | File | Purpose | When to read |
 |---|---|---|
-| `DOCS.md` | Documentation index — what each file is, conflict resolution hierarchy, change protocol | Read first |
-| `pocket-nori-prd.md` | Product requirements — Sections 3 and 5 are mandatory before any code | Always |
-| `pocket-nori-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
-| `pocket-nori-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
-| `.interface-design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
-| `docs/archive/spikes/PHASE_0A_SUMMARY.md` | QA summary of all 5 spikes — go/no-go decisions, bugs found and fixed | Before Phase 0 build |
-| `CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
-| `PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
-| `POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
+| `docs/project/DOCS.md` | Documentation index — what each file is, conflict resolution hierarchy, change protocol | Read first |
+| `docs/product/pocket-nori-prd.md` | Product requirements — Sections 3 and 5 are mandatory before any code | Always |
+| `docs/product/pocket-nori-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
+| `docs/product/pocket-nori-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
+| `docs/design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
+| `docs/agents/CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
+| `docs/project/PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
+| `docs/project/POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
 | `docs/later-stages/pocket-nori-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
 | `docs/specs/Topic_intelligence.md` | Definitive 5-stage topic intelligence pipeline spec (supersedes all prior topic docs) | Before any topic extraction/pipeline work |
 | `docs/specs/Pydantic_schema.md` | Complete Pydantic models for all pipeline stages | Before any topic model/schema work |
-| `competitive-analysis.md` | Competitor profiles (Granola, Otter, Fireflies, Notion, Mem0) | Background reading |
+| `docs/research/competitive-analysis.md` | Competitor profiles (Granola, Otter, Fireflies, Notion, Mem0) | Background reading |
 
 ---
 
@@ -130,7 +129,7 @@ Brief
 
 ## Phase 0a Spikes — Status
 
-All 5 spikes are CONDITIONAL GO and complete. Spike code is archived at `docs/archive/spikes/`. See `docs/archive/spikes/PHASE_0A_SUMMARY.md` for the full QA summary.
+All 5 spikes are CONDITIONAL GO and complete. Spike code was removed from the tree; it remains in git history.
 
 ---
 
@@ -138,7 +137,7 @@ All 5 spikes are CONDITIONAL GO and complete. Spike code is archived at `docs/ar
 
 Direction: **"Insightful Dashboard"** — light mint workspace, crisp white cards, dark saturated navigation rail, deep navy text, vivid green accent. Clear hierarchy, soft depth, no decorative noise.
 
-Key tokens (full list in `.interface-design/system.md`):
+Key tokens (full list in `docs/design/system.md`):
 - Background: `#F3F8FF` / light gradient canvas
 - Primary text: `#041021` (deep navy)
 - Accent (actions, active nav, highlights): `#00C27A` (bright green)
@@ -149,11 +148,10 @@ Key tokens (full list in `.interface-design/system.md`):
 
 ## CI Requirement
 
-Isolation tests must run on every PR: verify User A's JWT cannot read User B's rows in any user-owned table. (Original test harness archived at `docs/archive/spikes/spike4_supabase_rls/`.)
+Isolation tests must run on every PR: verify User A's JWT cannot read User B's rows in any user-owned table. (Harness lives at `scripts/rls_isolation/`.)
 
 ## Milestone Documentation Rule
 
 After every completed milestone, update docs in the same session:
-- `PROGRESS.md` (append milestone entry with validation results)
-- `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/PROJECT.md`
+- `docs/project/PROGRESS.md` (append milestone entry with validation results)
 - `CLAUDE.md` if stage/status instructions changed

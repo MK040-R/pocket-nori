@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  BASE_URL,
   ask as askSearch,
   deleteChatSession,
   getChatMessages,
   getChatSessions,
   isApiErrorStatus,
+  streamChat,
   type ChatCitation,
   type ChatMessage,
   type ChatSessionSummary,
@@ -370,19 +370,13 @@ export default function ChatPage() {
     let resolvedSessionId = requestedSessionId;
 
     try {
-      const response = await fetch(`${BASE_URL}/chat`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
+      const response = await streamChat(
+        {
           message: messageText,
           ...(requestedSessionId ? { session_id: requestedSessionId } : {}),
-        }),
-        signal: controller.signal,
-      });
+        },
+        controller.signal,
+      );
 
       if (!response.ok || !response.body) {
         if ([404, 405, 501, 503].includes(response.status)) {

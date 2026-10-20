@@ -1,3 +1,4 @@
+import { DemoNotFoundError, demoChatStream, demoRequest } from "@/lib/demo-router";
 import { isMeetingCategory, type MeetingCategory } from "@/lib/meeting-categories";
 
 const DEFAULT_API_URL =
@@ -6,6 +7,8 @@ const DEFAULT_API_URL =
     : "https://farz-personal-intelligence.onrender.com";
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export type Session = {
   user_id: string;
@@ -489,6 +492,17 @@ async function parseResponse<T>(response: Response, init: RequestOptions): Promi
 async function request(path: string, init: RequestOptions & { expectNoContent: true }): Promise<void>;
 async function request<T>(path: string, init?: RequestOptions): Promise<T>;
 async function request<T>(path: string, init: RequestOptions = {}): Promise<T | void> {
+  if (DEMO_MODE) {
+    try {
+      return (await demoRequest(path, init)) as T | void;
+    } catch (error) {
+      if (error instanceof DemoNotFoundError) {
+        throw new ApiError(404, error.message);
+      }
+      throw error;
+    }
+  }
+
   let response = await fetchResponse(path, init);
   if (shouldAttemptRefresh(path, init, response)) {
     const refreshedSession = await refreshSession();
@@ -871,5 +885,21 @@ export async function generateDraft(
   return request<DraftResponse>(`/commitments/${encodeURIComponent(commitmentId)}/draft`, {
     method: "POST",
     body: JSON.stringify({ format }),
+  });
+}
+
+export async function streamChat(body: { message: string; session_id?: string }, signal: AbortSignal): Promise<Response> {
+  if (DEMO_MODE) {
+    return demoChatStream(body.message, body.session_id);
+  }
+  return fetch(`${BASE_URL}/chat`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+    signal,
   });
 }
