@@ -80,3 +80,8 @@ spikes/spike1_electron_audio/out/
 spikes/spike4_supabase_rls/test_credentials.json
 spikes/spike2_deepgram/recordings/
 spikes/spike3_llm_extraction/results/
+
+# Personal working files (not part of the repo)
+All Final/
+costcalculator.pocketnori/
+*.xlsx
