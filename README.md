@@ -136,6 +136,4 @@ cd frontend && npm run lint && npm run build
 
 ## Docs
 
-- Product: [PRD](docs/product/pocket-nori-prd.md) · [UI spec](docs/product/pocket-nori-ui-spec.md) · [MVP technical requirements](docs/product/pocket-nori-tech-requirements-mvp.md)
-- Engineering: [Topic intelligence pipeline](docs/specs/Topic_intelligence.md) · [Knowledge graph](docs/specs/Knowledge_graph.md) · [Design system](docs/design/system.md)
-- Build history: [progress log](docs/project/PROGRESS.md) · [competitive analysis](docs/research/competitive-analysis.md)
+- [Topic intelligence pipeline](docs/specs/Topic_intelligence.md) · [Knowledge graph](docs/specs/Knowledge_graph.md) · [Pipeline data models](docs/specs/Pydantic_schema.md) · [Design system](docs/design/system.md)

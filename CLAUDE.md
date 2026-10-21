@@ -12,22 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Reference Documents
 
-Read these before writing any code — they are the source of truth for all decisions:
+Read these before writing any code. Product, planning, and research docs are kept outside this repository.
 
 | File | Purpose | When to read |
 |---|---|---|
-| `docs/project/DOCS.md` | Documentation index — what each file is, conflict resolution hierarchy, change protocol | Read first |
-| `docs/product/pocket-nori-prd.md` | Product requirements — Sections 3 and 5 are mandatory before any code | Always |
-| `docs/product/pocket-nori-tech-requirements-mvp.md` | Technical decisions with rationale (MVP scope, Phases 0a–2) | Before architecture/infra work |
-| `docs/product/pocket-nori-ui-spec.md` | UI object model, screen specs, component patterns, API contracts | Before any frontend work |
 | `docs/design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
-| `docs/agents/CODEX_BRIEF.md` | Live Codex/Claude integration contract for frontend-facing API shape | Before API contract changes |
-| `docs/project/PROGRESS.md` | Shared execution log for completed work waves | Update after each completed task |
-| `docs/project/POST_MVP_HARDENING_PLAN.md` | Post-MVP pilot hardening milestones and execution rules | Before post-MVP implementation |
-| `docs/later-stages/pocket-nori-tech-requirements-full.md` | Full architecture for Phase 3+ (AWS, Electron, compliance) | Phase 3+ only |
 | `docs/specs/Topic_intelligence.md` | Definitive 5-stage topic intelligence pipeline spec (supersedes all prior topic docs) | Before any topic extraction/pipeline work |
 | `docs/specs/Pydantic_schema.md` | Complete Pydantic models for all pipeline stages | Before any topic model/schema work |
-| `docs/research/competitive-analysis.md` | Competitor profiles (Granola, Otter, Fireflies, Notion, Mem0) | Background reading |
 
 ---
 
@@ -153,5 +144,4 @@ Isolation tests must run on every PR: verify User A's JWT cannot read User B's r
 ## Milestone Documentation Rule
 
 After every completed milestone, update docs in the same session:
-- `docs/project/PROGRESS.md` (append milestone entry with validation results)
 - `CLAUDE.md` if stage/status instructions changed
