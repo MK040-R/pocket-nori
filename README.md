@@ -2,6 +2,8 @@
 
 **A personal intelligence layer for working professionals.** Pocket Nori reads your meeting transcripts, pulls out topics, decisions, commitments and the people involved, and links them across meetings, so you can see how a topic developed instead of digging through recordings.
 
+**▶ Demo video (4 min): [watch on Loom](https://www.loom.com/share/2f20bf4abdab4088b132b8ee03b2fb20)** · **Live demo: [pocket-nori.vercel.app](https://pocket-nori.vercel.app)**, no sign-in needed. It runs on a fictional sample workspace.
+
 ![Home dashboard](docs/screenshots/home.png)
 
 ## Why
@@ -38,7 +40,11 @@ Pocket Nori keeps that context for each person, privately, and turns it into ans
 
 ## Try it
 
-The frontend includes a **demo mode** that runs fully in the browser on a fictional workspace (8 meetings, 5 topic arcs, actions, entities, briefs and chat), with no sign-in and no backend needed:
+**Watch:** [4-minute demo video](https://www.loom.com/share/2f20bf4abdab4088b132b8ee03b2fb20)
+
+**Online:** [pocket-nori.vercel.app](https://pocket-nori.vercel.app)
+
+**Locally:** the frontend includes a **demo mode** that runs fully in the browser on a fictional workspace (8 meetings, 5 topic arcs, actions, entities, briefs and chat), with no sign-in and no backend needed:
 
 ```bash
 cd frontend
