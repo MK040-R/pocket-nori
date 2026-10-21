@@ -2,7 +2,7 @@
 
 This document captures the knowledge graph that is actually persisted and queried in the current Pocket Nori backend. It reflects the implementation introduced with migrations `014`, `017`, and `018`, plus the graph materialization and query helpers in `src/knowledge_graph.py`.
 
-It is an implementation reference for graph work. Product intent still comes from `pocket-nori-prd.md`, and topic extraction behavior still comes from `docs/specs/Topic_intelligence.md`.
+It is an implementation reference for graph work.
 
 ---
 

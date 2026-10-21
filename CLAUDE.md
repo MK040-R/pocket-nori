@@ -17,8 +17,6 @@ Read these before writing any code. Product, planning, and research docs are kep
 | File | Purpose | When to read |
 |---|---|---|
 | `docs/design/system.md` | Design tokens: colors, typography, depth strategy | Before any styling |
-| `docs/specs/Topic_intelligence.md` | Definitive 5-stage topic intelligence pipeline spec (supersedes all prior topic docs) | Before any topic extraction/pipeline work |
-| `docs/specs/Pydantic_schema.md` | Complete Pydantic models for all pipeline stages | Before any topic model/schema work |
 
 ---
 
@@ -114,7 +112,7 @@ Brief
 └── composed from → Topic Arcs + Commitments + Connections + Calendar event
 ```
 
-`TopicNode` is the canonical stored representation for topics, produced by the 5-stage topic intelligence pipeline (segmentation → entity extraction → two-tier candidate identification → filtering → resolution). `TopicNode` accumulates aliases, entities, keywords, and graph relationships. The pipeline introduces intermediate models: `DiscussionBlock`, `BlockCandidacy`, `CandidateTopic`, `MergeCandidate`, `ResolutionDecision`. Cost target: $0.05–0.20 per meeting, with 70–80% of filtering before any LLM call. See `docs/specs/Topic_intelligence.md` for full specification.
+`TopicNode` is the canonical stored representation for topics, produced by the 5-stage topic intelligence pipeline (segmentation → entity extraction → two-tier candidate identification → filtering → resolution). `TopicNode` accumulates aliases, entities, keywords, and graph relationships. The pipeline introduces intermediate models: `DiscussionBlock`, `BlockCandidacy`, `CandidateTopic`, `MergeCandidate`, `ResolutionDecision`.
 
 ---
 
