@@ -84,7 +84,7 @@ flowchart LR
     FE <--> API
 ```
 
-**Pipeline.** A transcript goes through five stages: segmentation, entity extraction, two-tier topic candidate identification, filtering, and resolution against existing topics. The output is stored as a typed **knowledge graph** in Postgres: topic nodes, entity nodes and evidence-backed edges, with provenance links back to transcript segments. pgvector handles semantic retrieval. No separate graph database is needed. See [`docs/specs/Knowledge_graph.md`](docs/specs/Knowledge_graph.md).
+**Pipeline.** A transcript goes through five stages: segmentation, entity extraction, two-tier topic candidate identification, filtering, and resolution against existing topics. The output is stored as a typed **knowledge graph** in Postgres: topic nodes, entity nodes and evidence-backed edges, with provenance links back to transcript segments. pgvector handles semantic retrieval. No separate graph database is needed.
 
 **Privacy.** Every user-owned table is protected by Postgres row-level security. CI runs an isolation suite that checks User A's JWT cannot read any of User B's rows ([`scripts/rls_isolation`](scripts/rls_isolation)).
 
@@ -133,7 +133,3 @@ Apply the SQL files in `migrations/` to your Supabase project, in order.
 pytest                            # backend suite
 cd frontend && npm run lint && npm run build
 ```
-
-## Docs
-
-- [Knowledge graph](docs/specs/Knowledge_graph.md) · [Design system](docs/design/system.md)
